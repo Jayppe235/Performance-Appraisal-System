@@ -2,12 +2,15 @@
 
 PMAS is deployed as one HTTPS site: the Vite build is served at the subdomain root, PHP is served from the same document root, and only PHP connects to private MySQL. Never expose MySQL port 3306 to the public internet and never put database credentials in a `VITE_*` variable.
 
+Git deploys application code only. Database records and `assets/uploads` are persistent production data and are backed up and deployed independently. Local development never writes to the production database.
+
 ## Hosting requirements
 
 - Apache with `mod_rewrite` and `mod_headers`, PHP 8.1 or newer, PDO MySQL, OpenSSL, Mbstring, GD, ZIP, and Composer support
 - A private MySQL database/user, HTTPS certificate, and a subdomain whose document root is the PMAS directory
 - Writable `assets/uploads` and any report temporary directories required by the host
 - Ability to configure server environment variables (hosting panel, Apache virtual host, or a protected mechanism outside the public document root)
+- Automated daily MySQL backups with a documented restore method and periodic encrypted off-host copies
 
 ## Prepare production safely
 
@@ -28,7 +31,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Export-ProductionSch
 Import `release/production-schema.sql` into the empty hosted database, then import separately reviewed production records. Do not use `database/pmas.sql` for launch because it contains development seed data.
 
 1. Revoke the Gemini key that was formerly committed in `includes/config.php`, then create a replacement key. Do not reuse the exposed key.
-2. Copy `.env.production.example` as a reference only. Configure those names in the hosting panel; do not upload a file containing real secrets into the public directory.
+2. Copy `.env.production.example` as a reference only. Configure those names in the hosting panel; do not upload a file containing real secrets into the public directory. `PMAS_ENV=production` activates strict checks for HTTPS, a dedicated non-root database user, a password, and a data key of at least 32 characters. A host value of `localhost` is valid when PHP and private MySQL run on the same server.
 3. Use `PMAS_APP_URL=https://pmas.your-domain.example` and `PMAS_BASE_PATH=/` for a subdomain-root deployment.
 4. Set `PMAS_DATA_KEY` to the exact key used by the local database before changing database names or users. For this legacy local installation, an administrator can calculate the prior fallback locally with:
 
@@ -40,19 +43,35 @@ Import `release/production-schema.sql` into the empty hosted database, then impo
 
 ## Move the database
 
-Stop writes during the final export so local and hosted records cannot diverge.
+Stop writes during the final export so local and hosted records cannot diverge. The repository helper writes the sensitive dump under ignored `private-backups/` and removes incomplete exports on failure:
 
 ```powershell
-mysqldump --host=localhost --user=root --single-transaction --routines --triggers --events --default-character-set=utf8mb4 pmas_db_clean > pmas-production.sql
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Export-ProductionData.ps1 -NoPassword
 ```
 
 Create the hosted database and a dedicated user limited to that database. Import through the hosting panel or command line:
 
 ```text
-mysql --host=PRIVATE_DB_HOST --user=APP_DB_USER --password HOST_DB_NAME < pmas-production.sql
+mysql --host=PRIVATE_DB_HOST --user=APP_DB_USER --password HOST_DB_NAME < private-backups/pmas-production-TIMESTAMP.sql
 ```
 
-Delete local/export copies from any public or shared location after the validated import. Compare key table counts (users, evaluations, assignments, notifications), log in with each role, and verify an encrypted value can still be read before reopening writes.
+Do not enable public remote MySQL access just to import. Prefer phpMyAdmin or a shell inside the hosting network. Delete temporary hosted import copies after validation.
+
+Capture local counts before cutover:
+
+```powershell
+C:\xampp\php\php.exe scripts/Check-Database.php
+```
+
+Run the same CLI script from a private hosting shell with production environment variables, or compare `COUNT(*)` in phpMyAdmin for `users`, `evaluations`, `peer_evaluation_assignments`, `appraisal_periods`, and `notifications`. Log in with every role and verify encrypted values before reopening writes.
+
+## Ongoing schema changes and backups
+
+- Commit each schema change as a reviewed `database/migration_*.sql` file; never place live records in a migration.
+- Back up production immediately before applying a migration, apply it explicitly through the private hosting shell or phpMyAdmin, record the filename/date/operator, then run the acceptance checks.
+- Never import the local development database over production after launch. Local test data and production records intentionally remain separate.
+- Retain daily host backups according to institutional policy and create an encrypted off-host backup periodically. Test restoration into a temporary database at least quarterly.
+- Back up `assets/uploads` alongside the database. Git ignores runtime uploads, and the release bundle creates an empty upload directory.
 
 ## Build and upload
 
@@ -93,3 +112,5 @@ If the provider cannot keep `includes` outside the public document root, deny di
 - Check the PHP/server logs after the smoke test and remove or protect `setup.php` and all `_debug*`, `_test*`, `_fix*`, and migration runner files before launch.
 
 Local development remains `npm run dev` plus Apache/MySQL in XAMPP. The Vite proxy continues to map `/api` to `/PMAS/api` locally.
+
+Use `.env.local.example` as the local reference with `PMAS_ENV=local`. Local defaults target XAMPP; do not replace them with production credentials.

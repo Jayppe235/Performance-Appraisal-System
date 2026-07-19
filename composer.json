@@ -2,9 +2,10 @@
     "name": "pmas/dipascaf",
     "description": "DIPASCAF - Faculty Performance Evaluation System",
     "type": "project",
+    "license": "proprietary",
     "require": {
-        "php": ">=7.4",
-        "phpoffice/phpspreadsheet": "^1.29",
+        "php": ">=8.1",
+        "phpoffice/phpspreadsheet": "^1.30.5",
         "mpdf/mpdf": "^8.2"
     },
     "require-dev": {

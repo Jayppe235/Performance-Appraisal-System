@@ -1,18 +1,21 @@
 # Dependencies
 vendor/
 node_modules/
-composer.lock
 
 # Environment variables
 .env
 .env.local
 .env.*.local
-includes/credentials.php
 
 # Local database dumps (keep versioned migration_*.sql files)
 database/pmas.sql
 database/*_before_*.sql
 database/*backup*.json
+private-backups/
+
+# Runtime user uploads are data, not source code
+assets/uploads/*
+!assets/uploads/.gitkeep
 
 # IDE
 .vscode/

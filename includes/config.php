@@ -18,6 +18,13 @@ function pmas_base_path(string $path): string
     return '/' . trim($path, '/');
 }
 
+$environment = strtolower(pmas_env('PMAS_ENV', 'local'));
+if (!in_array($environment, ['local', 'production'], true)) {
+    throw new RuntimeException('PMAS_ENV must be either local or production.');
+}
+define('PMAS_ENV', $environment);
+define('IS_PRODUCTION', PMAS_ENV === 'production');
+
 define('APP_URL', rtrim(pmas_env('PMAS_APP_URL', 'http://localhost/PMAS'), '/'));
 define('BASE_URL', pmas_base_path(pmas_env('PMAS_BASE_PATH', '/PMAS')));
 define('DB_HOST', pmas_env('PMAS_DB_HOST', 'localhost'));
@@ -27,8 +34,16 @@ define('DB_USER', pmas_env('PMAS_DB_USER', 'root'));
 define('DB_PASS', pmas_env('PMAS_DB_PASS'));
 
 $configuredDataKey = pmas_env('PMAS_DATA_KEY');
-if ($configuredDataKey === '' && !str_contains(APP_URL, 'localhost') && !str_contains(APP_URL, '127.0.0.1')) {
-    throw new RuntimeException('PMAS_DATA_KEY must be configured in production.');
+if (IS_PRODUCTION) {
+    if (!str_starts_with(strtolower(APP_URL), 'https://')) {
+        throw new RuntimeException('PMAS_APP_URL must use HTTPS in production.');
+    }
+    if (strtolower(DB_USER) === 'root' || DB_PASS === '') {
+        throw new RuntimeException('Production requires a dedicated database user and password.');
+    }
+    if (strlen($configuredDataKey) < 32) {
+        throw new RuntimeException('PMAS_DATA_KEY must contain at least 32 characters in production.');
+    }
 }
 define('DATA_ENCRYPTION_KEY', $configuredDataKey !== '' ? $configuredDataKey : hash('sha256', DB_NAME . DB_USER . APP_NAME));
 
