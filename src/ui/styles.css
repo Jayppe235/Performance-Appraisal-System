@@ -1,0 +1,43 @@
+:root{
+  --bg:#0f1724;
+  --card-bg:linear-gradient(180deg,#0b1220 0%, #13303f 100%);
+  --accent:#2dd4bf;
+  --muted:rgba(255,255,255,0.75);
+  --glass: rgba(255,255,255,0.03);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:var(--bg); color:white; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale}
+.wrap{max-width:1100px;margin:40px auto;padding:18px}
+.card{background:var(--card-bg);border-radius:14px;padding:28px;box-shadow:0 8px 30px rgba(2,6,23,0.6);display:flex;gap:24px;align-items:center}
+.summary{display:grid;grid-template-columns:1fr 320px;align-items:stretch}
+.summary-left{padding:6px 2px}
+.title{font-size:28px;margin:0 0 10px;line-height:1.05}
+.subtitle{color:var(--muted);margin:0 0 18px;max-width:48ch}
+.badge{display:inline-block;background:rgba(255,255,255,0.04);padding:10px 14px;border-radius:10px;color:var(--muted)}
+.badge .small{display:block;font-size:11px;letter-spacing:0.08em;color:rgba(255,255,255,0.6);margin-bottom:6px}
+.badge strong{display:block;font-size:14px;color:var(--accent)}
+.summary-right{display:flex;align-items:center;justify-content:flex-end}
+.metrics{display:flex;flex-direction:column;gap:14px;width:240px}
+.metric{display:flex;align-items:center;gap:12px;background:var(--glass);padding:12px;border-radius:10px}
+.metric-icon{font-size:22px}
+.metric-value{font-weight:700;font-size:22px}
+.metric-label{color:var(--muted);font-size:13px}
+.details{margin-top:18px;flex-direction:column}
+.details h2{margin:0 0 10px}
+.actions{margin:0;padding-left:18px;color:var(--muted)}
+
+/* Responsive */
+@media (max-width:900px){
+  .summary{grid-template-columns:1fr;gap:16px}
+  .summary-right{justify-content:flex-start}
+  .metrics{flex-direction:row;width:100%;flex-wrap:wrap}
+  .metric{flex:1 1 45%;min-width:130px}
+  .wrap{padding:12px;margin:20px}
+  .title{font-size:22px}
+}
+
+@media (max-width:420px){
+  .metric{flex-basis:100%}
+  .subtitle{font-size:14px}
+  .badge{padding:8px}
+}

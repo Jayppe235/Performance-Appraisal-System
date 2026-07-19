@@ -1,0 +1,44 @@
+/* Light-mode button polish overrides */
+body:not(.dark-mode) button:not(.rating-btn):not(.eval-rating-btn),
+body:not(.dark-mode) .button-like,
+body:not(.dark-mode) .admin-form button:not(.rating-btn):not(.eval-rating-btn),
+body:not(.dark-mode) .admin-report-actions .report-link,
+body:not(.dark-mode) .admin-report-actions button {
+  background-image: linear-gradient(to right, #1f7a4f 0%, #2e965f 100%);
+  color: #ffffff !important;
+  border: 0 !important;
+  box-shadow: 0 12px 24px rgba(31,122,79,0.12) !important;
+  transition: box-shadow .18s ease, transform .12s ease;
+}
+
+body:not(.dark-mode) button:not(.rating-btn):not(.eval-rating-btn):hover,
+body:not(.dark-mode) .button-like:hover,
+body:not(.dark-mode) .admin-form button:not(.rating-btn):not(.eval-rating-btn):hover,
+body:not(.dark-mode) .admin-report-actions .report-link:hover,
+body:not(.dark-mode) .admin-report-actions button:hover {
+  background-image: linear-gradient(to right, #2e965f 0%, #1f7a4f 100%);
+  box-shadow: 0 18px 36px rgba(31,122,79,0.16) !important;
+  transform: translateY(-1px);
+}
+
+/* Ensure pill-like eval menu buttons have clear contrast */
+.dipascaf-eval-menu button,
+.dipascaf-eval-menu button.active {
+  color: #475569 !important;
+}
+
+body:not(.dark-mode) .rating-btn:not(.rating-btn-active),
+body:not(.dark-mode) .eval-rating-btn:not(.selected),
+body:not(.dark-mode) .form-b-radio-label:not(:has(input:checked)) {
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #475569 !important;
+}
+
+body:not(.dark-mode) .rating-btn.rating-btn-active,
+body:not(.dark-mode) .eval-rating-btn.selected,
+body:not(.dark-mode) .form-b-radio-label:has(input:checked) {
+  background: #1f7a4f !important;
+  background-image: none !important;
+  color: #ffffff !important;
+}

@@ -1,0 +1,424 @@
+/* APPRAISIA sidebar motion layer — loaded after legacy theme rules. */
+.admin-body .admin-sidebar {
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    width 340ms ease-in-out,
+    transform 340ms ease-in-out,
+    box-shadow 280ms ease-in-out !important;
+  will-change: width, transform;
+}
+
+.admin-body .admin-sidebar::before,
+.admin-body .admin-sidebar::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(55px);
+  opacity: 0.11;
+  transform: translate3d(0, 0, 0);
+  animation: appraSidebarDrift 16s ease-in-out infinite alternate;
+}
+
+.admin-body .admin-sidebar::before {
+  top: 12%;
+  left: -105px;
+  background: #22c55e;
+}
+
+.admin-body .admin-sidebar::after {
+  right: -115px;
+  bottom: 8%;
+  background: #10b981;
+  animation-delay: -8s;
+}
+
+.admin-body .sidebar-brand,
+.admin-body .sidebar-menu,
+.admin-body .sidebar-bottom {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-body .sidebar-menu a {
+  transform: translate3d(0, 0, 0) scale(1);
+  transform-origin: left center;
+  transition:
+    transform 260ms ease-in-out,
+    color 260ms ease-in-out,
+    background 260ms ease-in-out,
+    border-color 260ms ease-in-out,
+    box-shadow 260ms ease-in-out !important;
+  will-change: transform;
+}
+
+.admin-body .sidebar-menu a:hover {
+  border-color: rgba(22, 131, 88, 0.24) !important;
+  background: linear-gradient(100deg, rgba(16, 185, 129, 0.1), rgba(34, 197, 94, 0.045)) !important;
+  box-shadow: 0 9px 22px rgba(15, 81, 56, 0.11) !important;
+  transform: translate3d(4px, 0, 0) scale(1.015) !important;
+}
+
+.admin-body .sidebar-menu a:active {
+  transform: translate3d(2px, 0, 0) scale(0.985) !important;
+  transition-duration: 90ms !important;
+}
+
+.admin-body .sidebar-menu a:focus-visible {
+  outline: 3px solid rgba(16, 185, 129, 0.34) !important;
+  outline-offset: 2px;
+}
+
+.admin-body .sidebar-menu a::before {
+  left: 3px !important;
+  width: 4px !important;
+  height: 0 !important;
+  opacity: 0;
+  background: linear-gradient(180deg, #6ee7b7, #16a36a, #0f766e) !important;
+  box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+  transform: translateY(-50%) scaleY(0) !important;
+  transform-origin: center;
+  transition:
+    height 280ms ease-in-out,
+    opacity 220ms ease-in-out,
+    transform 280ms ease-in-out,
+    box-shadow 280ms ease-in-out !important;
+}
+
+.admin-body .sidebar-menu a.active {
+  border-color: rgba(16, 163, 106, 0.32) !important;
+  background: linear-gradient(105deg, rgba(16, 163, 106, 0.2), rgba(16, 185, 129, 0.1) 62%, rgba(34, 197, 94, 0.05)) !important;
+  color: #0d6847 !important;
+  box-shadow:
+    0 10px 26px rgba(15, 118, 80, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42) !important;
+}
+
+.admin-body .sidebar-menu a.active::before {
+  display: block !important;
+  height: 29px !important;
+  opacity: 1;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.58);
+  transform: translateY(-50%) scaleY(1) !important;
+}
+
+.admin-body .menu-icon {
+  transform: translateZ(0) scale(1) rotate(0deg);
+  transform-origin: center;
+  transition:
+    transform 280ms ease-in-out,
+    color 260ms ease-in-out,
+    background 260ms ease-in-out,
+    border-color 260ms ease-in-out,
+    box-shadow 260ms ease-in-out !important;
+  will-change: transform;
+}
+
+.admin-body .sidebar-menu a:hover .menu-icon {
+  transform: scale(1.09) rotate(-2deg);
+  border-color: rgba(16, 163, 106, 0.34) !important;
+  color: #0f7a53 !important;
+  box-shadow: 0 7px 17px rgba(16, 163, 106, 0.16) !important;
+}
+
+.admin-body .sidebar-menu a.active .menu-icon {
+  border-color: rgba(16, 163, 106, 0.44) !important;
+  background: linear-gradient(145deg, rgba(209, 250, 229, 0.98), rgba(167, 243, 208, 0.86)) !important;
+  color: #08734e !important;
+  box-shadow:
+    0 0 0 4px rgba(16, 185, 129, 0.09),
+    0 8px 19px rgba(16, 163, 106, 0.2) !important;
+  animation: appraActiveIconGlow 2.8s ease-in-out infinite;
+}
+
+.admin-body .sidebar-item-label,
+.admin-body .sidebar-brand-copy {
+  display: block !important;
+  max-width: 190px;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  transform: translate3d(0, 0, 0);
+  white-space: nowrap;
+  transition:
+    max-width 330ms ease-in-out,
+    opacity 210ms ease-in-out 90ms,
+    transform 330ms ease-in-out,
+    visibility 0s linear !important;
+}
+
+.admin-body .sidebar-brand-copy {
+  display: grid !important;
+}
+
+.admin-body.sidebar-collapsed .sidebar-item-label,
+.admin-body.sidebar-collapsed .sidebar-brand-copy,
+.admin-body.sidebar-collapsed .auto-badge {
+  display: block !important;
+  max-width: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transform: translate3d(-9px, 0, 0) !important;
+  transition:
+    max-width 300ms ease-in-out,
+    opacity 150ms ease-in-out,
+    transform 300ms ease-in-out,
+    visibility 0s linear 300ms !important;
+}
+
+.admin-body.sidebar-collapsed .sidebar-brand-copy {
+  display: grid !important;
+}
+
+.admin-body .sidebar-collapse {
+  display: inline-grid !important;
+  place-items: center;
+  overflow: hidden;
+  transition:
+    transform 260ms ease-in-out,
+    background 260ms ease-in-out,
+    border-color 260ms ease-in-out,
+    box-shadow 260ms ease-in-out !important;
+}
+
+.admin-body .sidebar-collapse::before,
+.admin-body .sidebar-collapse::after {
+  content: none !important;
+}
+
+.admin-body .sidebar-collapse-icon {
+  display: block;
+  color: currentColor;
+  stroke: currentColor;
+  transform: rotate(0deg);
+  transition: transform 340ms ease-in-out;
+}
+
+/* Dark mode avoids repaint-heavy effects while the rail changes size. */
+@media (min-width: 1121px) {
+  .admin-body.dark-mode .admin-sidebar,
+  .admin-dashboard-body.dark-mode .admin-sidebar,
+  .dean-body.dark-mode .admin-sidebar {
+    background-image: none !important;
+    box-shadow: none !important;
+    transition: width 160ms cubic-bezier(0.33, 1, 0.68, 1) !important;
+  }
+
+  .admin-body.dark-mode .admin-main,
+  .admin-dashboard-body.dark-mode .admin-main,
+  .dean-body.dark-mode .admin-main {
+    transition: margin-left 160ms cubic-bezier(0.33, 1, 0.68, 1) !important;
+  }
+
+  .admin-body.dark-mode .sidebar-brand-copy,
+  .admin-body.dark-mode .sidebar-item-label,
+  .admin-body.dark-mode .auto-badge {
+    transition:
+      max-width 120ms cubic-bezier(0.33, 1, 0.68, 1),
+      opacity 70ms linear,
+      transform 120ms cubic-bezier(0.33, 1, 0.68, 1),
+      visibility 0s linear !important;
+  }
+
+  .admin-body.dark-mode.sidebar-collapsed :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge) {
+    transition:
+      max-width 110ms ease-in,
+      opacity 60ms linear,
+      transform 110ms ease-in,
+      visibility 0s linear 110ms !important;
+  }
+
+  .admin-body.dark-mode .sidebar-menu a,
+  .admin-body.dark-mode .menu-icon {
+    box-shadow: none !important;
+    filter: none !important;
+    transition:
+      color 100ms linear,
+      background-color 100ms linear,
+      border-color 100ms linear !important;
+  }
+}
+
+.admin-body.sidebar-collapsed .sidebar-collapse-icon {
+  transform: rotate(180deg);
+}
+
+.admin-body .sidebar-collapse:hover {
+  background: #168358 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.11), 0 9px 20px rgba(15, 118, 80, 0.22) !important;
+  transform: scale(1.07);
+}
+
+.admin-body .sidebar-collapse:active {
+  transform: scale(0.92);
+  transition-duration: 90ms !important;
+}
+
+.admin-body .sidebar-collapse:focus-visible {
+  outline: 3px solid rgba(16, 185, 129, 0.36);
+  outline-offset: 2px;
+}
+
+/* Dark mode retains the emerald identity on deep neutral surfaces. */
+.admin-body.dark-mode .admin-sidebar {
+  background: linear-gradient(180deg, #0b1d18 0%, #0b1720 100%) !important;
+}
+
+.admin-body.dark-mode .sidebar-menu a:hover {
+  border-color: rgba(110, 231, 183, 0.24) !important;
+  background: linear-gradient(100deg, rgba(16, 185, 129, 0.16), rgba(13, 148, 136, 0.07)) !important;
+  color: #d1fae5 !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24) !important;
+}
+
+.admin-body.dark-mode .sidebar-menu a.active {
+  border-color: rgba(52, 211, 153, 0.32) !important;
+  background: linear-gradient(105deg, rgba(5, 150, 105, 0.3), rgba(16, 185, 129, 0.17) 60%, rgba(13, 148, 136, 0.08)) !important;
+  color: #ecfdf5 !important;
+  box-shadow: 0 11px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(167, 243, 208, 0.08) !important;
+}
+
+.admin-body.dark-mode .sidebar-menu a:hover .menu-icon {
+  border-color: rgba(110, 231, 183, 0.3) !important;
+  background: rgba(6, 78, 59, 0.42) !important;
+  color: #a7f3d0 !important;
+}
+
+.admin-body.dark-mode .sidebar-menu a.active .menu-icon {
+  border-color: rgba(110, 231, 183, 0.46) !important;
+  background: linear-gradient(145deg, #08734e, #0f5f49) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1), 0 8px 22px rgba(0, 0, 0, 0.3) !important;
+}
+
+.admin-body.dark-mode .sidebar-collapse:hover {
+  background: #087a55 !important;
+}
+
+/* Tablet and phone sidebars slide; labels reveal only while open. */
+@media (max-width: 1120px) {
+  .admin-body .admin-sidebar {
+    transition: transform 340ms ease-in-out, box-shadow 280ms ease-in-out !important;
+  }
+
+  .admin-body:not(.sidebar-open) .sidebar-item-label,
+  .admin-body:not(.sidebar-open) .sidebar-brand-copy,
+  .admin-body:not(.sidebar-open) .auto-badge {
+    display: block !important;
+    max-width: 0 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transform: translate3d(-9px, 0, 0) !important;
+  }
+
+  .admin-body:not(.sidebar-open) .sidebar-brand-copy {
+    display: grid !important;
+  }
+
+  .admin-body.sidebar-open .sidebar-item-label,
+  .admin-body.sidebar-open .sidebar-brand-copy {
+    max-width: 190px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  .admin-body.sidebar-open .sidebar-brand-copy {
+    display: grid !important;
+  }
+
+  .admin-body .sidebar-menu a:hover {
+    transform: translate3d(2px, 0, 0) scale(1.008) !important;
+  }
+}
+
+@keyframes appraSidebarDrift {
+  from { transform: translate3d(-8px, -10px, 0) scale(0.96); }
+  to { transform: translate3d(14px, 18px, 0) scale(1.08); }
+}
+
+@keyframes appraActiveIconGlow {
+  0%, 100% { filter: saturate(1) brightness(1); }
+  50% { filter: saturate(1.08) brightness(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-body .admin-sidebar,
+  .admin-body .admin-sidebar::before,
+  .admin-body .admin-sidebar::after,
+  .admin-body .sidebar-menu a,
+  .admin-body .sidebar-menu a::before,
+  .admin-body .menu-icon,
+  .admin-body .sidebar-item-label,
+  .admin-body .sidebar-brand-copy,
+  .admin-body .sidebar-collapse,
+  .admin-body .sidebar-collapse-icon {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* Performance pass: keep collapse motion lightweight and synchronized. */
+@media (min-width: 1121px) {
+  .admin-body .admin-sidebar,
+  .admin-dashboard-body .admin-sidebar,
+  .dean-body .admin-sidebar {
+    contain: paint;
+    will-change: auto;
+    transition:
+      width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 160ms ease !important;
+  }
+
+  .admin-body .admin-main,
+  .admin-dashboard-body .admin-main,
+  .dean-body .admin-main {
+    will-change: auto;
+    transition: margin-left 220ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  }
+
+  .admin-body .sidebar-brand-copy,
+  .admin-body .sidebar-item-label,
+  .admin-body .auto-badge {
+    will-change: auto;
+    transition:
+      max-width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 110ms ease,
+      transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s linear !important;
+  }
+
+  .admin-body.sidebar-collapsed :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge) {
+    transition:
+      max-width 160ms cubic-bezier(0.4, 0, 1, 1),
+      opacity 90ms ease,
+      transform 160ms cubic-bezier(0.4, 0, 1, 1),
+      visibility 0s linear 160ms !important;
+  }
+}
+
+.admin-body .admin-sidebar::before,
+.admin-body .admin-sidebar::after {
+  display: none !important;
+  animation: none !important;
+  filter: none !important;
+}
+
+.admin-body .sidebar-menu a.active .menu-icon {
+  animation: none !important;
+}
+
+.admin-body .sidebar-menu a,
+.admin-body .menu-icon,
+.admin-body .sidebar-collapse,
+.admin-body .sidebar-collapse-icon {
+  will-change: auto;
+  transition-duration: 160ms !important;
+}

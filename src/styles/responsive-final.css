@@ -1,0 +1,701 @@
+/* Final responsive shell rules. Keep this stylesheet imported last so page-level
+   styles cannot turn the mobile navigation backdrop into a content panel. */
+
+.admin-body > .sidebar-overlay,
+.admin-dashboard-body > .sidebar-overlay,
+.dean-body > .sidebar-overlay {
+  display: none !important;
+  appearance: none !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: transparent !important;
+}
+
+@media (max-width: 1200px), (pointer: coarse) and (max-width: 1600px) {
+  .admin-body,
+  .admin-dashboard-body,
+  .dean-body {
+    overflow-x: hidden !important;
+  }
+
+  .admin-body > .sidebar-overlay,
+  .admin-dashboard-body > .sidebar-overlay,
+  .dean-body > .sidebar-overlay {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 4900 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transition: opacity 180ms ease, visibility 180ms ease !important;
+  }
+
+  .admin-body.sidebar-open > .sidebar-overlay,
+  .admin-dashboard-body.sidebar-open > .sidebar-overlay,
+  .dean-body.sidebar-open > .sidebar-overlay {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .admin-body > .admin-sidebar,
+  .admin-body.sidebar-collapsed > .admin-sidebar,
+  .admin-dashboard-body > .admin-sidebar,
+  .admin-dashboard-body.sidebar-collapsed > .admin-sidebar,
+  .dean-body > .admin-sidebar,
+  .dean-body.sidebar-collapsed > .admin-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    z-index: 5000 !important;
+    width: min(304px, 86vw) !important;
+    min-width: min(304px, 86vw) !important;
+    max-width: 86vw !important;
+    height: 100dvh !important;
+    padding: 14px 12px !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    border-radius: 0 22px 22px 0 !important;
+    transition: transform 220ms cubic-bezier(.22, .8, .22, 1) !important;
+  }
+
+  .admin-body.sidebar-open > .admin-sidebar,
+  .admin-body.sidebar-open.sidebar-collapsed > .admin-sidebar,
+  .admin-dashboard-body.sidebar-open > .admin-sidebar,
+  .admin-dashboard-body.sidebar-open.sidebar-collapsed > .admin-sidebar,
+  .dean-body.sidebar-open > .admin-sidebar,
+  .dean-body.sidebar-open.sidebar-collapsed > .admin-sidebar {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  .admin-body > .admin-main,
+  .admin-body.sidebar-collapsed > .admin-main,
+  .admin-dashboard-body > .admin-main,
+  .admin-dashboard-body.sidebar-collapsed > .admin-main,
+  .dean-body > .admin-main,
+  .dean-body.sidebar-collapsed > .admin-main {
+    position: relative !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    transform: none !important;
+  }
+
+  /* Mobile top bar: explicit placement prevents older collapse rules from
+     squeezing the title into a few clipped characters. */
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header {
+    display: grid !important;
+    grid-template-areas: "toggle info actions" !important;
+    grid-template-columns: 44px minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 68px !important;
+    padding: 10px 14px !important;
+    overflow: visible !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header > .menu-toggle {
+    display: grid !important;
+    grid-area: toggle !important;
+    grid-column: 1 !important;
+    order: 0 !important;
+    position: static !important;
+    place-content: center !important;
+    gap: 4px !important;
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    border-radius: 13px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    background-image: none !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header > .menu-toggle::before,
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header > .menu-toggle::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header > .menu-toggle span {
+    display: block !important;
+    width: 18px !important;
+    height: 2px !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: currentColor !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header > .admin-header-info {
+    grid-area: info !important;
+    grid-column: 2 !important;
+    order: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    overflow: hidden !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header-info h1 {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    color: inherit !important;
+    font-size: clamp(1rem, 2.5vw, 1.2rem) !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.015em !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header-note {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 3px 0 0 !important;
+    overflow: hidden !important;
+    font-size: 0.76rem !important;
+    line-height: 1.2 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header > .admin-actions {
+    grid-area: actions !important;
+    grid-column: 3 !important;
+    order: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 7px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-actions :is(.dean-header-context, .role-context),
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-search {
+    display: none !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) :is(.notification-button, .profile-button.account-menu-trigger) {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    flex: 0 0 42px !important;
+    padding: 0 !important;
+    border-radius: 13px !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .profile-button .admin-avatar {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 10px !important;
+    font-size: 0.82rem !important;
+  }
+
+  .admin-sidebar .sidebar-brand {
+    display: grid !important;
+    grid-template-columns: 48px minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100% !important;
+    padding: 8px !important;
+  }
+
+  .admin-sidebar .sidebar-brand-copy,
+  .admin-sidebar .sidebar-item-label,
+  .admin-sidebar .auto-badge,
+  .sidebar-collapsed .admin-sidebar .sidebar-brand-copy,
+  .sidebar-collapsed .admin-sidebar .sidebar-item-label,
+  .sidebar-collapsed .admin-sidebar .auto-badge {
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    transform: none !important;
+  }
+
+  .admin-sidebar .sidebar-brand-copy,
+  .admin-sidebar .sidebar-item-label {
+    font-size: 0.9rem !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .admin-sidebar .sidebar-collapse {
+    display: none !important;
+  }
+
+  .admin-sidebar .sidebar-menu,
+  .sidebar-collapsed .admin-sidebar .sidebar-menu {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 7px !important;
+    width: 100% !important;
+    padding: 12px 2px !important;
+  }
+
+  .admin-sidebar .sidebar-menu a,
+  .admin-sidebar .sidebar-menu a.active,
+  .sidebar-collapsed .admin-sidebar .sidebar-menu a,
+  .sidebar-collapsed .admin-sidebar .sidebar-menu a.active {
+    display: grid !important;
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 52px !important;
+    margin: 0 !important;
+    padding: 6px 12px 6px 7px !important;
+    border-radius: 14px !important;
+    text-align: left !important;
+  }
+}
+
+/* Fallback for browsers that report unusual pointer/viewport combinations.
+   A collapsed rail must never show shortened brand text. */
+:is(.admin-body, .admin-dashboard-body, .dean-body).sidebar-collapsed .sidebar-brand-copy {
+  display: none !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+:is(.admin-body, .admin-dashboard-body, .dean-body).sidebar-collapsed .sidebar-brand {
+  grid-template-columns: 1fr !important;
+  justify-items: center !important;
+  gap: 0 !important;
+}
+
+/* Final self-review toolbar lock: overrides legacy flex rules that separate the
+   calendar, selector, and status into different rows on phone browsers. */
+@media (max-width: 1200px), (pointer: coarse) and (max-width: 1600px) {
+  .dean-self-review .dean-self-review-robot {
+    display: none !important;
+  }
+
+  .dean-self-review .dean-self-review-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 112px !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector {
+    display: grid !important;
+    grid-template-columns: 22px minmax(0, 1fr) auto !important;
+    grid-template-rows: 1fr !important;
+    align-items: center !important;
+    gap: 9px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 54px !important;
+    height: auto !important;
+    padding: 7px 10px !important;
+    overflow: hidden !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-icon {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 18px !important;
+    height: 18px !important;
+    margin: 0 !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-label {
+    display: none !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-select-wrapper {
+    display: block !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-select {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 40px !important;
+    margin: 0 !important;
+    padding-right: 30px !important;
+    overflow: hidden !important;
+    font-size: 0.82rem !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-status {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    align-self: center !important;
+    justify-self: end !important;
+    width: auto !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  .dean-self-review .dean-self-review-actions > .evaluation-nav-btn.secondary {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    width: 112px !important;
+    min-width: 112px !important;
+    min-height: 54px !important;
+    height: auto !important;
+    padding: 0 12px !important;
+    overflow: hidden !important;
+    font-size: 0.82rem !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .dean-self-review .dean-self-review-actions {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .dean-self-review .dean-self-review-actions > .evaluation-nav-btn.secondary {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector {
+    grid-template-columns: 20px minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-status {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    justify-self: start !important;
+  }
+}
+
+/* Self-evaluation review: compact phone/tablet composition. */
+@media (max-width: 1200px), (pointer: coarse) and (max-width: 1600px) {
+  .dean-self-review {
+    gap: 14px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-bottom: 72px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+
+  .dean-self-review .dean-self-review-head {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 16px !important;
+    min-height: 0 !important;
+    padding: clamp(18px, 4vw, 28px) !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+  }
+
+  .dean-self-review .dean-self-review-campus {
+    background-position: center !important;
+    background-size: cover !important;
+    opacity: 0.4 !important;
+  }
+
+  .dean-self-review .dean-self-review-title {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .dean-self-review .dean-self-review-title .eyebrow {
+    margin-bottom: 8px !important;
+    font-size: clamp(0.66rem, 1.7vw, 0.76rem) !important;
+    line-height: 1.3 !important;
+  }
+
+  .dean-self-review .dean-self-review-title h2 {
+    max-width: 18ch !important;
+    font-size: clamp(1.75rem, 5.5vw, 2.55rem) !important;
+    line-height: 1.08 !important;
+    text-wrap: balance !important;
+  }
+
+  .dean-self-review .dean-self-review-title p:not(.eyebrow) {
+    max-width: 58ch !important;
+    margin-top: 10px !important;
+    font-size: clamp(0.88rem, 2.2vw, 1rem) !important;
+    line-height: 1.5 !important;
+  }
+
+  .dean-self-review .dean-self-review-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    width: 100% !important;
+    margin-top: 16px !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector {
+    display: grid !important;
+    grid-template-columns: 20px minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    padding: 7px 10px !important;
+    overflow: hidden !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-select {
+    min-width: 0 !important;
+    font-size: 0.84rem !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .dean-self-review .dean-self-review-actions > .evaluation-nav-btn {
+    width: auto !important;
+    min-width: 108px !important;
+    min-height: 52px !important;
+    margin: 0 !important;
+  }
+
+  .dean-self-review .dean-self-review-robot {
+    position: absolute !important;
+    right: 14px !important;
+    bottom: 10px !important;
+    width: clamp(90px, 16vw, 145px) !important;
+    max-height: 150px !important;
+    margin: 0 !important;
+    opacity: 0.72 !important;
+  }
+
+  .dean-self-review-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .dean-self-review-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .dean-self-review-toolbar > :first-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  .dean-self-review-table-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .dean-self-review .dean-self-review-head {
+    gap: 12px !important;
+    padding: 17px 14px 20px !important;
+  }
+
+  .dean-self-review .dean-self-review-title h2 {
+    max-width: 100% !important;
+    font-size: clamp(1.55rem, 8vw, 2rem) !important;
+  }
+
+  .dean-self-review .dean-self-review-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dean-self-review .dean-self-review-actions > .evaluation-nav-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .dean-self-review .dean-self-review-robot {
+    display: none !important;
+  }
+
+  .dean-self-review-summary,
+  .dean-self-review-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dean-self-review-toolbar > :first-child {
+    grid-column: auto !important;
+  }
+
+  .dean-self-review-card,
+  .dean-self-review-panel {
+    padding: 12px !important;
+  }
+}
+
+/* Desktop collapsed state: keep the compact brand intentional instead of
+   rendering truncated APP... / Admin... labels below the logo. */
+@media (min-width: 1201px) and (pointer: fine) {
+  :is(.admin-body, .admin-dashboard-body, .dean-body).sidebar-collapsed .sidebar-brand {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    place-items: center !important;
+    gap: 0 !important;
+    padding: 16px 8px !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body).sidebar-collapsed .sidebar-brand-copy {
+    display: none !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body).sidebar-collapsed .sidebar-brand .brand-icon {
+    width: 52px !important;
+    height: 52px !important;
+    margin: 0 !important;
+    border-radius: 15px !important;
+    font-size: 1.25rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header {
+    grid-template-columns: 40px minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+    min-height: 62px !important;
+    padding: 8px 10px !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header-note {
+    display: none !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-header > .menu-toggle,
+  :is(.admin-body, .admin-dashboard-body, .dean-body) :is(.notification-button, .profile-button.account-menu-trigger) {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    flex-basis: 38px !important;
+  }
+
+  :is(.admin-body, .admin-dashboard-body, .dean-body) .admin-actions {
+    gap: 5px !important;
+  }
+
+  .admin-body > .admin-sidebar,
+  .admin-body.sidebar-collapsed > .admin-sidebar,
+  .admin-dashboard-body > .admin-sidebar,
+  .admin-dashboard-body.sidebar-collapsed > .admin-sidebar,
+  .dean-body > .admin-sidebar,
+  .dean-body.sidebar-collapsed > .admin-sidebar {
+    width: min(288px, 88vw) !important;
+    min-width: min(288px, 88vw) !important;
+    max-width: 88vw !important;
+  }
+}
+
+@media (max-width: 1200px), (pointer: coarse) and (max-width: 1600px) {
+  .admin-sidebar .sidebar-brand-copy,
+  .sidebar-collapsed .admin-sidebar .sidebar-brand-copy {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-items: start !important;
+    align-content: center !important;
+    gap: 2px !important;
+    min-width: 0 !important;
+    line-height: 1 !important;
+    text-align: left !important;
+  }
+
+  .admin-sidebar .sidebar-brand-copy strong,
+  .admin-sidebar .sidebar-brand-copy small {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .admin-sidebar .sidebar-brand-copy strong {
+    font-size: 1rem !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.015em !important;
+  }
+
+  .admin-sidebar .sidebar-brand-copy small {
+    font-size: 0.7rem !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+  }
+}
+
+/* This must remain last: never render ellipsized branding in a collapsed rail. */
+:is(.admin-body, .admin-dashboard-body, .dean-body).sidebar-collapsed .sidebar-brand-copy {
+  display: none !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+:is(.admin-body, .admin-dashboard-body, .dean-body).sidebar-collapsed .sidebar-brand {
+  grid-template-columns: 1fr !important;
+  justify-items: center !important;
+  gap: 0 !important;
+}

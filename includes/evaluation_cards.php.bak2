@@ -1,0 +1,4199 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/admin_data.php';
+require_once __DIR__ . '/peer_assignment_algorithm.php';
+require_once __DIR__ . '/evaluation_period.php';
+
+function dipascaf_evaluation_deadline(): string
+{
+    $period = dipascaf_open_evaluation_period();
+
+    return (string) ($period['date_end'] ?? date('Y-m-d', strtotime('+14 days')));
+
+
+}
+
+function dipascaf_current_cycle_name(): string
+{
+    $period = dipascaf_current_evaluation_period();
+
+    if ($period !== null && trim((string) ($period['period_name'] ?? '')) !== '') {
+        return trim((string) $period['period_name']);
+    
+
+    $setting = admin_one(
+        "SELECT setting_value FROM system_settings WHERE setting_key = 'current_appraisal_cycle' LIMIT 1"
+    }
+    );
+
+    if ($setting !== null && trim((string) ($setting['setting_value'] ?? '')) !== '') {
+        return trim((string) $setting['setting_value']);
+    
+
+    }
+    return date('Y') . ' Appraisal Cycle';
+
+
+}
+    
+    
+
+function dipascaf_questionnaire_type_from_position(string $positionTitle): string
+{
+    $position = strtolower($positionTitle);
+
+    return str_contains($position, 'dean') || str_contains($position, 'program head') ? 'admin' : 'faculty';
+
+
+}
+
+function dipascaf_department_aliases_for_dean(int $deanUserId): array
+{
+    $departments = admin_all(
+        'SELECT department_code, department_name FROM departments WHERE dean_user_id = :dean_user_id AND is_active = 1',
+        ['dean_user_id' => $deanUserId]
+    );
+
+    if ($departments !== []) {
+        $aliases = [];
+        foreach ($departments as $department) {
+            $aliases = array_merge($aliases, admin_department_aliases($department));
+        
+
+        }
+        return array_values(array_unique(array_filter($aliases)));
+    
+
+    $deanUser = admin_one(
+        'SELECT department FROM users WHERE id = :id',
+        ['id' => $deanUserId]
+    }
+    );
+
+    $department = trim((string) ($deanUser['department'] ?? ''));
+    if ($department === '') {
+        return [];
+    
+
+    $departmentRow = admin_one(
+        'SELECT department_code, department_name FROM departments WHERE department_name = :department OR department_code = :department LIMIT 1',
+        ['department' => $department]
+    }
+    );
+
+    if ($departmentRow !== null) {
+        return array_values(array_unique(array_filter(admin_department_aliases($departmentRow))));
+    
+
+    $departmentNormalized = strtolower(admin_normalize_department_name($department));
+    }
+    foreach (admin_departments() as $dept) {
+        $aliases = array_map('strtolower', admin_department_aliases($dept));
+        if (in_array($departmentNormalized, $aliases, true) || in_array(strtolower($department), $aliases, true)) {
+            return array_values(array_unique(array_filter(admin_department_aliases($dept))));
+        
+    
+
+        }
+    }
+    return [$department];
+
+
+}
+        
+    
+    
+    
+        
+    
+
+function dipascaf_sync_department_faculty_records(array $departments): void
+{
+    $departments = array_values(array_unique(array_filter($departments, fn ($value): bool => is_string($value) && trim($value) !== '')));
+    if ($departments === []) {
+        return;
+    
+
+    $placeholders = implode(',', array_fill(0, count($departments), '?'));
+    $users = admin_all(
+        "SELECT id, full_name, email, phone, department, program, role
+         FROM users
+         WHERE is_active = 1
+           AND role IN ('teacher', 'program_head')
+           AND department IN ($placeholders)",
+        $departments
+    }
+    );
+
+    foreach ($users as $user) {
+        $email = trim((string) ($user['email'] ?? ''));
+        $userId = (int) ($user['id'] ?? 0);
+        if ($email === '' || $userId === 0) {
+            continue;
+        
+
+        $positionTitle = $user['role'] === 'program_head' ? 'Program Head' : 'Faculty';
+        $programCode = trim((string) ($user['program'] ?? ''));
+        $departmentValue = trim((string) ($user['department'] ?? ''));
+
+        $existingFaculty = admin_one(
+            'SELECT id FROM faculty WHERE user_id = :user_id OR email = :email LIMIT 1',
+            ['user_id' => $userId, 'email' => $email]
+        }
+        );
+
+        if ($existingFaculty === null) {
+            try {
+                $stmt = db()->prepare(
+                    "INSERT IGNORE INTO faculty
+                        (user_id, full_name, email, phone, department, program_code, position_title)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)"
+                );
+                $stmt->execute([
+                    $userId,
+                    trim((string) ($user['full_name'] ?? '')),
+                    $email,
+                    trim((string) ($user['phone'] ?? '')) ?: null,
+                    $departmentValue,
+                    $programCode ?: null,
+                    $positionTitle,
+                ]);
+             }
+             catch (Throwable) {
+             }
+                // ignore insert failures
+            
+         }
+         else
+            try {
+                $stmt = db()->prepare(
+                    "UPDATE faculty
+                     SET full_name = ?, email = ?, phone = ?, department = ?, program_code = ?, position_title = ?
+                     WHERE id = ?"
+                );
+                $stmt->execute([
+                    trim((string) ($user['full_name'] ?? '')),
+                    $email,
+                    trim((string) ($user['phone'] ?? '')) ?: null,
+                    $departmentValue,
+                    $programCode ?: null,
+                    $positionTitle,
+                    (int) $existingFaculty['id'],
+                ]);
+             }
+             catch (Throwable) {
+             }
+                // ignore update failures
+            
+        
+    
+
+
+    }
+}
+             
+            
+             
+            
+        
+        
+    
+    
+
+function dipascaf_ensure_leadership_faculty_record(int $userId, string $positionTitle): int
+{
+    $user = admin_one(
+        'SELECT id, full_name, email, phone, department, program, role FROM users WHERE id = :id AND is_active = 1 LIMIT 1',
+        ['id' => $userId]
+    );
+
+    if ($user === null) {
+        return 0;
+    
+
+    $email = trim((string) ($user['email'] ?? ''));
+    }
+    if ($email === '') {
+        return 0;
+    
+
+    $existingFaculty = admin_one(
+        'SELECT id FROM faculty WHERE user_id = :user_id OR email = :email LIMIT 1',
+        ['user_id' => $userId, 'email' => $email]
+    }
+    );
+
+    $department = trim((string) ($user['department'] ?? ''));
+    $program = trim((string) ($user['program'] ?? ''));
+
+    if ($existingFaculty === null) {
+        try {
+            $stmt = db()->prepare(
+                "INSERT IGNORE INTO faculty
+                    (user_id, full_name, email, phone, department, program_code, position_title)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)"
+            );
+            $stmt->execute([
+                $userId,
+                trim((string) ($user['full_name'] ?? '')),
+                $email,
+                trim((string) ($user['phone'] ?? '')) ?: null,
+                $department,
+                $program ?: null,
+                $positionTitle,
+            ]);
+         }
+         catch (Throwable) {
+         }
+            return 0;
+        
+
+        $existingFaculty = admin_one(
+            'SELECT id FROM faculty WHERE user_id = :user_id OR email = :email LIMIT 1',
+            ['user_id' => $userId, 'email' => $email]
+         }
+        }
+        );
+     
+     else
+        try {
+            db()->prepare(
+                "UPDATE faculty
+                 SET user_id = ?, full_name = ?, email = ?, phone = ?, department = ?, program_code = ?, position_title = ?
+                 WHERE id = ?"
+            )->execute([
+                $userId,
+                trim((string) ($user['full_name'] ?? '')),
+                $email,
+                trim((string) ($user['phone'] ?? '')) ?: null,
+                $department,
+                $program ?: null,
+                $positionTitle,
+                (int) $existingFaculty['id'],
+            ]);
+         }
+         catch (Throwable) {
+         }
+            // Keep the existing row usable even if optional metadata cannot be refreshed.
+        
+    
+
+    return (int) ($existingFaculty['id'] ?? 0);
+
+
+
+         
+        
+    
+    
+    
+
+function dipascaf_ensure_teacher_leadership_assignments(int $teacherUserId): void
+{
+    admin_ensure_faculty_program_schema();
+
+    $teacher = admin_one(
+        'SELECT u.id, u.email, u.department, u.program, f.id AS faculty_id, f.department AS faculty_department, f.program_code
+         FROM users u
+         LEFT JOIN faculty f ON f.user_id = u.id OR (f.user_id IS NULL AND f.email = u.email)
+         WHERE u.id = :id AND u.role = "teacher" AND u.is_active = 1
+         LIMIT 1',
+        ['id' => $teacherUserId]
+    );
+
+    if ($teacher === null) {
+        return;
+    
+
+    $department = trim((string) ($teacher['faculty_department'] ?? $teacher['department'] ?? ''));
+    $programCode = trim((string) ($teacher['program_code'] ?? $teacher['program'] ?? ''));
+    }
+    if ($department === '' && $programCode === '') {
+        return;
+    
+
+    $departmentAliases = $department !== '' ? admin_matching_department_aliases($department) : [];
+    }
+    if ($departmentAliases === [] && $department !== '') {
+        $departmentAliases = [$department];
+    
+
+    $leaders = [];
+
+    }
+    if ($departmentAliases !== []) {
+        $placeholders = implode(',', array_fill(0, count($departmentAliases), '?'));
+        $deans = admin_all(
+            "SELECT DISTINCT u.id, u.role
+             FROM departments d
+             JOIN users u ON u.id = d.dean_user_id
+             WHERE d.is_active = 1
+               AND u.role = 'dean'
+               AND u.is_active = 1
+               AND (d.department_code IN ($placeholders) OR d.department_name IN ($placeholders) OR u.department IN ($placeholders))",
+            array_merge($departmentAliases, $departmentAliases, $departmentAliases)
+        );
+
+        foreach ($deans as $dean) {
+            $leaders[(int) $dean['id']] = ['user_id' => (int) $dean['id'], 'role' => 'dean'];
+        
+    
+
+        }
+    }
+    if ($programCode !== '') {
+        $programHead = admin_one(
+            "SELECT u.id, u.role
+             FROM programs p
+             JOIN users u ON u.id = p.program_head_user_id
+             WHERE p.is_active = 1
+               AND p.program_code = :program_code
+               AND u.role = 'program_head'
+               AND u.is_active = 1
+             LIMIT 1",
+            ['program_code' => $programCode]
+        );
+
+        if ($programHead !== null) {
+            $leaders[(int) $programHead['id']] = ['user_id' => (int) $programHead['id'], 'role' => 'program_head'];
+         }
+         else
+         }
+            $programHeadUser = admin_one(
+                "SELECT id, role
+                 FROM users
+                 WHERE role = 'program_head'
+                   AND is_active = 1
+                   AND program = :program_code
+                 LIMIT 1",
+                ['program_code' => $programCode]
+            );
+
+            if ($programHeadUser !== null) {
+                $leaders[(int) $programHeadUser['id']] = ['user_id' => (int) $programHeadUser['id'], 'role' => 'program_head'];
+            
+        
+    
+
+            }
+    if ($leaders === []) {
+        return;
+    
+
+    $cycleName = dipascaf_current_cycle_name();
+    $insertAssignment = db()->prepare(
+        "INSERT IGNORE INTO peer_assignments
+            (cycle_name, evaluator_user_id, evaluatee_faculty_id, evaluator_role, assignment_type, questionnaire_type, status, assigned_at, deadline)
+         VALUES (?, ?, ?, 'teacher', ?, 'admin', 'pending', NOW(), ?)"
+    }
+    );
+
+    foreach ($leaders as $leader) {
+        $leaderUserId = (int) $leader['user_id'];
+        if ($leaderUserId === $teacherUserId) {
+            continue;
+        
+
+        $assignmentType = $leader['role'] === 'dean' ? 'dean' : 'program_head';
+        $positionTitle = $assignmentType === 'dean' ? 'Dean' : 'Program Head';
+        $facultyId = dipascaf_ensure_leadership_faculty_record($leaderUserId, $positionTitle);
+        }
+        if ($facultyId === 0 || $facultyId === (int) ($teacher['faculty_id'] ?? 0)) {
+            continue;
+        
+
+        $deadline = dipascaf_evaluation_deadline();
+        $insertAssignment->execute([
+            $cycleName,
+            $teacherUserId,
+            $facultyId,
+            $assignmentType,
+            $deadline,
+        }
+        }
+        ]);
+    
+
+
+        }
+    
+
+    
+    
+            
+        
+    
+        
+    
+    
+    
+    
+
+function dipascaf_ensure_teacher_peer_assignment(int $teacherUserId): void
+{
+    admin_ensure_faculty_program_schema();
+
+    $teacher = admin_one(
+        'SELECT u.id, u.email, u.department, u.program, f.id AS faculty_id, f.department AS faculty_department, f.program_code
+         FROM users u
+         LEFT JOIN faculty f ON f.user_id = u.id OR (f.user_id IS NULL AND f.email = u.email)
+         WHERE u.id = :id AND u.role = "teacher" AND u.is_active = 1
+         LIMIT 1',
+        ['id' => $teacherUserId]
+    );
+
+    if ($teacher === null) {
+        return;
+    
+
+    $teacherFacultyId = (int) ($teacher['faculty_id'] ?? 0);
+    $department = trim((string) ($teacher['faculty_department'] ?? $teacher['department'] ?? ''));
+    $programCode = trim((string) ($teacher['program_code'] ?? $teacher['program'] ?? ''));
+    }
+    if ($teacherFacultyId === 0 || ($department === '' && $programCode === '')) {
+        return;
+    
+
+    $cycleName = dipascaf_current_cycle_name();
+    $existingPeer = admin_one(
+        'SELECT id FROM peer_assignments
+         WHERE cycle_name = :cycle_name
+           AND evaluator_user_id = :evaluator_user_id
+           AND evaluator_role = "teacher"
+           AND assignment_type = "peer"
+         LIMIT 1',
+        ['cycle_name' => $cycleName, 'evaluator_user_id' => $teacherUserId]
+    }
+    );
+
+    if ($existingPeer !== null) {
+        return;
+    
+
+    $filters = ['f.id <> :faculty_id', 'u.id <> :teacher_user_id', 'u.role = "teacher"', 'u.is_active = 1'];
+    $params = [
+        'faculty_id' => $teacherFacultyId,
+        'teacher_user_id' => $teacherUserId,
+    }
+    ];
+
+    if ($programCode !== '') {
+        $filters[] = '(f.program_code = :faculty_program_code OR u.program = :user_program_code)';
+        $params['faculty_program_code'] = $programCode;
+        $params['user_program_code'] = $programCode;
+     }
+     else$department !== '') {
+     }
+        $departmentAliases = admin_matching_department_aliases($department);
+        if ($departmentAliases === []) {
+            $departmentAliases = [$department];
+        
+
+        $departmentPlaceholders = [];
+        }
+        foreach ($departmentAliases as $index => $alias) {
+            $key = 'department_' . $index;
+            $departmentPlaceholders[] = ':' . $key;
+            $params[$key] = $alias;
+        
+        $filters[] = 'f.department IN (' . implode(',', $departmentPlaceholders) . ')';
+    
+
+    $peer = admin_one(
+        'SELECT f.id, u.id AS user_id
+         FROM faculty f
+         JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         WHERE f.is_active = 1
+           AND f.is_archived = 0
+           AND ' . implode(' AND ', $filters) . '
+           AND LOWER(COALESCE(f.position_title, "")) NOT LIKE "%dean%"
+           AND LOWER(COALESCE(f.position_title, "")) NOT LIKE "%program head%"
+         ORDER BY RAND()
+         LIMIT 1',
+        $params
+        }
+        }
+        
+     
+    
+    
+    
+    
+    );
+
+    if ($peer === null) {
+        return;
+    
+
+    db()->prepare(
+        "INSERT IGNORE INTO peer_assignments
+            (cycle_name, evaluator_user_id, evaluatee_faculty_id, evaluator_role, assignment_type, questionnaire_type, status, assigned_at, deadline)
+         VALUES (?, ?, ?, 'teacher', 'peer', 'faculty', 'pending', NOW(), ?)"
+    )->execute([
+        $cycleName,
+        $teacherUserId,
+        (int) $peer['id'],
+        dipascaf_evaluation_deadline(),
+    }
+    ]);
+
+
+    
+
+
+function dipascaf_program_head_scope(int $programHeadUserId): array
+{
+    $programs = admin_all(
+        'SELECT p.program_code, d.department_code, d.department_name
+         FROM programs p
+         JOIN departments d ON d.id = p.department_id
+         WHERE p.program_head_user_id = :program_head_user_id AND p.is_active = 1',
+        ['program_head_user_id' => $programHeadUserId]
+    );
+
+    $departments = [];
+    $programCodes = [];
+    foreach ($programs as $program) {
+        $programCodes[] = trim((string) ($program['program_code'] ?? ''));
+        $departments = array_merge($departments, admin_department_aliases($program));
+    
+
+    }
+    if ($programs === []) {
+        $user = admin_one(
+            'SELECT department, program FROM users WHERE id = :id AND role = "program_head" LIMIT 1',
+            ['id' => $programHeadUserId]
+        );
+
+        $department = trim((string) ($user['department'] ?? ''));
+        if ($department !== '') {
+            $departments = admin_matching_department_aliases($department);
+        
+
+        $program = trim((string) ($user['program'] ?? ''));
+        }
+        if ($program !== '') {
+            $programCodes[] = $program;
+        
+    
+
+        }
+    }
+    return [
+        'departments' => array_values(array_unique(array_filter($departments))),
+        'program_codes' => array_values(array_unique(array_filter($programCodes))),
+        }
+        
+    
+    
+    ];
+
+
+
+
+function dipascaf_ensure_program_head_assignments(int $programHeadUserId): void
+{
+    admin_ensure_faculty_program_schema();
+
+    $scope = dipascaf_program_head_scope($programHeadUserId);
+    $departments = $scope['departments'];
+    $programCodes = $scope['program_codes'];
+
+    if ($departments !== []) {
+        dipascaf_sync_department_faculty_records($departments);
+    
+
+    $filters = [];
+    $params = [];
+
+    }
+    if ($programCodes !== []) {
+        $programPlaceholders = implode(',', array_fill(0, count($programCodes), '?'));
+        $filters[] = "(f.program_code IN ($programPlaceholders) OR u.program IN ($programPlaceholders))";
+        $params = array_merge($params, $programCodes, $programCodes);
+    
+
+    }
+    if ($programCodes === [] && $departments !== []) {
+        $departmentPlaceholders = implode(',', array_fill(0, count($departments), '?'));
+        $filters[] = "f.department IN ($departmentPlaceholders)";
+        $params = array_merge($params, $departments);
+    
+
+    }
+    if ($filters === []) {
+        return;
+    
+
+    $programHeadUser = admin_one(
+        'SELECT email FROM users WHERE id = :id',
+        ['id' => $programHeadUserId]
+    }
+    );
+    $programHeadEmail = strtolower(trim((string) ($programHeadUser['email'] ?? '')));
+    $cycleName = dipascaf_current_cycle_name();
+
+    if ($departments !== []) {
+        $departmentPlaceholders = implode(',', array_fill(0, count($departments), '?'));
+        $deans = admin_all(
+            "SELECT DISTINCT u.id
+             FROM departments d
+             JOIN users u ON u.id = d.dean_user_id
+             WHERE d.is_active = 1
+               AND u.role = 'dean'
+               AND u.is_active = 1
+               AND (d.department_code IN ($departmentPlaceholders) OR d.department_name IN ($departmentPlaceholders) OR u.department IN ($departmentPlaceholders))",
+            array_merge($departments, $departments, $departments)
+        );
+
+        if ($deans !== []) {
+            $insertDeanAssignment = db()->prepare(
+                "INSERT IGNORE INTO peer_assignments
+                    (cycle_name, evaluator_user_id, evaluatee_faculty_id, evaluator_role, assignment_type, questionnaire_type, status, assigned_at, deadline)
+                 VALUES (?, ?, ?, 'program_head', 'dean', 'admin', 'pending', NOW(), ?)"
+            );
+
+            foreach ($deans as $dean) {
+                $deanUserId = (int) ($dean['id'] ?? 0);
+                if ($deanUserId === 0 || $deanUserId === $programHeadUserId) {
+                    continue;
+                
+
+                $deanFacultyId = dipascaf_ensure_leadership_faculty_record($deanUserId, 'Dean');
+                }
+                if ($deanFacultyId === 0) {
+                    continue;
+                
+
+                $deadline = dipascaf_evaluation_deadline();
+                $insertDeanAssignment->execute([
+                    $cycleName,
+                    $programHeadUserId,
+                    $deanFacultyId,
+                    $deadline,
+                }
+                }
+                ]);
+            
+        
+    
+
+    $facultyRows = admin_all(
+        "SELECT f.id, f.user_id, f.email, f.position_title, u.role AS user_role
+         FROM faculty f
+         LEFT JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         WHERE f.is_active = 1 AND f.is_archived = 0
+           AND (" . implode(' OR ', $filters) . ")
+           AND (u.role IS NULL OR u.role = 'teacher')
+           AND LOWER(COALESCE(f.position_title, '')) NOT LIKE '%program head%'
+           AND LOWER(COALESCE(f.position_title, '')) NOT LIKE '%dean%'
+         ORDER BY f.full_name",
+        $params
+                }
+            }
+        }
+    
+    );
+
+    if ($facultyRows === []) {
+        return;
+    
+
+    $insertAssignment = db()->prepare(
+        "INSERT IGNORE INTO peer_assignments
+            (cycle_name, evaluator_user_id, evaluatee_faculty_id, evaluator_role, assignment_type, questionnaire_type, status, assigned_at, deadline)
+         VALUES (?, ?, ?, 'program_head', 'program_head', 'faculty', 'pending', NOW(), ?)"
+    }
+    );
+
+    foreach ($facultyRows as $faculty) {
+        $facultyUserId = (int) ($faculty['user_id'] ?? 0);
+        $facultyEmail = strtolower(trim((string) ($faculty['email'] ?? '')));
+
+        if (
+            $facultyUserId === $programHeadUserId
+            || ($programHeadEmail !== '' && $facultyEmail !== '' && $facultyEmail === $programHeadEmail)
+        ) {
+            continue;
+        
+
+        $deadline = dipascaf_evaluation_deadline();
+        $insertAssignment->execute([
+            $cycleName,
+            $programHeadUserId,
+            (int) $faculty['id'],
+            $deadline,
+        }
+        ]);
+    
+
+
+        }
+    
+
+    
+    
+            
+        
+    
+    
+    
+    
+    
+
+function dipascaf_ensure_dean_assignments(int $deanUserId): void
+{
+    $departments = dipascaf_department_aliases_for_dean($deanUserId);
+    if ($departments === []) {
+        return;
+    
+
+    dipascaf_sync_department_faculty_records($departments);
+
+    $deanUser = admin_one(
+        'SELECT email FROM users WHERE id = :id',
+        ['id' => $deanUserId]
+    }
+    );
+    $deanEmail = strtolower(trim((string) ($deanUser['email'] ?? '')));
+
+    $placeholders = implode(',', array_fill(0, count($departments), '?'));
+    $facultyRows = admin_all(
+        "SELECT f.id, f.user_id, f.email, f.position_title, u.role AS user_role
+         FROM faculty f
+         LEFT JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         WHERE f.is_active = 1 AND f.is_archived = 0
+           AND f.department IN ($placeholders)
+           AND (u.role IS NULL OR u.role <> 'admin_hr')
+         ORDER BY f.full_name",
+        $departments
+    }
+    );
+
+    if ($facultyRows === []) {
+        return;
+    
+
+    $cycleName = dipascaf_current_cycle_name();
+    $insertAssignment = db()->prepare(
+        "INSERT IGNORE INTO peer_assignments
+            (cycle_name, evaluator_user_id, evaluatee_faculty_id, evaluator_role, assignment_type, questionnaire_type, status, assigned_at, deadline)
+         VALUES (?, ?, ?, 'dean', 'dean', ?, 'pending', NOW(), ?)"
+    }
+    );
+
+    foreach ($facultyRows as $faculty) {
+        $facultyUserId = (int) ($faculty['user_id'] ?? 0);
+        $facultyEmail = strtolower(trim((string) ($faculty['email'] ?? '')));
+        $facultyRole = strtolower(trim((string) ($faculty['user_role'] ?? '')));
+
+        if (
+            $facultyUserId === $deanUserId
+            || $facultyRole === 'admin_hr'
+            || ($deanEmail !== '' && $facultyEmail !== '' && $facultyEmail === $deanEmail)
+        ) {
+            continue;
+        
+
+        $deadline = dipascaf_evaluation_deadline();
+        $insertAssignment->execute([
+            $cycleName,
+            $deanUserId,
+            (int) $faculty['id'],
+            dipascaf_questionnaire_type_from_position((string) ($faculty['position_title'] ?? '')),
+            $deadline,
+        }
+        ]);
+    
+
+
+        }
+    
+
+    
+    
+
+function dipascaf_required_explanation_type(float $averageRating): string
+{
+    if ($averageRating >= 4.51) {
+        return 'behavioral_evidence';
+    
+
+    }
+    if ($averageRating <= 3.00) {
+        return 'behavioral_evidence';
+    
+
+    }
+    return 'reason_for_rating';
+
+
+}
+    
+    
+
+function dipascaf_validate_category_explanation(
+
+    string $categoryTitle,
+    float $averageRating,
+    string $behavioralEvidence,
+    string $reasonForRating,
+    string $recommendation,
+    string $aiSuggestion,
+    string $aiDecision
+): void {
+    if ($averageRating >= 4.51 && $behavioralEvidence === '') {
+        throw new RuntimeException('Behavioral Evidence is required for high ratings in ' . $categoryTitle . '.');
+    
+
+    }
+    if ($averageRating <= 3.00 && $behavioralEvidence === '') {
+        throw new RuntimeException('Behavioral Evidence is required for low ratings in ' . $categoryTitle . '.');
+    
+
+
+    }
+    if ($aiSuggestion !== '' && !in_array($aiDecision, ['accepted', 'edited'], true)) {
+        throw new RuntimeException('Review and confirm the AI suggestion for ' . $categoryTitle . ' before submitting.');
+    
+
+
+    }
+}
+    
+    
+    
+
+function dipascaf_assignment_rows(int $evaluatorUserId, string $evaluatorRole): array
+{
+    $period = dipascaf_open_evaluation_period();
+    if ($period === null) {
+        return [];
+    
+
+    admin_ensure_profile_image_column();
+    }
+    if ($evaluatorRole === 'dean') {
+        dipascaf_ensure_dean_assignments($evaluatorUserId);
+     }
+     else$evaluatorRole === 'vpaa') {
+     }
+        require_once __DIR__ . '/vpaa_data.php';
+        vpaa_ensure_dean_assignments($evaluatorUserId);
+     }
+     else$evaluatorRole === 'program_head') {
+     }
+        dipascaf_ensure_program_head_assignments($evaluatorUserId);
+     
+     else$evaluatorRole === 'teacher') {
+     }
+        dipascaf_ensure_teacher_leadership_assignments($evaluatorUserId);
+        dipascaf_ensure_teacher_peer_assignment($evaluatorUserId);
+    
+    try {
+        db()->exec(
+            "UPDATE peer_assignments pa
+             JOIN faculty f ON f.id = pa.evaluatee_faculty_id
+             SET pa.questionnaire_type = CASE
+                 WHEN LOWER(f.position_title) LIKE '%dean%' OR LOWER(f.position_title) LIKE '%program head%' THEN 'admin'
+                 ELSE 'faculty'
+             END
+             WHERE pa.questionnaire_type IS NULL"
+        );
+     }
+     catch (Throwable) {
+     }
+        // Older databases without questionnaire_type are handled by their existing section routing.
+    
+
+    $rows = admin_all(
+        'SELECT p.*, f.full_name, f.full_name AS evaluatee_name, f.email, f.department,
+            COALESCE(NULLIF(f.program_code, ""), NULLIF(u.program, ""), "") AS program_code,
+            pg.program_name AS program_name,
+            f.position_title, f.progress_percent, u.profile_image
+         FROM peer_assignments p
+         JOIN faculty f ON f.id = p.evaluatee_faculty_id
+         LEFT JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         LEFT JOIN programs pg ON pg.program_code = COALESCE(NULLIF(f.program_code, ""), NULLIF(u.program, ""), "")
+            WHERE p.evaluator_user_id = :evaluator_user_id AND p.evaluator_role = :evaluator_role
+              AND p.cycle_name = :cycle_name
+              AND COALESCE(LOWER(u.role), "") <> "admin_hr"
+         ORDER BY FIELD(p.status, "pending", "submitted"), p.assigned_at DESC',
+        ['evaluator_user_id' => $evaluatorUserId, 'evaluator_role' => $evaluatorRole, 'cycle_name' => (string) $period['period_name']]
+     
+    
+     
+     
+     
+    
+    
+    );
+
+    $assignmentIds = array_map(fn (array $row): int => (int) $row['id'], $rows);
+    $submissionsByAssignmentId = [];
+    if ($assignmentIds !== []) {
+        try {
+            $placeholders = implode(',', array_fill(0, count($assignmentIds), '?'));
+            $stmt = db()->prepare("SELECT * FROM evaluation_submissions WHERE assignment_id IN ($placeholders)");
+            $stmt->execute($assignmentIds);
+            foreach ($stmt->fetchAll() as $submission) {
+                $submissionsByAssignmentId[(int) $submission['assignment_id']] = $submission;
+            
+         }
+         catch (Throwable) {
+         }
+            // Database unavailable - no submissions can be fetched
+        
+    
+
+    $deadline = dipascaf_evaluation_deadline();
+        }
+    }
+    foreach ($rows as &$row) {
+        $submission = $submissionsByAssignmentId[(int) $row['id']] ?? null;
+        $position = strtolower((string) $row['position_title']);
+        $row['role_label'] = match (true) {
+            str_contains($position, 'dean') => 'Dean',
+            str_contains($position, 'program head') => 'Program Head',
+            default => 'Faculty',
+        }
+        ;
+        $row['section_key'] = match (true) {
+            $row['assignment_type'] === 'peer' => 'peer',
+            $row['role_label'] === 'Dean' => 'dean',
+            $row['role_label'] === 'Program Head' => 'program_head',
+            default => 'faculty',
+        }
+        ;
+        $row['section_label'] = match ($row['section_key']) {
+            'dean' => 'Dean Evaluation',
+            'program_head' => 'Program Head Evaluation',
+            'peer' => 'Peer Evaluation',
+            default => 'Faculty Evaluation',
+        }
+        ;
+        $row['relationship_tag'] = $row['assignment_type'] === 'peer' ? 'Confidential peer evaluation' : '';
+        $row['deadline'] = $deadline;
+        $row['evaluation_score'] = null;
+        $row['date_evaluated_display'] = '';
+        $row['ai_analysis'] = null;
+
+        }
+        
+        
+        if ($submission) {
+            $scores = [
+                (int) ($submission['communication_score'] ?? 0),
+                (int) ($submission['teaching_score'] ?? 0),
+                (int) ($submission['classroom_management_score'] ?? 0),
+                (int) ($submission['job_knowledge_score'] ?? 0),
+            ];
+            $row['evaluation_score'] = round(array_sum($scores) / 4, 2);
+            $row['date_evaluated_display'] = $submission['submitted_at']
+                ? date('M j, Y', strtotime((string) $submission['submitted_at']))
+                : '';
+            $row['ai_analysis'] = dipascaf_generated_analysis($scores);
+        
+    
+    unset($row);
+
+    $rows = array_values(array_filter($rows, static function (array $row) use ($evaluatorRole): bool {
+        $roleLabel = (string) ($row['role_label'] ?? '');
+        $assignmentType = (string) ($row['assignment_type'] ?? '');
+
+        return match ($evaluatorRole) {
+            'vpaa' => $roleLabel === 'Dean',
+            'dean' => in_array($roleLabel, ['Faculty', 'Program Head'], true),
+            'program_head' => in_array($roleLabel, ['Faculty', 'Dean', 'Program Head'], true),
+            'teacher' => (
+                ($roleLabel === 'Faculty' && $assignmentType === 'peer')
+                || in_array($roleLabel, ['Dean', 'Program Head'], true)
+            ),
+            default => false,
+        }
+        ;
+    }
+        }
+    
+         
+            
+        
+    
+    ));
+
+        
+    
+        
+    
+    return $rows;
+
+
+
+function dipascaf_evaluation_records(array $assignments): array
+{
+    $assignmentIds = array_map(fn (array $row): int => (int) $row['id'], $assignments);
+    if ($assignmentIds === []) {
+        return [];
+    
+
+    }
+    try {
+        $placeholders = implode(',', array_fill(0, count($assignmentIds), '?'));
+        $stmt = db()->prepare("SELECT * FROM evaluation_submissions WHERE assignment_id IN ($placeholders)");
+        $stmt->execute($assignmentIds);
+     }
+     catch (Throwable) {
+     }
+        return [];
+    
+
+    $records = [];
+    foreach ($stmt->fetchAll() as $submission) {
+        $scores = [
+            (int) ($submission['communication_score'] ?? 3),
+            (int) ($submission['teaching_score'] ?? 3),
+            (int) ($submission['classroom_management_score'] ?? 3),
+            (int) ($submission['job_knowledge_score'] ?? 3),
+        ];
+        $records[(string) $submission['assignment_id']] = [
+            'communication_score' => $scores[0],
+            'teaching_score' => $scores[1],
+            'classroom_management_score' => $scores[2],
+            'job_knowledge_score' => $scores[3],
+            'behavioral_evidence' => secure_decrypt_value($submission['behavioral_evidence'] ?? ''),
+            'overall_comments' => secure_decrypt_value($submission['overall_comments'] ?? ''),
+            'analysis' => dipascaf_generated_analysis($scores),
+        ];
+    
+
+    }
+    return $records;
+
+
+}
+    
+     
+    
+    
+
+function dipascaf_generated_analysis(array $scores): array
+{
+    $labels = ['Communication', 'Teaching Effectiveness', 'Classroom Management', 'Job Knowledge'];
+    $maxIndex = array_keys($scores, max($scores))[0];
+    $minIndex = array_keys($scores, min($scores))[0];
+
+    return [
+        'strengths' => $labels[$maxIndex] . ' is the strongest observed area.',
+        'weaknesses' => $labels[$minIndex] . ' needs the most follow-up.',
+        'trainings' => match ($labels[$minIndex]) {
+            'Communication' => 'Communication skills workshop and feedback coaching',
+            'Teaching Effectiveness' => 'Outcomes-based teaching strategies seminar',
+            'Classroom Management' => 'Classroom management and learner engagement training',
+            default => 'Instructional planning and subject mastery mentoring',
+        ,
+        'insights' => 'Average score: ' . number_format(array_sum($scores) / 4, 2) . '/5.',
+        }
+        }
+    ];
+
+
+
+
+function dipascaf_evaluation_summary(array $assignments): array
+{
+    $total = count($assignments);
+    $done = count(array_filter($assignments, fn (array $row): bool => $row['status'] === 'submitted'));
+    $pending = max(0, $total - $done);
+
+    return [
+        'total' => $total,
+        'done' => $done,
+        'pending' => $pending,
+        'percent' => $total > 0 ? round(($done / $total) * 100) : 0,
+    ];
+
+
+}
+
+function dipascaf_form_b_seed(): array
+{
+    return [
+        [
+            'title' => 'Classroom Management',
+            'description' => 'Evaluator must provide comments or evidence based on actual classroom behavior, especially if the rating is 4.51 or higher, or 3.00 or lower.',
+            'factor_weight' => 18.00,
+            'questions' => [
+                'Prepares and submits learning plans/syllabi and module delivery plans.',
+                'Prepares needed materials for the delivery of instructions in advance of the class session.',
+                'Starts and ends the class on time.',
+                'Presents and discusses lessons in a clear and orderly manner.',
+                'Implements rules of behavior fairly and consistently.',
+                'Guides students by setting the objectives of the lesson at the start of the period, and summarizing the lesson toward the end of the class.',
+                'Administers evaluation/assessment instruments and returns corrected papers with corresponding grades within the prescribed deadline.',
+                'Prepares formative and summative types of measures for monitoring, regulating, and evaluating students’ class performance.',
+            ],
+        ],
+        [
+            'title' => 'Job Knowledge, Quality of Work, and Excellence',
+            'description' => 'Evaluator must describe the faculty member’s work quality, subject mastery, output completion, and professional competence.',
+            'factor_weight' => 18.00,
+            'questions' => [
+                'Demonstrates knowledge of basic concepts, facts, and principles of the particular professional discipline.',
+                'Demonstrates capability to carry out instructions, follow orders, and complete assigned work with minimum supervision.',
+                'Accomplishes tasks and assignments with accuracy, completeness, neatness, and timeliness in relation to institutional standards.',
+                'Completes tasks efficiently and effectively.',
+            ],
+        ],
+        [
+            'title' => 'Communication Skills',
+            'description' => 'Evaluator must describe how the faculty communicates with students, colleagues, superiors, and other stakeholders.',
+            'factor_weight' => 14.00,
+            'questions' => [
+                'Organizes and conveys ideas clearly and consistently. Transmits ideas, thoughts, and information convincingly and confidently to gain understanding and acceptance, or to generate agreement and action, whether orally or in writing.',
+                'Delivers messages and information to others through the use of appropriate approach, medium, and language.',
+                'Gives courteous, accurate, and complete responses to inquiries of both internal and external customers.',
+                'Uses appropriate non-verbal communication such as tone, volume, facial expression, and gestures in support of spoken messages.',
+                'Gives necessary and timely feedback to superiors and colleagues on work and personal concerns and issues affecting the work environment and job performance.',
+            ],
+        ],
+        [
+            'title' => 'Flexibility and Adaptability, Resourcefulness, Creativity, and Innovativeness',
+            'description' => 'Evaluator must describe how the faculty adapts to changes, solves problems, and contributes new ideas.',
+            'factor_weight' => 12.00,
+            'questions' => [
+                'Develops more effective and efficient ways of accomplishing work targets by actively generating and contributing new ideas and translating these ideas to improve methods, systems, and techniques for application in the learning environment.',
+                'Shows ability to adjust to different roles and functions within the institution and adapt to different situations.',
+                'Originates and develops new or improved methods, procedures, and techniques to contribute to institutional productivity, efficiency, and effectiveness.',
+                'Displays openness to change and acceptance of new institutional situations and methods of performing one’s tasks.',
+                'Shares results of successful innovation efforts with other units in the institution.',
+            ],
+        ],
+        [
+            'title' => 'Job Commitment and Responsibility',
+            'description' => 'Evaluator must describe the faculty member’s reliability, responsibility, initiative, and commitment to assigned duties.',
+            'factor_weight' => 12.00,
+            'questions' => [
+                'Performs tasks with minimal guidance and outside direction.',
+                'Accepts assigned tasks and responsibilities with willingness and enthusiasm. Addresses job-related concerns promptly.',
+                'Pursues tasks with industry and perseverance until completion; exhibits willingness to put in extra time and effort in the completion of tasks.',
+                'Manifests reliability in completing and submitting expected work outputs, including reportorial requirements.',
+                'Performs assigned regular and/or additional tasks and pursues work goals willingly and with a sense of responsibility and personal accountability, without immediate consideration or expectation of additional material or economic rewards.',
+            ],
+        ],
+        [
+            'title' => 'Institutional Sensitivity',
+            'description' => 'Evaluator must describe how the faculty supports institutional values, policies, and activities.',
+            'factor_weight' => 10.00,
+            'questions' => [
+                'Shows loyalty and commitment to the institution by upholding the institutional vision, mission, philosophy, and values, as opposed to loyalty to specific individuals in the organization.',
+                'Takes pride in being associated as a member of the organization; looks at one’s relationship with the institution as a mutually beneficial long-term partnership.',
+                'Assumes responsibility for and recognizes the impact and implication of personal actions and decisions on institutional concerns such as organizational image, productivity, and viability.',
+                'Observes and complies with institutional policies, procedures, and guidelines.',
+                'Takes effort to be present and participate in institutional activities.',
+            ],
+        ],
+        [
+            'title' => 'Interpersonal Sensitivity, Teamwork, and Collaboration',
+            'description' => 'Evaluator must describe how the faculty works with others, accepts feedback, and contributes to teamwork.',
+            'factor_weight' => 10.00,
+            'questions' => [
+                'Respects roles and functions, opinions, abilities, and contributions of others; treats others with dignity and importance regardless of rank in the organization.',
+                'Shows openness to constructive feedback on developmental areas from others in the organization.',
+                'Provides help and support to others by sharing one’s knowledge, ideas, suggestions, opinions, insights from experience, and resources.',
+                'Complements the weaknesses of other team players with one’s own strengths in the performance of group tasks and activities.',
+                'Develops mutual trust, sensitivity, acceptance or tolerance of individual differences, and empathy with others. Respects feelings, beliefs, traditions, and culture of others.',
+            ],
+        ],
+        [
+            'title' => 'Attendance and Punctuality',
+            'description' => 'Evaluator must describe the faculty member’s attendance, punctuality, and time management.',
+            'factor_weight' => 8.00,
+            'questions' => [
+                'Observes regularity and punctuality in work hours.',
+                'Comes on time for institutional activities such as meetings, assemblies, programs, and appointments with external parties; does not leave until completion of the activity unless there is a valid and pressing reason to do so.',
+                'Stays in one’s work area for the performance of tasks unless absence from the work station is occasioned by performance of work in another venue as directed by superiors or as necessary.',
+                'Minimizes lost time in the performance of functions.',
+            ],
+        ],
+        [
+            'title' => 'Professional Decorum',
+            'description' => 'Evaluator must describe the faculty member’s professionalism, ethics, fairness, integrity, and proper conduct.',
+            'factor_weight' => 8.00,
+            'questions' => [
+                'Observes professional ethics in the performance of one’s job.',
+                'Observes fairness and equity when dealing with all stakeholders of the institution.',
+                'Displays personal and professional integrity by matching one’s words with the corresponding action.',
+                'Exhibits professional behavior through appropriate manners, speech, and dressing in day-to-day work, institutional activities, and when representing the institution in external functions, so as to project a positive institutional image.',
+            ],
+        ],
+    ];
+
+
+}
+
+function dipascaf_ensure_form_b_schema(): void
+{
+    static $checked = false;
+
+    if ($checked) {
+        return;
+    
+
+    $checked = true;
+
+    }
+    try {
+        db()->exec(
+            'CREATE TABLE IF NOT EXISTS pmas_form_b_categories (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(220) NOT NULL UNIQUE,
+                factor_weight DECIMAL(5,2) NOT NULL,
+                sort_order INT NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )'
+        );
+
+        db()->exec(
+            'CREATE TABLE IF NOT EXISTS pmas_form_b_questions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                category_id INT NOT NULL,
+                question_text TEXT NOT NULL,
+                sort_order INT NOT NULL DEFAULT 0,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_form_b_question (category_id, question_text(180)),
+                CONSTRAINT fk_form_b_question_category
+                    FOREIGN KEY (category_id) REFERENCES pmas_form_b_categories(id)
+                    ON DELETE CASCADE
+            )'
+        );
+
+        db()->exec(
+            'CREATE TABLE IF NOT EXISTS pmas_form_b_category_results (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                assignment_id INT NOT NULL,
+                evaluator_user_id INT NOT NULL,
+                evaluatee_faculty_id INT NOT NULL,
+                category_id INT NOT NULL,
+                total_rate DECIMAL(6,2) NOT NULL,
+                question_count INT NOT NULL,
+                average_rating DECIMAL(4,2) NOT NULL,
+                factor_weight DECIMAL(5,2) NOT NULL,
+                weighted_score DECIMAL(6,4) NOT NULL,
+                questionnaire_answers JSON NULL,
+                behavioral_evidence TEXT NULL,
+                reason_for_rating TEXT NULL,
+                recommendation TEXT NULL,
+                ai_suggestion TEXT NULL,
+                ai_decision ENUM("none", "pending_review", "accepted", "edited", "rejected") NOT NULL DEFAULT "none",
+                required_explanation ENUM("behavioral_evidence", "reason_for_rating", "behavioral_evidence_recommendation") NOT NULL DEFAULT "reason_for_rating",
+                explanation_complete TINYINT(1) NOT NULL DEFAULT 0,
+                evaluation_period VARCHAR(120) NOT NULL,
+                status ENUM("draft", "completed") NOT NULL DEFAULT "completed",
+                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_form_b_assignment_category (assignment_id, category_id),
+                CONSTRAINT fk_form_b_result_assignment
+                    FOREIGN KEY (assignment_id) REFERENCES peer_assignments(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_form_b_result_evaluator
+                    FOREIGN KEY (evaluator_user_id) REFERENCES users(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_form_b_result_faculty
+                    FOREIGN KEY (evaluatee_faculty_id) REFERENCES faculty(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_form_b_result_category
+                    FOREIGN KEY (category_id) REFERENCES pmas_form_b_categories(id)
+                    ON DELETE CASCADE
+            )'
+        );
+
+        foreach ([
+            'ALTER TABLE pmas_form_b_categories ADD COLUMN description TEXT NULL AFTER title',
+            'ALTER TABLE pmas_form_b_categories ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER sort_order',
+            'ALTER TABLE pmas_form_b_category_results MODIFY ai_decision ENUM("none", "pending_review", "accepted", "edited", "rejected") NOT NULL DEFAULT "none"',
+            'ALTER TABLE pmas_form_b_category_results ADD COLUMN required_explanation ENUM("behavioral_evidence", "reason_for_rating", "behavioral_evidence_recommendation") NOT NULL DEFAULT "reason_for_rating" AFTER ai_decision',
+            'ALTER TABLE pmas_form_b_category_results ADD COLUMN explanation_complete TINYINT(1) NOT NULL DEFAULT 0 AFTER required_explanation',
+            'ALTER TABLE pmas_form_b_category_results ADD COLUMN questionnaire_evidence JSON NULL AFTER questionnaire_answers',
+        ] as $sql) {
+            try {
+                db()->exec($sql);
+             }
+             catch (Throwable) {
+             }
+                // Existing databases may already have the column or enum definition.
+            
+        
+
+        }
+        foreach (dipascaf_form_b_seed() as $index => $category) {
+            db()->prepare(
+                'INSERT INTO pmas_form_b_categories (title, description, factor_weight, sort_order)
+                 VALUES (:title, :description, :factor_weight, :sort_order)
+                 ON DUPLICATE KEY UPDATE title = title'
+            )->execute([
+                'title' => $category['title'],
+                'description' => $category['description'] ?? null,
+                'factor_weight' => $category['factor_weight'],
+                'sort_order' => $index + 1,
+            ]);
+
+            $categoryRow = admin_one('SELECT id FROM pmas_form_b_categories WHERE title = :title', ['title' => $category['title']]);
+            if ($categoryRow === null) {
+                continue;
+            
+
+            }
+            foreach ($category['questions'] as $questionIndex => $questionText) {
+                db()->prepare(
+                    'INSERT INTO pmas_form_b_questions (category_id, question_text, sort_order, is_active)
+                     VALUES (:category_id, :question_text, :sort_order, 1)
+                     ON DUPLICATE KEY UPDATE question_text = question_text'
+                )->execute([
+                    'category_id' => (int) $categoryRow['id'],
+                    'question_text' => $questionText,
+                    'sort_order' => $questionIndex + 1,
+                ]);
+            
+        
+     }
+        }
+     catch (Throwable) {
+     }
+        // Database unavailable — skip Form B schema setup gracefully
+    
+
+
+/* ============================================================
+ * PMAS Form A — Administrative Evaluation (Dean & Program Head)
+ * ============================================================ */
+
+    }
+}
+     
+            
+            
+        
+             
+            
+        
+    
+    
+
+function dipascaf_form_a_seed(): array
+{
+    return [
+        [
+            'title' => 'Leadership and Management of Subordinates / Management Skills: Planning, Organizing, and Controlling Skills',
+            'factor_weight' => 20.00,
+            'description' => 'Behavioral Evidences.',
+            'questions' => [
+                'Leads by example and with credibility.',
+                'Assumes responsibility and accountability for one’s actions and decisions and for those of others in the work group.',
+                'Motivates and inspires subordinates to ensure compliance with policies, procedures, and guidelines.',
+                'Maintains team spirit within the work unit.',
+                'Develops subordinates’ job and personal competence through delegation of authority and responsibility.',
+                'Conducts fair, objective, and comprehensive assessment of subordinates and implements developmental activities to enhance their performance level.',
+                'Utilizes various communications to convey relevant information.',
+                'Involves various stakeholders in the strategic planning for the institutional directions.',
+                'Sets challenging, quantifiable and time-bounded goals and work performance standards and establishes work priorities and courses of action based on set objectives.',
+                'Optimizes allocation of materials, human and financial resources, and time in relation to achievement of work performance results and objectives.',
+                'Undertakes the preparation of budget projections in support of work programs and activities and ensures optimal operations in accordance with approved budgetary allocations.',
+                'Incorporates in the action plans preventive and contingency measures in anticipation to potential problems.',
+                'Organizes group functions and activities and ensures that objectives, policies and procedures, and standards of performance are well defined and pursued.',
+                'Determines number and qualifications of staff required; ensures proper placement of and task assignment for subordinates in consideration of their present and potential competence level.',
+                'Sets up reportorial system feedbacking mechanisms for purpose of monitoring, regulating and evaluating actual work performances in accordance with work targets and performance standards.',
+                'Conducts regular evaluation of results of projects and activities; takes responsibility to initiate and complete corrective action if necessary.',
+            ],
+        ],
+        [
+            'title' => 'Job Knowledge, Quality of Work, and Excellence',
+            'factor_weight' => 18.00,
+            'description' => 'Behavioral Evidences.',
+            'questions' => [
+                'Demonstrates knowledge of basic concepts, facts and principles of particular professional discipline.',
+                'Manifests understanding methods, techniques, accomplishment of job functions.',
+                'Shows familiarity with specific details of one’s job by accomplishing duties and responsibilities as spelled out in the job description in a practical, efficient and effective manner.',
+                'Keeps abreast with the latest technology, concepts and approaches related to one’s work and takes effort to develop upgraded skills in keeping with such new development.',
+                'Manifests attention to details. Reviews and rechecks finished work for items that may be erroneous or had been overlooked before turning it over to concerned parties.',
+                'Accomplishes tasks and assignments with accuracy, completeness, neatness, and timeliness, in relation to institutional and other related industry standards.',
+                'Does the right things right the first time and every time. Exercises care in the performance of functions thus requiring negligible rework on completed assignment.',
+                'Manifests attention to details, reviews and re-checks finished work for items that may be erroneous or had been overlooked before turning it over to concerned parties.',
+                'Adheres to existing operational policies, procedures, systems and guidelines in the performance of one’s functions.',
+                'Completes tasks efficiently and effectively in consideration of pre-determined and mutually agreed performance standards to the satisfaction of the stakeholders’ needs and expectations.',
+            ],
+        ],
+        [
+            'title' => 'Interpersonal Sensitivity, Teamwork, and Collaboration',
+            'description' => 'Behavioral Evidences.',
+            'factor_weight' => 10.00,
+            'questions' => [
+                'Interacts effectively with all levels of officers and employees of the institution through a demonstration of a balance between positive regards for the self with the positive regards for others.',
+                'Displays cheerfulness and friendliness and establishes harmonious relationships with others and helps create a happy and fun but productive atmosphere in the workplace.',
+                'Accepts constructive feedback on developmental areas from others in the institution.',
+                'Initiates efforts at resolving interpersonal differences and conflict situations with others.',
+                'Respects the authority of superiors as symbols of the institution.',
+                'Participates willingly in group efforts, institutional activities and other collaborative endeavors.',
+                'Provides help and support to others by sharing one’s knowledge, ideas, suggestions, opinions and insights from experience, as well as resources.',
+                'Exerts efforts and undertakes reasonable adjustments to accommodate requests for assistance in providing information or services by other work units towards the completion of their functions and work assistance.',
+            ],
+        ],
+        [
+            'title' => 'Initiative: Resourcefulness, Creativity and Effectiveness',
+            'factor_weight' => 10.00,
+            'description' => 'Behavioral Evidences.',
+            'questions' => [
+                'Performs tasks with minimal guidance and outside direction.',
+                'Finishes job assignments even in the absence of some logistical requirements through the exercise of resourcefulness in generating substitutes or undertaking alternative approaches.',
+                'Displays stability and effective performance of work in spite of opposition, setbacks, problems, and unexpected events.',
+                'Displays openness to change and acceptance of new institutional situations and methods of performing one’s tasks.',
+                'Exercises creativity, by formulating and implementing innovative goals and projects for both one’s work area and the entire institution.',
+            ],
+        ],
+        [
+            'title' => 'Institutional Sensitivity / Concern for the Institution',
+            'factor_weight' => 10.00,
+            'description' => 'Behavioral Evidences.',
+            'questions' => [
+                'Shows loyalty and commitment to the institution by upholding the institutional vision, mission, philosophy, and values.',
+                'Takes effort to be present and participate in institutional activities.',
+                'Safeguards confidential information that one has access to especially if disclosures would be detrimental to the interest of the institution.',
+                'Demonstrates personal responsibility, commitment and loyalty to the institution by adhering to the institutional code of conduct and prescribed ethical work.',
+                'Assumes responsibility for and recognizes the impact and implication of personal actions and decisions on institutional concerns as institutional image, productivity, and viability.',
+            ],
+        ],
+        [
+            'title' => 'Communication Skills',
+            'description' => 'Behavioral Evidences.',
+            'factor_weight' => 10.00,
+            'questions' => [
+                'Demonstrates active listening skills to absorb and understand messages from others.',
+                'Delivers messages and information to others through the use of appropriate approach, medium, and language.',
+                'Gives courteous, accurate, and complete responses to inquiries of stakeholders.',
+                'Gives necessary and timely feedback to superiors and colleagues on work and personal concerns and issues affecting the work environment and job performance.',
+            ],
+        ],
+        [
+            'title' => 'Professional Decorum',
+            'description' => 'Behavioral Evidences.',
+            'factor_weight' => 9.00,
+            'questions' => [
+                'Observes professional ethics in the performance of one’s job.',
+                'Establishes professional relationships with stakeholders, avoiding personal closeness to the point of asking personal favors such as loans, borrowing of personal resources, etc.',
+                'Does things honestly and truthfully by being transparent in work-related transactions.',
+                'Exhibits professional behavior through appropriate manners, speech and dressing in day-to-day work, institutional activities and when representing the institution in external functions so as to project a positive institutional image.',
+            ],
+        ],
+        [
+            'title' => 'Attendance and Punctuality',
+            'description' => 'Behavioral Evidences.',
+            'factor_weight' => 5.00,
+            'questions' => [
+                'Arrives at the workplace on or before the official time in and leaves the workplace not earlier than the official time out.',
+                'Stays in one’s workplace for the performance of tasks unless performance of work in another venue as directed by superiors or as necessary.',
+                'Comes on time for institutional activities such as meetings, assemblies and programs.',
+                'Minimizes lost time in the performance of functions. Avoids opportunities to take time out, leaves one’s job, or absent oneself from work for personal transactions without any valid and pressing reasons.',
+            ],
+        ],
+    ];
+
+
+
+
+}
+
+function dipascaf_ensure_form_a_schema(): void
+{
+    static $checked = false;
+
+    if ($checked) {
+        return;
+    
+
+    $checked = true;
+
+    }
+    try {
+        db()->exec(
+            'CREATE TABLE IF NOT EXISTS pmas_form_a_categories (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(220) NOT NULL UNIQUE,
+                factor_weight DECIMAL(5,2) NOT NULL,
+                sort_order INT NOT NULL DEFAULT 0,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )'
+        );
+        foreach ([
+            'ALTER TABLE pmas_form_a_categories ADD COLUMN description TEXT NULL AFTER title',
+            'ALTER TABLE pmas_form_a_categories ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER sort_order',
+            'ALTER TABLE pmas_form_a_categories ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at',
+            'ALTER TABLE pmas_form_a_questions ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at',
+        ] as $sql) {
+            try {
+                db()->exec($sql);
+             }
+             catch (Throwable $exception) {
+             }
+                // Older local databases may already have these columns.
+            
+        
+
+        db()->exec(
+            'CREATE TABLE IF NOT EXISTS pmas_form_a_questions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                category_id INT NOT NULL,
+                question_text TEXT NOT NULL,
+                sort_order INT NOT NULL DEFAULT 0,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_form_a_question (category_id, question_text(180)),
+                CONSTRAINT fk_form_a_question_category
+                    FOREIGN KEY (category_id) REFERENCES pmas_form_a_categories(id)
+                    ON DELETE CASCADE
+            )'
+        }
+        );
+
+        db()->exec(
+            'CREATE TABLE IF NOT EXISTS pmas_form_a_category_results (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                assignment_id INT NOT NULL,
+                evaluator_user_id INT NOT NULL,
+                evaluatee_faculty_id INT NOT NULL,
+                category_id INT NOT NULL,
+                total_rate DECIMAL(6,2) NOT NULL,
+                question_count INT NOT NULL,
+                average_rating DECIMAL(4,2) NOT NULL,
+                factor_weight DECIMAL(5,2) NOT NULL,
+                weighted_score DECIMAL(6,4) NOT NULL,
+                questionnaire_answers JSON NULL,
+                behavioral_evidence TEXT NULL,
+                reason_for_rating TEXT NULL,
+                recommendation TEXT NULL,
+                ai_suggestion TEXT NULL,
+                ai_decision ENUM("none", "pending_review", "accepted", "edited", "rejected") NOT NULL DEFAULT "none",
+                required_explanation ENUM("behavioral_evidence", "reason_for_rating", "behavioral_evidence_recommendation") NOT NULL DEFAULT "reason_for_rating",
+                explanation_complete TINYINT(1) NOT NULL DEFAULT 0,
+                evaluation_period VARCHAR(120) NOT NULL,
+                status ENUM("draft", "completed") NOT NULL DEFAULT "completed",
+                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_form_a_assignment_category (assignment_id, category_id),
+                CONSTRAINT fk_form_a_result_assignment
+                    FOREIGN KEY (assignment_id) REFERENCES peer_assignments(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_form_a_result_evaluator
+                    FOREIGN KEY (evaluator_user_id) REFERENCES users(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_form_a_result_faculty
+                    FOREIGN KEY (evaluatee_faculty_id) REFERENCES faculty(id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_form_a_result_category
+                    FOREIGN KEY (category_id) REFERENCES pmas_form_a_categories(id)
+                    ON DELETE CASCADE
+            )'
+             }
+            }
+        
+        );
+        foreach ([
+            'ALTER TABLE pmas_form_a_category_results MODIFY ai_decision ENUM("none", "pending_review", "accepted", "edited", "rejected") NOT NULL DEFAULT "none"',
+            'ALTER TABLE pmas_form_a_category_results ADD COLUMN required_explanation ENUM("behavioral_evidence", "reason_for_rating", "behavioral_evidence_recommendation") NOT NULL DEFAULT "reason_for_rating" AFTER ai_decision',
+            'ALTER TABLE pmas_form_a_category_results ADD COLUMN explanation_complete TINYINT(1) NOT NULL DEFAULT 0 AFTER required_explanation',
+            'ALTER TABLE pmas_form_a_category_results ADD COLUMN questionnaire_evidence JSON NULL AFTER questionnaire_answers',
+        ] as $sql) {
+            try {
+                db()->exec($sql);
+             }
+             catch (Throwable $exception) {
+             }
+                // Older local databases may already have these columns.
+            
+        
+
+        }
+        foreach (dipascaf_form_a_seed() as $index => $category) {
+            db()->prepare(
+                'INSERT INTO pmas_form_a_categories (title, description, factor_weight, sort_order)
+                 VALUES (:title, :description, :factor_weight, :sort_order)
+                 ON DUPLICATE KEY UPDATE title = title'
+            )->execute([
+                'title' => $category['title'],
+                'factor_weight' => $category['factor_weight'],
+                'sort_order' => $index + 1,
+                'description' => $category['description'] ?? null,
+            ]);
+
+            $categoryRow = admin_one('SELECT id FROM pmas_form_a_categories WHERE title = :title', ['title' => $category['title']]);
+            if ($categoryRow === null) {
+                continue;
+            
+
+            }
+            foreach ($category['questions'] as $questionIndex => $questionText) {
+                db()->prepare(
+                    'INSERT INTO pmas_form_a_questions (category_id, question_text, sort_order, is_active)
+                     VALUES (:category_id, :question_text, :sort_order, 1)
+                     ON DUPLICATE KEY UPDATE question_text = question_text'
+                )->execute([
+                    'category_id' => (int) $categoryRow['id'],
+                    'question_text' => $questionText,
+                    'sort_order' => $questionIndex + 1,
+                ]);
+            
+        
+     }
+        }
+     catch (Throwable) {
+     }
+        // Database unavailable — skip Form A schema setup gracefully
+    
+
+
+    
+
+     
+            
+            
+        
+             
+            
+        
+    
+    
+
+function dipascaf_form_a_categories(): array
+{
+    dipascaf_ensure_form_a_schema();
+
+    $categories = admin_all(
+        'SELECT * FROM pmas_form_a_categories WHERE is_active = 1 ORDER BY sort_order, id'
+    );
+    $questions = admin_all(
+        'SELECT * FROM pmas_form_a_questions WHERE is_active = 1 ORDER BY sort_order, id'
+    );
+
+    $questionsByCategory = [];
+    foreach ($questions as $q) {
+        $questionsByCategory[(int) $q['category_id']][] = $q;
+    
+
+    }
+    foreach ($categories as &$category) {
+        $category['questions'] = $questionsByCategory[(int) $category['id']] ?? [];
+    
+    unset($category);
+
+    }
+    return $categories;
+
+
+}
+    
+    
+
+function dipascaf_form_a_records(array $assignments): array
+{
+    dipascaf_ensure_form_a_schema();
+
+    $ids = array_map(fn ($a) => $a['assignment_id'] ?? $a['id'] ?? 0, $assignments);
+    $ids = array_filter($ids, fn ($id) => $id > 0);
+
+    if (empty($ids)) {
+        return [];
+    
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $records = admin_all(
+        "SELECT r.*, c.title AS category_title
+         FROM pmas_form_a_category_results r
+         JOIN pmas_form_a_categories c ON c.id = r.category_id
+         WHERE r.assignment_id IN ($placeholders) AND r.status = 'completed'",
+        $ids
+    }
+    );
+
+    $byAssignment = [];
+    foreach ($records as $r) {
+        $aid = (int) $r['assignment_id'];
+        $byAssignment[$aid][] = [
+            'category_id' => (int) $r['category_id'],
+            'category_title' => (string) $r['category_title'],
+            'total_rate' => (float) $r['total_rate'],
+            'question_count' => (int) $r['question_count'],
+            'average_rating' => (float) $r['average_rating'],
+            'factor_weight' => (float) $r['factor_weight'],
+            'weighted_score' => (float) $r['weighted_score'],
+            'questionnaire_answers' => json_decode((string) ($r['questionnaire_answers'] ?? '{'), true) ?: [],
+            'questionnaire_evidence' => json_decode((string) ($r['questionnaire_evidence'] ?? '{'), true) ?: [],
+            'behavioral_evidence' => secure_decrypt_value($r['behavioral_evidence'] ?? ''),
+            'reason_for_rating' => secure_decrypt_value($r['reason_for_rating'] ?? ''),
+            'recommendation' => secure_decrypt_value($r['recommendation'] ?? ''),
+            'ai_suggestion' => secure_decrypt_value($r['ai_suggestion'] ?? ''),
+            'ai_decision' => (string) ($r['ai_decision'] ?? 'none'),
+            'required_explanation' => (string) ($r['required_explanation'] ?? ''),
+            'explanation_complete' => (int) ($r['explanation_complete'] ?? 0),
+            'status' => (string) ($r['status'] ?? ''),
+            }
+            }
+        ];
+    
+
+    
+    return $byAssignment;
+
+
+
+    
+    
+
+function dipascaf_completion_activity_message(int $assignmentId, string $formLabel, float $finalScore): string
+{
+    $details = admin_one(
+        'SELECT pa.id, f.full_name AS evaluatee_name, u.full_name AS evaluator_name
+         FROM peer_assignments pa
+         JOIN faculty f ON f.id = pa.evaluatee_faculty_id
+         LEFT JOIN users u ON u.id = pa.evaluator_user_id
+         WHERE pa.id = :id',
+        ['id' => $assignmentId]
+    );
+
+    $evaluateeName = trim((string) ($details['evaluatee_name'] ?? 'assigned faculty'));
+    $evaluatorName = trim((string) ($details['evaluator_name'] ?? 'An evaluator'));
+
+    return sprintf(
+        '%s completed %s evaluation for %s (Assignment #%d, Score: %.2f/5).',
+        $evaluatorName !== '' ? $evaluatorName : 'An evaluator',
+        $formLabel,
+        $evaluateeName !== '' ? $evaluateeName : 'assigned faculty',
+        $assignmentId,
+        $finalScore
+    );
+
+
+}
+
+function dipascaf_submit_form_a_evaluation(array $input): array
+{
+    $assignmentId = (int) ($input['assignment_id'] ?? 0);
+    $formData     = $input['form_a_payload'] ?? [];
+    $evaluationPeriod = $input['evaluation_period'] ?? 'Unknown Period';
+
+    if ($assignmentId <= 0 || empty($formData)) {
+        return ['success' => false, 'message' => 'Invalid assignment or empty form data.'];
+    
+
+    $assignment = admin_one(
+        'SELECT pa.*, pa.evaluator_user_id, pa.evaluatee_faculty_id
+         FROM peer_assignments pa
+         WHERE pa.id = :id',
+        ['id' => $assignmentId]
+    }
+    );
+
+    if ($assignment === null) {
+        return ['success' => false, 'message' => 'Assignment not found.'];
+    
+
+    $currentUser = current_user();
+    }
+    if ($currentUser !== null && (int) $currentUser['id'] !== (int) $assignment['evaluator_user_id']) {
+        return ['success' => false, 'message' => 'You are not authorized to submit this evaluation.'];
+    
+
+    }
+    if ((string) ($assignment['status'] ?? '') === 'submitted') {
+        return ['success' => false, 'message' => 'This evaluation was already submitted.'];
+    
+
+    }
+    try {
+        $period = dipascaf_assert_assignment_allowed($assignment, (int) ($currentUser['id'] ?? 0), 'form_a');
+        $evaluationPeriod = (string) ($period['period_name'] ?? $evaluationPeriod);
+     }
+     catch (Throwable $exception) {
+     }
+        return ['success' => false, 'message' => $exception->getMessage()];
+    
+
+    $evaluatorId    = (int) $assignment['evaluator_user_id'];
+    $evaluateeId    = (int) $assignment['evaluatee_faculty_id'];
+
+    $categoryIds = array_keys($formData);
+    if (count($categoryIds) < 1) {
+        return ['success' => false, 'message' => 'No category data provided.'];
+    
+
+    $activeCategories = dipascaf_form_a_categories();
+    $categoriesById = [];
+    }
+    foreach ($activeCategories as $category) {
+        $categoriesById[(int) $category['id']] = $category;
+    
+
+    }
+    if ($categoriesById === []) {
+        return ['success' => false, 'message' => 'PMAS Form A has no active categories.'];
+    
+
+    }
+    foreach ($categoriesById as $categoryId => $category) {
+        if (!isset($formData[(string) $categoryId]) && !isset($formData[$categoryId])) {
+            return ['success' => false, 'message' => 'Complete all PMAS Form A categories before final submission. Missing: ' . $category['title']];
+        
+    
+
+    db()->beginTransaction();
+        }
+    }
+    try {
+        $totalWeightedScore = 0.0;
+        $allCategoryScores = [];
+
+        foreach ($categoriesById as $catId => $category) {
+            $catId = (int) $catId;
+            $catData = $formData[(string) $catId] ?? $formData[$catId] ?? [];
+            $answers = $catData['answers'] ?? [];
+            $behavioralEvidence = trim((string) ($catData['behavioral_evidence'] ?? ''));
+            $reasonForRating   = trim((string) ($catData['reason_for_rating'] ?? ''));
+            $recommendation    = trim((string) ($catData['recommendation'] ?? ''));
+            $aiSuggestion      = trim((string) ($catData['ai_suggestion'] ?? ''));
+            $aiDecision        = (string) ($catData['ai_decision'] ?? 'none');
+
+            $factorWeight = (float) ($category['factor_weight'] ?? 0);
+            $totalRate = 0;
+            $cleanAnswers = [];
+            $questionIds = array_map(static fn (array $question): int => (int) $question['id'], $category['questions'] ?? []);
+            foreach ($questionIds as $questionId) {
+                $qKey = (string) $questionId;
+                if (!isset($answers[$qKey])) {
+                    throw new RuntimeException('Every question under ' . $category['title'] . ' must be rated.');
+                
+                $rate = max(1, min(5, (int) $answers[$qKey]));
+                $cleanAnswers[$questionId] = $rate;
+                $totalRate += $rate;
+
+
+            
+
+            $questionCount = count($questionIds);
+                }
+            }
+            if ($questionCount === 0) {
+                throw new RuntimeException($category['title'] . ' has no active questionnaire items.');
+            
+
+            $averageRating = $questionCount > 0 ? round($totalRate / $questionCount, 2) : 0;
+            $weightedScore = $questionCount > 0 ? round($averageRating * ($factorWeight / 100), 4) : 0;
+            $requiredExplanation = dipascaf_required_explanation_type($averageRating);
+
+            dipascaf_validate_category_explanation(
+                $category['title'],
+                $averageRating,
+                $behavioralEvidence,
+                $reasonForRating,
+                $recommendation,
+                $aiSuggestion,
+                $aiDecision
+            }
+            );
+            $totalWeightedScore += $weightedScore;
+
+            $allCategoryScores[] = [
+                'category_id' => $catId,
+                'average_rating' => $averageRating,
+                'weighted_score' => $weightedScore,
+            }
+                }
+            }
+            ];
+
+            db()->prepare(                 'INSERT INTO pmas_form_a_category_results
+                 (assignment_id, evaluator_user_id, evaluatee_faculty_id, category_id,
+                  total_rate, question_count, average_rating, factor_weight, weighted_score,
+                  questionnaire_answers, questionnaire_evidence, behavioral_evidence, reason_for_rating, recommendation,
+                  ai_suggestion, ai_decision, required_explanation, explanation_complete, evaluation_period, status)
+                 VALUES
+                 (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id, :category_id,
+                  :total_rate, :question_count, :average_rating, :factor_weight, :weighted_score,
+                  :questionnaire_answers, :questionnaire_evidence, :behavioral_evidence, :reason_for_rating, :recommendation,
+                  :ai_suggestion, :ai_decision, :required_explanation, 1, :evaluation_period, "completed")
+                 ON DUPLICATE KEY UPDATE
+                  total_rate         = VALUES(total_rate),
+                  question_count     = VALUES(question_count),
+                  average_rating     = VALUES(average_rating),
+                  weighted_score     = VALUES(weighted_score),
+                  questionnaire_answers = VALUES(questionnaire_answers),
+                  questionnaire_evidence = VALUES(questionnaire_evidence),
+                  behavioral_evidence=VALUES(behavioral_evidence),
+                  reason_for_rating=VALUES(reason_for_rating),
+                  recommendation=VALUES(recommendation),
+                  ai_suggestion=VALUES(ai_suggestion),
+                  ai_decision=VALUES(ai_decision),
+                  required_explanation=VALUES(required_explanation),
+                  explanation_complete=VALUES(explanation_complete),
+                  status                = "completed"'
+            )->execute([
+                'assignment_id'         => $assignmentId,
+                'evaluator_user_id'     => $evaluatorId,
+                'evaluatee_faculty_id'  => $evaluateeId,
+                'category_id'           => $catId,
+                'total_rate'            => $totalRate,
+                'question_count'        => $questionCount,
+                'average_rating'        => $averageRating,
+                'factor_weight'         => $factorWeight,
+                'weighted_score'        => $weightedScore,
+                'questionnaire_answers' => json_encode($cleanAnswers),
+                'questionnaire_evidence' => json_encode([], JSON_THROW_ON_ERROR),
+                'behavioral_evidence'   => secure_encrypt_value($behavioralEvidence),
+                'reason_for_rating'     => secure_encrypt_value($reasonForRating),
+                'recommendation'        => secure_encrypt_value($recommendation),
+                'ai_suggestion'         => secure_encrypt_value($aiSuggestion),
+                'ai_decision'           => $aiDecision,
+                'required_explanation'  => $requiredExplanation,
+                'evaluation_period'     => $evaluationPeriod,
+            ]);
+        
+
+        // Legacy scores for evaluation_submissions
+        $commScore = 0; $teachScore = 0; $classScore = 0; $jobScore = 0;
+        
+        foreach ($allCategoryScores as $cs) {
+            $score = (float) $cs['average_rating'];
+            $title = admin_one('SELECT title FROM pmas_form_a_categories WHERE id = :id', ['id' => (int) $cs['category_id']]);
+            $titleLower = $title ? strtolower((string) $title['title']) : '';
+            if (str_contains($titleLower, 'communication')) {
+                $commScore = $score;
+             }
+             elsestr_contains($titleLower, 'job knowledge')) {
+             }
+                $jobScore = $score;
+             }
+             elsestr_contains($titleLower, 'leadership')) {
+             }
+                $teachScore = $score;
+             
+             elsestr_contains($titleLower, 'interpersonal')) {
+             }
+                $classScore = $score;
+            
+        
+
+        db()->prepare(
+            'INSERT INTO evaluation_submissions
+             (assignment_id, evaluator_user_id, evaluatee_faculty_id,
+              communication_score, teaching_score, classroom_management_score, job_knowledge_score,
+              behavioral_evidence, overall_comments, submitted_at)
+             VALUES
+             (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id,
+              :communication_score, :teaching_score, :classroom_management_score, :job_knowledge_score,
+              :behavioral_evidence, :overall_comments, NOW())
+             ON DUPLICATE KEY UPDATE
+              communication_score       = VALUES(communication_score),
+              teaching_score            = VALUES(teaching_score),
+              classroom_management_score = VALUES(classroom_management_score),
+              job_knowledge_score       = VALUES(job_knowledge_score),
+              behavioral_evidence       = VALUES(behavioral_evidence),
+              overall_comments          = VALUES(overall_comments)'
+        )->execute([
+            'assignment_id'               => $assignmentId,
+            'evaluator_user_id'           => $evaluatorId,
+            'evaluatee_faculty_id'        => $evaluateeId,
+            'communication_score'         => $commScore,
+            'teaching_score'              => $teachScore,
+            'classroom_management_score'  => $classScore,
+            'job_knowledge_score'         => $jobScore,
+            'behavioral_evidence'         => secure_encrypt_value(''),
+            'overall_comments'            => secure_encrypt_value('Form A — Total Weighted Score: ' . number_format($totalWeightedScore, 4)),
+             
+             
+             
+            
+        
+        
+        ]);
+
+        db()->prepare('UPDATE peer_assignments SET status = "submitted", submitted_at = NOW() WHERE id = :id')
+            ->execute(['id' => $assignmentId]);
+        dipascaf_sync_peer_assignment_status($assignmentId, 'submitted');
+
+        db()->commit();
+
+        admin_activity(dipascaf_completion_activity_message($assignmentId, 'PMAS Form A', (float) $totalWeightedScore));
+
+        return [
+            'success'           => true,
+            'assignment_id'     => $assignmentId,
+            'message'           => 'PMAS Form A submitted successfully.',
+            'total_weighted_score' => round($totalWeightedScore, 4),
+        ];
+     
+     catch (\Throwable $e) {
+     }
+        db()->rollBack();
+        return ['success' => false, 'message' => $e->getMessage()];
+    
+
+
+     
+    
+        
+    
+    
+    
+    
+     
+    
+    
+    
+    
+    
+
+function dipascaf_form_b_categories(): array
+{
+    dipascaf_ensure_form_b_schema();
+
+    $categories = admin_all(
+        'SELECT * FROM pmas_form_b_categories WHERE is_active = 1 ORDER BY sort_order, id'
+    );
+    $questions = admin_all(
+        'SELECT id, category_id, question_text
+         FROM pmas_form_b_questions
+         WHERE is_active = 1
+         ORDER BY sort_order, id'
+    );
+
+    $questionsByCategory = [];
+    foreach ($questions as $question) {
+        $questionsByCategory[(int) $question['category_id']][] = [
+            'id' => (int) $question['id'],
+            'text' => (string) $question['question_text'],
+        ];
+    
+
+    }
+    return array_map(static function (array $category) use ($questionsByCategory): array {
+        $id = (int) $category['id'];
+        return [
+            'id' => $id,
+            'title' => (string) $category['title'],
+            'factor_weight' => (float) $category['factor_weight'],
+            'questions' => $questionsByCategory[$id] ?? [],
+        ];
+    }
+    }
+    , $categories);
+
+
+    
+
+
+function dipascaf_form_b_records(array $assignments): array
+{
+    dipascaf_ensure_form_b_schema();
+
+    $assignmentIds = array_map(fn (array $row): int => (int) $row['id'], $assignments);
+    if ($assignmentIds === []) {
+        return [];
+    
+
+    $placeholders = implode(',', array_fill(0, count($assignmentIds), '?'));
+    $stmt = db()->prepare(
+        "SELECT r.*, c.title
+         FROM pmas_form_b_category_results r
+         JOIN pmas_form_b_categories c ON c.id = r.category_id
+         WHERE r.assignment_id IN ($placeholders)
+         ORDER BY c.sort_order, c.id"
+    }
+    );
+    $stmt->execute($assignmentIds);
+
+    $records = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $assignmentId = (string) $row['assignment_id'];
+        $records[$assignmentId][(string) $row['category_id']] = [
+            'category_id' => (int) $row['category_id'],
+            'title' => (string) $row['title'],
+            'total_rate' => (float) $row['total_rate'],
+            'question_count' => (int) $row['question_count'],
+            'average_rating' => (float) $row['average_rating'],
+            'factor_weight' => (float) $row['factor_weight'],
+            'weighted_score' => (float) $row['weighted_score'],
+            'answers' => json_decode((string) ($row['questionnaire_answers'] ?? '{'), true) ?: [],
+            'questionnaire_evidence' => json_decode((string) ($row['questionnaire_evidence'] ?? '{'), true) ?: [],
+            'behavioral_evidence' => secure_decrypt_value($row['behavioral_evidence'] ?? ''),
+            'reason_for_rating' => secure_decrypt_value($row['reason_for_rating'] ?? ''),
+            'recommendation' => secure_decrypt_value($row['recommendation'] ?? ''),
+            'ai_suggestion' => secure_decrypt_value($row['ai_suggestion'] ?? ''),
+            'ai_decision' => (string) $row['ai_decision'],
+            'required_explanation' => (string) ($row['required_explanation'] ?? ''),
+            'explanation_complete' => (int) ($row['explanation_complete'] ?? 0),
+            'status' => (string) $row['status'],
+            }
+            }
+        ];
+    
+
+    
+    return $records;
+
+
+
+    
+    
+
+function dipascaf_submit_evaluation(int $evaluatorUserId, string $evaluatorRole, string $activityDescription): array
+{
+    if (!verify_csrf($_POST['csrf_token'] ?? null)) {
+        throw new RuntimeException('Session expired. Please try again.');
+    
+
+    $assignmentId = (int) ($_POST['assignment_id'] ?? 0);
+    $assignment = admin_one(
+        'SELECT * FROM peer_assignments
+         WHERE id = :id AND evaluator_user_id = :evaluator_user_id AND evaluator_role = :evaluator_role',
+        ['id' => $assignmentId, 'evaluator_user_id' => $evaluatorUserId, 'evaluator_role' => $evaluatorRole]
+    }
+    );
+
+    if (!$assignment) {
+        throw new RuntimeException('Evaluation assignment was not found.');
+    
+
+    }
+    if (!isset($_POST['form_b_payload']) && trim((string) ($_POST['dipascaf_form_a_payload'] ?? '')) === '') {
+        dipascaf_assert_assignment_allowed($assignment, $evaluatorUserId, 'form_b');
+    
+
+    }
+    if (isset($_POST['form_b_payload']) && trim((string) $_POST['form_b_payload']) !== '') {
+        return dipascaf_submit_form_b_evaluation($assignment, $evaluatorUserId, $activityDescription);
+    
+
+    $formAPayloadRaw = trim((string) ($_POST['dipascaf_form_a_payload'] ?? ''));
+    }
+    if ($formAPayloadRaw !== '') {
+        $formAPayload = json_decode($formAPayloadRaw, true);
+        if (!is_array($formAPayload) || $formAPayload === []) {
+            throw new RuntimeException('Invalid Form A payload.');
+        
+
+        $result = dipascaf_submit_form_a_evaluation([
+            'assignment_id' => $assignmentId,
+            'form_a_payload' => $formAPayload,
+            'evaluation_period' => (string) ($assignment['cycle_name'] ?? admin_setting('current_appraisal_cycle', 'Current Appraisal Cycle')),
+        }
+        ]);
+
+        }
+        if (empty($result['success'])) {
+            throw new RuntimeException((string) ($result['message'] ?? 'Unable to submit PMAS Form A evaluation.'));
+        
+
+        }
+        return $result;
+    
+
+    $scores = [
+        'communication_score' => max(1, min(5, (int) ($_POST['communication_score'] ?? 1))),
+        'teaching_score' => max(1, min(5, (int) ($_POST['teaching_score'] ?? 1))),
+        'classroom_management_score' => max(1, min(5, (int) ($_POST['classroom_management_score'] ?? 1))),
+        'job_knowledge_score' => max(1, min(5, (int) ($_POST['job_knowledge_score'] ?? 1))),
+    }
+    ];
+    $behavioralEvidence = trim($_POST['behavioral_evidence'] ?? '');
+    $overallComments = trim($_POST['overall_comments'] ?? '');
+
+    if ((in_array(1, $scores, true) || in_array(5, $scores, true)) && $behavioralEvidence === '') {
+        throw new RuntimeException('Behavioral evidence is required for very high or low ratings.');
+    
+
+    db()->prepare(
+        'INSERT INTO evaluation_submissions
+         (assignment_id, evaluator_user_id, evaluatee_faculty_id, communication_score, teaching_score,
+          classroom_management_score, job_knowledge_score, behavioral_evidence, overall_comments)
+         VALUES
+         (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id, :communication_score, :teaching_score,
+          :classroom_management_score, :job_knowledge_score, :behavioral_evidence, :overall_comments)
+         ON DUPLICATE KEY UPDATE
+          communication_score=VALUES(communication_score),
+          teaching_score=VALUES(teaching_score),
+          classroom_management_score=VALUES(classroom_management_score),
+          job_knowledge_score=VALUES(job_knowledge_score),
+          behavioral_evidence=VALUES(behavioral_evidence),
+          overall_comments=VALUES(overall_comments),
+          submitted_at=NOW()'
+    )->execute(array_merge([
+        'assignment_id' => $assignmentId,
+        'evaluator_user_id' => $evaluatorUserId,
+        'evaluatee_faculty_id' => (int) $assignment['evaluatee_faculty_id'],
+        'behavioral_evidence' => secure_encrypt_value($behavioralEvidence),
+        'overall_comments' => secure_encrypt_value($overallComments),
+    }
+        
+    
+    
+    
+    
+    
+    ], $scores));
+
+    db()->prepare('UPDATE peer_assignments SET status = "submitted", submitted_at = NOW() WHERE id = :id')
+        ->execute(['id' => $assignmentId]);
+
+    $legacyFinalScore = array_sum(array_values($scores)) / max(1, count($scores));
+    admin_activity(dipascaf_completion_activity_message($assignmentId, 'PMAS evaluation', (float) $legacyFinalScore));
+
+    
+    return [
+        'assignment_id' => $assignmentId,
+        'message' => 'Evaluation submitted successfully.',
+        'analysis' => dipascaf_generated_analysis(array_values($scores)),
+    ];
+
+
+
+
+function dipascaf_submit_form_b_evaluation(array $assignment, int $evaluatorUserId, string $activityDescription): array
+{
+    dipascaf_ensure_form_b_schema();
+
+    if ((string) ($assignment['status'] ?? '') === 'submitted') {
+        throw new RuntimeException('This evaluation was already submitted.');
+    
+
+    $period = dipascaf_assert_assignment_allowed($assignment, $evaluatorUserId, 'form_b');
+
+    $payload = json_decode((string) ($_POST['form_b_payload'] ?? ''), true);
+    }
+    if (!is_array($payload)) {
+        throw new RuntimeException('PMAS Form B data is missing or invalid.');
+    
+
+    $categories = dipascaf_form_b_categories();
+    $categoriesById = [];
+    }
+    foreach ($categories as $category) {
+        $categoriesById[(int) $category['id']] = $category;
+    
+
+    }
+    if ($categoriesById === []) {
+        throw new RuntimeException('PMAS Form B has no active categories.');
+    
+
+    $results = is_array($payload['categories'] ?? null) ? $payload['categories'] : [];
+    $completedById = [];
+    }
+    foreach ($results as $result) {
+        $completedById[(int) ($result['category_id'] ?? 0)] = $result;
+    
+
+    }
+    foreach ($categoriesById as $categoryId => $category) {
+        if (!isset($completedById[$categoryId])) {
+            throw new RuntimeException('Complete all PMAS Form B categories before final submission.');
+        
+    
+
+    $cycleName = (string) ($period['period_name'] ?? $assignment['cycle_name'] ?? admin_setting('current_appraisal_cycle', 'Current Appraisal Cycle'));
+    $totalWeightedScore = 0.0;
+    $categoryAverages = [];
+
+    db()->beginTransaction();
+        }
+    }
+    try {
+        foreach ($categoriesById as $categoryId => $category) {
+            $result = $completedById[$categoryId];
+            $answers = is_array($result['answers'] ?? null) ? $result['answers'] : [];
+            $questionIds = array_map(static fn (array $question): int => (int) $question['id'], $category['questions']);
+            $rates = [];
+
+            foreach ($questionIds as $questionId) {
+                $qKey = (string) $questionId;
+                if (!isset($answers[$qKey])) {
+                    throw new RuntimeException('Every question under ' . $category['title'] . ' must be rated.');
+                
+                $rate = max(1, min(5, (int) $answers[$qKey]));
+                $rates[] = $rate;
+
+
+            
+
+            $questionCount = count($rates);
+                }
+            }
+            if ($questionCount === 0) {
+                throw new RuntimeException($category['title'] . ' has no active questionnaire items.');
+            
+
+            $totalRate = array_sum($rates);
+            $averageRating = round($totalRate / $questionCount, 2);
+            $factorWeight = (float) $category['factor_weight'];
+            $weightedScore = round($averageRating * ($factorWeight / 100), 4);
+            $behavioralEvidence = trim((string) ($result['behavioral_evidence'] ?? ''));
+            $reasonForRating = trim((string) ($result['reason_for_rating'] ?? ''));
+            $recommendation = trim((string) ($result['recommendation'] ?? ''));
+            $aiSuggestion = trim((string) ($result['ai_suggestion'] ?? ''));
+            $aiDecision = (string) ($result['ai_decision'] ?? 'none');
+            $requiredExplanation = dipascaf_required_explanation_type($averageRating);
+
+            dipascaf_validate_category_explanation(
+                $category['title'],
+                $averageRating,
+                $behavioralEvidence,
+                $reasonForRating,
+                $recommendation,
+                $aiSuggestion,
+                $aiDecision
+            }
+            );
+
+            db()->prepare(
+                'INSERT INTO pmas_form_b_category_results
+                 (assignment_id, evaluator_user_id, evaluatee_faculty_id, category_id, total_rate, question_count,
+                  average_rating, factor_weight, weighted_score, questionnaire_answers, questionnaire_evidence, behavioral_evidence,
+                  reason_for_rating, recommendation, ai_suggestion, ai_decision, required_explanation,
+                  explanation_complete, evaluation_period, status)
+                 VALUES
+                 (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id, :category_id, :total_rate, :question_count,
+                  :average_rating, :factor_weight, :weighted_score, :questionnaire_answers, :questionnaire_evidence, :behavioral_evidence,
+                  :reason_for_rating, :recommendation, :ai_suggestion, :ai_decision, :required_explanation,
+                  1, :evaluation_period, "completed")
+                 ON DUPLICATE KEY UPDATE
+                  total_rate=VALUES(total_rate),
+                  question_count=VALUES(question_count),
+                  average_rating=VALUES(average_rating),
+                  factor_weight=VALUES(factor_weight),
+                  weighted_score=VALUES(weighted_score),
+                  questionnaire_answers=VALUES(questionnaire_answers),
+                  questionnaire_evidence=VALUES(questionnaire_evidence),
+                  behavioral_evidence=VALUES(behavioral_evidence),
+                  reason_for_rating=VALUES(reason_for_rating),
+                  recommendation=VALUES(recommendation),
+                  ai_suggestion=VALUES(ai_suggestion),
+                  ai_decision=VALUES(ai_decision),
+                  required_explanation=VALUES(required_explanation),
+                  explanation_complete=VALUES(explanation_complete),
+                  evaluation_period=VALUES(evaluation_period),
+                  status="completed",
+                  submitted_at=NOW()'
+            )->execute([
+                'assignment_id' => (int) $assignment['id'],
+                'evaluator_user_id' => $evaluatorUserId,
+                'evaluatee_faculty_id' => (int) $assignment['evaluatee_faculty_id'],
+                'category_id' => $categoryId,
+                'total_rate' => $totalRate,
+                'question_count' => $questionCount,
+                'average_rating' => $averageRating,
+                'factor_weight' => $factorWeight,
+                'weighted_score' => $weightedScore,
+                'questionnaire_answers' => json_encode($answers, JSON_THROW_ON_ERROR),
+                'questionnaire_evidence' => json_encode([], JSON_THROW_ON_ERROR),
+                'behavioral_evidence' => secure_encrypt_value($behavioralEvidence),
+                'reason_for_rating' => secure_encrypt_value($reasonForRating),
+                'recommendation' => secure_encrypt_value($recommendation),
+                'ai_suggestion' => secure_encrypt_value($aiSuggestion),
+                'ai_decision' => $aiDecision,
+                'required_explanation' => $requiredExplanation,
+                'evaluation_period' => $cycleName,
+            }
+                }
+            }
+            ]);
+
+            $totalWeightedScore += $weightedScore;
+            $categoryAverages[$category['title']] = $averageRating;
+        
+
+        $legacyScores = [
+            'communication_score' => (int) round($categoryAverages['Communication Skills'] ?? $totalWeightedScore),
+            'teaching_score' => (int) round($totalWeightedScore),
+            'classroom_management_score' => (int) round($categoryAverages['Classroom Management'] ?? $totalWeightedScore),
+            'job_knowledge_score' => (int) round($categoryAverages['Job Knowledge, Quality of Work, and Excellence'] ?? $totalWeightedScore),
+        
+        ];
+        foreach ($legacyScores as &$score) {
+            $score = max(1, min(5, $score));
+        
+        unset($score);
+
+        db()->prepare(
+            'INSERT INTO evaluation_submissions
+             (assignment_id, evaluator_user_id, evaluatee_faculty_id, communication_score, teaching_score,
+              classroom_management_score, job_knowledge_score, behavioral_evidence, overall_comments)
+             VALUES
+             (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id, :communication_score, :teaching_score,
+              :classroom_management_score, :job_knowledge_score, :behavioral_evidence, :overall_comments)
+             ON DUPLICATE KEY UPDATE
+              communication_score=VALUES(communication_score),
+              teaching_score=VALUES(teaching_score),
+              classroom_management_score=VALUES(classroom_management_score),
+              job_knowledge_score=VALUES(job_knowledge_score),
+              behavioral_evidence=VALUES(behavioral_evidence),
+              overall_comments=VALUES(overall_comments),
+              submitted_at=NOW()'
+        )->execute(array_merge([
+            'assignment_id' => (int) $assignment['id'],
+            'evaluator_user_id' => $evaluatorUserId,
+            'evaluatee_faculty_id' => (int) $assignment['evaluatee_faculty_id'],
+            'behavioral_evidence' => secure_encrypt_value('PMAS Form B category evidences are stored per category.'),
+            'overall_comments' => secure_encrypt_value('PMAS Form B final weighted score: ' . number_format($totalWeightedScore, 2) . ' / 5.00.'),
+        }
+        
+        ], $legacyScores));
+
+        db()->prepare('UPDATE peer_assignments SET status = "submitted", submitted_at = NOW() WHERE id = :id')
+            ->execute(['id' => (int) $assignment['id']]);
+        dipascaf_sync_peer_assignment_status((int) $assignment['id'], 'submitted');
+
+        db()->commit();
+     
+     catch (Throwable $exception) {
+     }
+        db()->rollBack();
+        throw $exception;
+    
+
+    admin_activity(dipascaf_completion_activity_message((int) $assignment['id'], 'PMAS Form B', (float) $totalWeightedScore));
+
+    
+    return [
+        'assignment_id' => (int) $assignment['id'],
+        'message' => 'PMAS Form B faculty evaluation submitted successfully.',
+        'final_score' => round($totalWeightedScore, 2),
+        'analysis' => dipascaf_generated_analysis([
+            $legacyScores['communication_score'],
+            $legacyScores['teaching_score'],
+            $legacyScores['classroom_management_score'],
+            $legacyScores['job_knowledge_score'],
+        ]),
+     
+    
+        
+    
+    
+    
+    
+    
+    
+    ];
+
+
+
+
+function dipascaf_render_evaluation_dashboard(array $options): void
+{
+    $assignments = $options['assignments'];
+    $summary = dipascaf_evaluation_summary($assignments);
+    $records = dipascaf_evaluation_records($assignments);
+    $evaluatorRole = !empty($assignments) ? ($assignments[0]['evaluator_role'] ?? '') : '';
+    $evaluatorId = !empty($assignments) ? (int) ($assignments[0]['evaluator_user_id'] ?? 0) : 0;
+    if (in_array($evaluatorRole, ['admin_hr', 'admin'], true)) {
+        echo '<div class="notice error" style="padding:1rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:0.5rem;color:#991b1b;font-weight:500">Admin users are not allowed to submit evaluations.</div>';
+        return;
+    
+
+    // Reject self-evaluation
+    $filteredAssignments = [];
+    }
+    foreach ($assignments as $a) {
+        $evaluateeId = (int) ($a['evaluatee_faculty_id'] ?? 0);
+        if ($evaluateeId > 0 && $evaluateeId === $evaluatorId) {
+            continue;
+        
+        $filteredAssignments[] = $a;
+    
+    $assignments = $filteredAssignments;
+        }
+    }
+    if (empty($assignments)) {
+        echo '<div class="notice error" style="padding:1rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:0.5rem;color:#991b1b;font-weight:500">All available evaluation assignments require self-evaluation, which is not permitted.</div>';
+        return;
+    
+    $formBEnabled = true;
+    $formACategories = dipascaf_form_a_categories();
+    $formARecords = dipascaf_form_a_records($assignments);
+    $formBCategories = dipascaf_form_b_categories();
+    $formBRecords = dipascaf_form_b_records($assignments);
+    $sections = array_values(array_unique(array_map(fn (array $row): string => $row['section_key'], $assignments)));
+    $defaultSection = $options['defaultSection'] ?? ($sections[0] ?? 'all');
+    $departments = array_values(array_unique(array_filter(array_map(fn (array $row): string => (string) $row['department'], $assignments))));
+    $programCourses = array_values(array_unique(array_filter(array_map(
+        fn (array $row): string => trim((string) ($row['program_code'] ?? $row['program_name'] ?? $row['department'] ?? '')),
+        $assignments
+    }
+        }
+    
+    
+    ))));
+    $isDeanEvaluation = ($options['hideRoleStatusFilters'] ?? false) || $evaluatorRole === 'dean';
+    $pendingPercent = $summary['total'] > 0 ? round(($summary['pending'] / $summary['total']) * 100) : 0;
+    sort($departments);
+    sort($programCourses);
+    ?>
+    <section class="dipascaf-evaluation-shell" data-default-section="<?= e($defaultSection) ?>">
+        <div class="dipascaf-eval-hero">
+            <div>
+                <p class="eyebrow"><?= e($options['eyebrow'] ?? 'DIPASCAF Evaluation') ?></p>
+                <h2><?= e($options['title'] ?? 'Evaluation Dashboard') ?></h2>
+                <p><?= e($options['subtitle'] ?? 'Complete assigned evaluations and monitor pending appraisal tasks.') ?></p>
+            </div>
+            <div class="dipascaf-progress-card">
+                <strong><?= e((string) $summary['percent']) ?>%</strong>
+                <span>Overall completion</span>
+                <div class="dipascaf-progress"><span data-progress="<?= e((string) $summary['percent']) ?>"></span></div>
+            </div>
+        </div>
+
+        <section class="evaluation-completion-card" style="--completion-rate: <?= e((string) $summary['percent']) ?>; --pending-rate: <?= e((string) $pendingPercent) ?>;" aria-label="Overall completion <?= e((string) $summary['percent']) ?> percent">
+            <div class="evaluation-completion-chart">
+                <svg viewBox="0 0 120 120" aria-hidden="true">
+                    <circle class="evaluation-completion-track" cx="60" cy="60" r="48" pathLength="100"></circle>
+                    <circle class="evaluation-completion-pending" cx="60" cy="60" r="48" pathLength="100"></circle>
+                    <circle class="evaluation-completion-done" cx="60" cy="60" r="48" pathLength="100"></circle>
+                </svg>
+                <strong><?= e((string) $summary['percent']) ?>%</strong>
+            </div>
+            <div class="evaluation-completion-details">
+                <h3>Overall Completion</h3>
+                <p><?= e((string) $summary['done']) ?> completed, <?= e((string) $summary['pending']) ?> pending, <?= e((string) $summary['total']) ?> total evaluation tasks.</p>
+                <div class="completion-legend" aria-label="Completion chart legend">
+                    <span class="done">Completed</span>
+                    <span class="pending">Pending</span>
+                    <span class="overall">Overall</span>
+                </div>
+            </div>
+        </section>
+
+        <div class="dipascaf-stat-row">
+            <article><span>Done</span><strong><?= e((string) $summary['done']) ?></strong></article>
+            <article><span>Pending</span><strong><?= e((string) $summary['pending']) ?></strong></article>
+            <article><span>Total</span><strong><?= e((string) $summary['total']) ?></strong></article>
+        </div>
+
+        <nav class="dipascaf-eval-menu" aria-label="Evaluation sections">
+            <button type="button" data-section="all" class="active">All Evaluations</button>
+            <?php if (!$isDeanEvaluation): ?>
+            <button type="button" data-section="dean">Dean Evaluation</button>
+            <?php endif; ?>
+            <button type="button" data-section="program_head">Program Head Evaluation</button>
+            <button type="button" data-section="faculty">Faculty Evaluation</button>
+            <button type="button" data-section="peer">Peer Evaluation</button>
+        </nav>
+
+        <div class="dipascaf-filters">
+            <label>Search<input type="search" data-eval-search placeholder="Search name, role, or program"></label>
+            <?php if (!$isDeanEvaluation): ?>
+            <label>Role
+                <select data-eval-role>
+                    <option value="">All roles</option>
+                    <option>Dean</option>
+                    <option>Program Head</option>
+                    <option>Faculty</option>
+                </select>
+            </label>
+            <?php endif; ?>
+            <label><?= $isDeanEvaluation ? 'Program/Course' : 'Department/Program' ?>
+                <select data-eval-department>
+                    <option value=""><?= $isDeanEvaluation ? 'All programs/courses' : 'All departments' ?></option>
+                    <?php foreach (($isDeanEvaluation ? $programCourses : $departments) as $department): ?>
+                        <option value="<?= e($department) ?>"><?= e($department) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <?php if (!$isDeanEvaluation): ?>
+            <label>Status
+                <select data-eval-status>
+                    <option value="">All status</option>
+                    <option value="pending">Pending</option>
+                    <option value="submitted">Done</option>
+                </select>
+            </label>
+            <?php endif; ?>
+        </div>
+
+        <div class="dipascaf-card-grid">
+            <?php foreach ($assignments as $assignment): ?>
+                <?php
+                    $isDone = $assignment['status'] === 'submitted';
+                    $avatarPath = trim((string) ($assignment['profile_image'] ?? ''));
+                    $avatarUrl = $avatarPath !== '' ? BASE_URL . '/' . ltrim($avatarPath, '/') : '';
+                    $name = (string) $assignment['full_name'];
+                    $jsName = htmlspecialchars(json_encode($name, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
+                    $questionnaireType = (string) ($assignment['questionnaire_type'] ?? '');
+                    $isFormBCard = $questionnaireType === 'faculty'
+                        || ($questionnaireType === '' && ($assignment['section_key'] === 'faculty' || $assignment['section_key'] === 'peer'));
+                    $programCourse = trim((string) ($assignment['program_code'] ?? $assignment['program_name'] ?? $assignment['department'] ?? ''));
+                    $searchText = strtolower($name . ' ' . $assignment['role_label'] . ' ' . $assignment['department'] . ' ' . $programCourse . ' ' . $assignment['position_title']);
+                ?>
+                <article class="dipascaf-eval-card <?= $isDone ? 'done' : 'pending' ?>"
+                    data-section="<?= e((string) $assignment['section_key']) ?>"
+                    data-form-b="<?= $isFormBCard ? '1' : '0' ?>"
+                    data-role="<?= e((string) $assignment['role_label']) ?>"
+                    data-department="<?= e((string) $assignment['department']) ?>"
+                    data-program="<?= e($programCourse) ?>"
+                    data-status="<?= e((string) $assignment['status']) ?>"
+                    data-search="<?= e($searchText) ?>">
+                    <div class="dipascaf-card-top">
+                        <div class="dipascaf-avatar">
+                            <?php if ($avatarUrl !== ''): ?>
+                                <img src="<?= e($avatarUrl) ?>" alt="<?= e($name) ?> profile picture">
+                            <?php else: ?>
+                                <?= e(strtoupper(substr($name, 0, 1))) ?>
+                            <?php endif; ?>
+                        </div>
+                        <span class="dipascaf-status <?= $isDone ? 'done' : 'pending' ?>"><?= $isDone ? 'Done' : 'Pending' ?></span>
+                    </div>
+                    <h3><?= e($name) ?></h3>
+                    <p><?= e((string) $assignment['role_label']) ?> - <?= e((string) $assignment['position_title']) ?></p>
+                    <div class="dipascaf-card-meta">
+                        <span><?= e((string) $assignment['department']) ?></span>
+                        <span>Deadline: <?= e((string) $assignment['deadline']) ?></span>
+                        <?php if ((string) $assignment['relationship_tag'] !== ''): ?><span><?= e((string) $assignment['relationship_tag']) ?></span><?php endif; ?>
+                    </div>
+                    <?php if ($isDone && $assignment['ai_analysis']): ?>
+                        <div class="dipascaf-ai-mini">
+                            <strong>AI insights</strong>
+                            <span><?= e($assignment['ai_analysis']['insights']) ?></span>
+                        </div>
+                    <?php endif; ?>
+                    <div class="dipascaf-card-actions">
+                        <?php if ($isDone): ?>
+                            <button type="button" class="dipascaf-view-btn" onclick="openDipascafEvaluation(<?= e((string) $assignment['id']) ?>, <?= $jsName ?>, true, <?= $isFormBCard ? 'true' : 'false' ?>)">View Evaluation</button>
+                        <?php else: ?>
+                            <button type="button" class="dipascaf-evaluate-btn" onclick="openDipascafEvaluation(<?= e((string) $assignment['id']) ?>, <?= $jsName ?>, false, <?= $isFormBCard ? 'true' : 'false' ?>)">Tap to Evaluate</button>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="dipascaf-empty" hidden>No evaluation cards match the selected filters.</div>
+    </section>
+
+<style>
+/* PMAS Form A - Category Card UI */
+.form-a-category-grid{display:grid;gap:12px;margin:16px 0
+.form-a-category-card{background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;overflow:hidden;transition:all .2s
+.form-a-category-card:hover{border-color:#cbd5e1;box-shadow:0 2px 8px rgba(0,0,0,.06)
+.form-a-category-card.completed{border-color:#86efac;background:#f0fdf4
+.form-a-category-card.in-progress{border-color:#fde68a;background:#fffbeb
+.form-a-category-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;font-weight:600;font-size:.92rem;color:#1e293b;background:#f8fafc;border-bottom:1px solid #e2e8f0;user-select:none
+.form-a-category-header .weight-badge{display:inline-flex;align-items:center;padding:2px 10px;border-radius:20px;font-size:.78rem;font-weight:700;color:#fff;background:#6366f1
+.form-a-status-badge{margin-left:auto;font-size:.75rem;font-weight:600;padding:2px 10px;border-radius:20px
+.form-a-status-badge.not-started{background:#f1f5f9;color:#64748b
+.form-a-status-badge.in-progress{background:#fef3c7;color:#92400e
+.form-a-status-badge.completed{background:#dcfce7;color:#166534
+.form-a-category-body{padding:16px;display:grid;gap:12px
+.form-a-question-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;background:#f8fafc;border-radius:8px;font-size:.85rem
+.form-a-question-row .q-text{flex:1;min-width:200px;color:#334155
+.form-a-question-row select{padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:.82rem;background:#fff
+.form-a-rating-row{display:flex;gap:4px;align-items:center
+.form-a-rating-row label{display:flex;align-items:center;gap:3px;font-size:.75rem;cursor:pointer;padding:2px 6px;border-radius:4px;background:#f1f5f9
+.form-a-rating-row input[type=radio]{margin:0
+.form-a-computation-row{display:flex;flex-wrap:wrap;gap:16px;padding:10px 12px;background:#f0f9ff;border-radius:8px;font-size:.82rem;color:#1e40af;font-weight:500
+.form-a-computation-row span{display:flex;align-items:center;gap:4px
+.form-a-explanation-field{width:100%;min-height:60px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.85rem;font-family:inherit;resize:vertical;transition:border-color .2s;box-sizing:border-box
+.form-a-explanation-field:focus{border-color:#6366f1;outline:none;box-shadow:0 0 0 3px rgba(99,102,241,.1)
+.form-a-ai-btn{padding:6px 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:.8rem;cursor:pointer;transition:all .15s
+.form-a-ai-btn:hover{background:#f1f5f9;border-color:#6366f1;color:#6366f1
+.form-a-category-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center
+.form-a-progress-row{padding:12px 0;font-size:.85rem;color:#64748b;text-align:center
+.form-a-submit-btn{width:100%;padding:12px;border:none;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;background:#22c55e;color:#fff;transition:all .2s
+.form-a-submit-btn:disabled{background:#d1d5db;color:#9ca3af;cursor:not-allowed
+.form-a-submit-btn:not(:disabled):hover{background:#16a34a.form-b-evidence-box{padding:16px 12px;background:#f8fafc;border-radius:12px;margin-top:12px;border:1px solid #e2e8f0
+.form-b-evidence-section{margin-bottom:10px
+.form-b-evidence-section:last-child{margin-bottom:0
+.form-b-evidence-section label{display:block;font-size:.8rem;font-weight:700;color:#334155;margin-top:10px;margin-bottom:4px
+.form-b-evidence-section textarea{width:100%;min-height:60px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.85rem;font-family:inherit;resize:vertical;transition:border-color .2s;box-sizing:border-box
+.form-b-evidence-section textarea:focus{border-color:#6366f1;outline:none;box-shadow:0 0 0 3px rgba(99,102,241,.1)
+.evidence-heading,.explanation-heading{padding:10px 12px;background:#eef2ff;border-radius:8px;margin-bottom:8px
+.evidence-heading strong,.explanation-heading strong{font-size:.85rem;color:#4338ca
+.required-mark{color:#dc2626;font-size:.75rem;font-weight:700;margin-left:4px
+.form-b-progress-hint{text-align:center;padding:16px 12px;color:#64748b;font-size:.85rem;font-weight:500
+
+.form-a-final-score-card{background:linear-gradient(135deg,#f0f9ff,#eff6ff);border:2px solid #93c5fd;border-radius:12px;padding:20px;margin:16px 0;text-align:center
+.form-a-final-score-card .score-value{font-size:2.2rem;font-weight:800;color:#1e40af
+.form-a-final-score-card .score-label{font-size:.85rem;color:#64748b
+.form-a-final-summary{width:100%;min-height:80px;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:.85rem;resize:vertical;box-sizing:border-box
+</style>
+    <div class="dipascaf-modal" id="dipascafEvaluationModal" hidden>
+        <div class="dipascaf-modal-panel">
+            <button type="button" class="dipascaf-modal-close" onclick="closeDipascafEvaluation()">Close</button>
+            <h2>Evaluation Form</h2>
+            <p id="dipascafModalSubtitle">Rate this evaluatee.</p>
+            <div class="notice error" id="dipascafModalError" hidden></div>
+            <form id="dipascafEvaluationForm" method="post">
+                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                <input type="hidden" name="action" value="submit_evaluation">
+                <input type="hidden" name="assignment_id" id="dipascafAssignmentId">
+                <?php if ($formBEnabled): ?>
+                    <input type="hidden" name="form_b_payload" id="dipascafFormBPayload">
+                    <input type="hidden" name="dipascaf_form_a_payload" id="dipascafFormAPayload">
+                    <div class="form-b-scale" aria-label="PMAS Form B rating scale">
+                        <span>5 - Highly Evident</span>
+                        <span>4 - Evident</span>
+                        <span>3 - Moderately Evident</span>
+                        <span>2 - Slightly Evident</span>
+                        <span>1 - Not Evident</span>
+                    </div>
+                    <div class="form-b-layout">
+                        <div class="form-b-category-list" id="formBCategoryList"></div>
+                        <section class="form-b-category-panel" id="formBCategoryPanel">
+                            <div class="form-b-category-empty">Select a PMAS Form B category to begin.</div>
+                        </section>
+                    </div>
+                    <div class="form-b-final-card">
+                        <span>Total Weighted Score</span>
+                        <strong id="formBFinalScore">0.00 / 5.00</strong>
+                        <small id="formBFinalStatus">Complete all categories to submit.</small>
+                    </div>
+                    <div class="form-a-layout" id="dipascafFormALayout" hidden>
+                        <div class="form-a-category-list"><div class="form-a-category-list-inner" id="formACategoryList"></div></div>
+                        <div class="form-a-category-panel" id="formACategoryPanel"><div class="form-a-panel-empty">Select a category to begin rating</div></div>
+                        <div class="form-a-final-card">
+                            <div class="form-a-final-row"><span>Total Weighted Score</span><strong class="form-a-final-score" id="formAFinalScore">0.00</strong></div>
+                            <div class="form-a-progress-row" id="formAProgressRow">Complete all 8 categories to submit.</div>
+                            <button type="button" class="form-a-submit-btn" id="formASubmitBtn" disabled>Submit Evaluation</button>
+                        </div>
+                    </div>
+
+                <?php endif; ?>
+                <div class="dipascaf-analysis" id="dipascafAnalysis" hidden>
+                    <strong>AI-generated analysis</strong>
+                    <p data-analysis-strengths></p>
+                    <p data-analysis-weaknesses></p>
+                    <p data-analysis-trainings></p>
+                    <p data-analysis-insights></p>
+                </div>
+                <button type="submit" class="dipascaf-evaluate-btn" id="dipascafSubmitBtn">Submit Evaluation</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        window.dipascafEvaluationRecords = <?= json_encode($records, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+        window.pmasFormBEnabled = true;
+        window.pmasFormACategories = <?= json_encode($formACategories, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+        window.pmasFormARecords = <?= json_encode($formARecords, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+        window.pmasFormBCategories = <?= json_encode($formBCategories, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+        window.pmasFormBRecords = <?= json_encode($formBRecords, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+        window.pmasFormAAiEnabled = <?= json_encode(admin_setting('form_a_ai_assistance_enabled', '1') === '1') ?>;
+        window.pmasFormBAiEnabled = <?= json_encode(admin_setting('form_b_ai_assistance_enabled', '1') === '1') ?>;
+        document.querySelectorAll('[data-progress]').forEach((bar) => {
+            bar.style.width = `${Math.max(0, Math.min(100, Number(bar.dataset.progress || 0)))%`;
+            }
+        }
+        );
+        (function () {
+            const shell = document.querySelector('.dipascaf-evaluation-shell');
+            const cards = Array.from(document.querySelectorAll('.dipascaf-eval-card'));
+            const empty = document.querySelector('.dipascaf-empty');
+            const modal = document.getElementById('dipascafEvaluationModal');
+            const form = document.getElementById('dipascafEvaluationForm');
+            const submitBtn = document.getElementById('dipascafSubmitBtn');
+            const errorBox = document.getElementById('dipascafModalError');
+            const analysisBox = document.getElementById('dipascafAnalysis');
+            const fields = form ? Array.from(form.querySelectorAll('input[type="number"], textarea')) : [];
+            const formBPayload = document.getElementById('dipascafFormBPayload');
+            const formBCategoryList = document.getElementById('formBCategoryList');
+            const formBCategoryPanel = document.getElementById('formBCategoryPanel');
+            const formBFinalScore = document.getElementById('formBFinalScore');
+            const formBFinalStatus = document.getElementById('formBFinalStatus');
+            const formBCategories = window.pmasFormBCategories || [];
+            let formBState = {;
+            let activeFormBCategoryId = formBCategories[0]?.id ? String(formBCategories[0].id) : '';
+            let currentUsesFormB = false;
+            let currentSection = 'all';
+            let currentAssignmentId = '';
+
+            }
+            function draftKey(assignmentId, useFormB) {
+            }
+                return 'pmas-evaluation-draft:' + (useFormB ? 'form_b' : 'form_a') + ':' + assignmentId;
+            
+
+            function saveCurrentDraft() {
+            }
+                if (!currentAssignmentId) return;
+                try {
+                    window.localStorage.setItem(draftKey(currentAssignmentId, currentUsesFormB), JSON.stringify({
+                        formBState,
+                        activeFormBCategoryId,
+                        formAState,
+                        activeFormACategoryId,
+                        savedAt: new Date().toISOString(),
+                    }
+                    ));
+                 }
+                 catch (_) {
+                 }
+            
+
+                }
+            function restoreCurrentDraft() {
+            }
+                if (!currentAssignmentId) return false;
+                try {
+                    const rawDraft = window.localStorage.getItem(draftKey(currentAssignmentId, currentUsesFormB));
+                    if (!rawDraft) return false;
+                    const draft = JSON.parse(rawDraft);
+                    if (currentUsesFormB && draft.formBState) {
+                        formBState = draft.formBState;
+                        activeFormBCategoryId = draft.activeFormBCategoryId || activeFormBCategoryId;
+                        return true;
+                    
+                    }
+                    if (!currentUsesFormB && draft.formAState) {
+                        formAState = draft.formAState;
+                        activeFormACategoryId = draft.activeFormACategoryId || activeFormACategoryId;
+                        return true;
+                    
+                 }
+                 catch (_) {
+                 }
+                    window.localStorage.removeItem(draftKey(currentAssignmentId, currentUsesFormB));
+                
+                }
+                return false;
+            
+
+            function applyFilters() {
+            }
+                if (!shell) return;
+                const search = (shell.querySelector('[data-eval-search]')?.value || '').toLowerCase();
+                const role = shell.querySelector('[data-eval-role]')?.value || '';
+                const department = shell.querySelector('[data-eval-department]')?.value || '';
+                const status = shell.querySelector('[data-eval-status]')?.value || '';
+                let visible = 0;
+
+                cards.forEach((card) => {
+                    const matchesSection = currentSection === 'all' || card.dataset.section === currentSection;
+                    const matchesSearch = !search || (card.dataset.search || '').includes(search);
+                    const matchesRole = !role || card.dataset.role === role;
+                    const matchesDepartment = !department || card.dataset.department === department || card.dataset.program === department;
+                    const matchesStatus = !status || card.dataset.status === status;
+                    const show = matchesSection && matchesSearch && matchesRole && matchesDepartment && matchesStatus;
+                    card.hidden = !show;
+                    if (show) visible++;
+                }
+                );
+
+                if (empty) empty.hidden = visible !== 0;
+            
+
+            function setAnalysis(record) {
+            }
+                if (!analysisBox) return;
+                if (!record || !record.analysis) {
+                    analysisBox.hidden = true;
+                    return;
+                
+                analysisBox.hidden = false;
+                analysisBox.querySelector('[data-analysis-strengths]').textContent = 'Strengths: ' + record.analysis.strengths;
+                analysisBox.querySelector('[data-analysis-weaknesses]').textContent = 'Weaknesses: ' + record.analysis.weaknesses;
+                analysisBox.querySelector('[data-analysis-trainings]').textContent = 'Suggested seminars/trainings: ' + record.analysis.trainings;
+                analysisBox.querySelector('[data-analysis-insights]').textContent = 'Performance insights: ' + record.analysis.insights;
+            
+
+                }
+            function emptyFormBState() {
+            }
+                const next = {;
+                }
+                formBCategories.forEach((category) => {
+                    const answers = {;
+                    category.questions.forEach((question) => {
+                        answers[String(question.id)] = '';
+                    }
+                    }
+                    );
+                    next[String(category.id)] = {
+                        category_id: Number(category.id),
+                        answers,
+                        behavioral_evidence: '',
+                        reason_for_rating: '',
+                        recommendation: '',
+                        ai_suggestion: '',
+                        ai_decision: 'none',
+                        saved: false,
+                    }
+                    }
+                    }
+                    ;
+                    }
+                }
+                );
+                return next;
+            
+
+            function formBStats(category) {
+            }
+                const state = formBState[String(category.id)] || {;
+                const answers = state.answers || {;
+                const rates = category.questions
+                    .map((question) => Number(answers[String(question.id)] || 0))
+                    .filter((rate) => rate >= 1 && rate <= 5);
+                }
+                }
+                const totalRate = rates.reduce((total, rate) => total + rate, 0);
+                const questionCount = category.questions.length;
+                const average = questionCount > 0 && rates.length === questionCount ? totalRate / questionCount : 0;
+                const weighted = average * (Number(category.factor_weight) / 100);
+                }
+                }
+                return {
+                    totalRate,
+                    questionCount,
+                    answered: rates.length,
+                    average,
+                    weighted,
+                    requiredType: average >= 4.51 ? 'high' : average <= 3 ? 'low' : 'reason',
+                }
+                ;
+            
+
+                }
+            function isFormBCategoryReady(category) {
+            }
+                const state = formBState[String(category.id)] || {;
+                const stats = formBStats(category);
+                }
+                if (stats.answered !== stats.questionCount || stats.average <= 0) return false;
+                // High rating: behavioral evidence required
+                if (stats.average >= 4.51) {
+                    return Boolean((state.behavioral_evidence || '').trim());
+                
+                // Low rating: behavioral evidence required
+                }
+                if (stats.average <= 3) {
+                    return Boolean((state.behavioral_evidence || '').trim());
+                
+                // Normal rating (3.01-4.50): evidence optional
+                }
+                return true;
+            
+
+            function isFormBCategoryComplete(category) {
+            }
+                const state = formBState[String(category.id)] || {;
+                }
+                return isFormBCategoryReady(category) && state.saved === true;
+            
+
+            function saveFormBCategory(category) {
+            }
+                if (!isFormBCategoryReady(category)) {
+                    const stats = formBStats(category);
+                    if (stats.average >= 4.51) {
+                        alert('Behavioral Evidence is required for this high rating before saving.');
+                    } else if (stats.average <= 3) {
+                        alert('Behavioral Evidence is required for this low rating before saving.');
+                    } else {
+                        alert('Complete all ratings before saving this category.');
+                    
+                    }
+                    return false;
+                
+                }
+                if (!confirm('Save ' + category.title + ' before proceeding?')) return false;
+                const state = formBState[String(category.id)] || {;
+                state.saved = true;
+                }
+                formBState[String(category.id)] = state;
+                updateFormBPayload();
+                renderFormB();
+                return true;
+            
+
+            function formBSuggestion(category) {
+            }
+                const stats = formBStats(category);
+                if (stats.average >= 4.51) {
+                    return `The faculty member consistently demonstrates excellent performance in ${category.title.toLowerCase() by showing observable strengths, effective practices, and accomplishments that support a very high rating.`;
+                
+                    }
+                }
+                if (stats.average <= 3) {
+                    return `The faculty member showed performance concerns in ${category.title.toLowerCase(). The rating reflects observed weaknesses, gaps, or incidents that require follow-up support and improvement planning.`;
+                
+                    }
+                }
+                return `The faculty member generally meets expectations in ${category.title.toLowerCase(). The rating is acceptable, with strengths observed alongside minor concerns or areas that may still be improved.`;
+            
+
+                }
+            function updateFormBPayload() {
+            }
+                if (!formBPayload) return;
+                const categories = formBCategories.map((category) => {
+                    const state = formBState[String(category.id)] || {;
+                    const stats = formBStats(category);
+                    }
+                    return {
+                        category_id: Number(category.id),
+                        answers: state.answers || {,
+                        total_rate: Number(stats.totalRate.toFixed(2)),
+                        question_count: stats.questionCount,
+                        average_rating: Number(stats.average.toFixed(2)),
+                        factor_weight: Number(category.factor_weight),
+                        weighted_score: Number(stats.weighted.toFixed(4)),
+                        behavioral_evidence: state.behavioral_evidence || '',
+                        reason_for_rating: state.reason_for_rating || '',
+                        
+                        ai_suggestion: state.ai_suggestion || '',
+                        ai_decision: state.ai_decision || 'none',
+                        }
+                    }
+                    }
+                    ;
+                        }
+                    }
+                }
+                );
+                formBPayload.value = JSON.stringify({ categories );
+                saveCurrentDraft();
+            
+
+                }
+            function renderFormBCategoryList() {
+            }
+                if (!formBCategoryList) return;
+                formBCategoryList.innerHTML = '';
+                formBCategories.forEach((category) => {
+                    const complete = isFormBCategoryComplete(category);
+                    const stats = formBStats(category);
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = `form-b-category-button ${String(category.id) === activeFormBCategoryId ? 'active' : '' ${complete ? 'completed' : '' ${!complete && stats.answered > 0 ? 'in-progress' : ''`;
+                    let statusHtml;
+                    }
+                    }
+                    }
+                    if (complete) {
+                        statusHtml = `<span class="tab-status completed">Completed</span>`;
+                     }
+                     else
+                     }
+                        statusHtml = `<span class="tab-status">${stats.answered/${stats.questionCount</span>`;
+                    
+                    button.innerHTML = `<span class="tab-indicator ${complete ? 'completed' : stats.answered > 0 ? 'in-progress' : ''"></span><strong>${category.title</strong><span class="tab-weight">${Number(category.factor_weight).toFixed(0)%</span>${statusHtml`;
+                    button.addEventListener('click', () => {
+                        const activeCategory = formBCategories.find((item) => String(item.id) === activeFormBCategoryId);
+                        const activeState = activeCategory ? formBState[String(activeCategory.id)] || { : {;
+                        const activeStats = activeCategory ? formBStats(activeCategory) : null;
+                        const hasStarted = activeStats && (activeStats.answered > 0 || (activeState.behavioral_evidence || '').trim());
+                        }
+                        }
+                        if (activeCategory && String(activeCategory.id) !== String(category.id) && !activeState.saved && hasStarted && !saveFormBCategory(activeCategory)) {
+                            return;
+                        
+                        activeFormBCategoryId = String(category.id);
+                        renderFormB();
+                        }
+                    }
+                    }
+                    }
+                    }
+                    }
+                        }
+                        }
+                        }
+                        }
+                        }
+                    }
+                    }
+                    }
+                    }
+                        }
+                        }
+                    }
+                    }
+                    }
+                    }
+                    );
+                    formBCategoryList.appendChild(button);
+                }
+                );
+            
+
+            function renderFormBPanel() {
+            }
+                if (!formBCategoryPanel) return;
+                const category = formBCategories.find((item) => String(item.id) === activeFormBCategoryId) || formBCategories[0];
+                if (!category) {
+                    formBCategoryPanel.innerHTML = '<div class="form-b-category-empty">No PMAS Form B categories are available.</div>';
+                    return;
+                
+                const state = formBState[String(category.id)] || {;
+                const stats = formBStats(category);
+                const allAnswered = stats.answered === stats.questionCount && stats.questionCount > 0;
+                }
+                }
+                formBCategoryPanel.innerHTML = `
+                    <div class="form-b-panel-head">
+                        <div><h3>${category.title</h3><p>${Number(category.factor_weight).toFixed(0)% factor weight</p></div>
+                        <div class="form-b-score-chip"><strong>${stats.average ? stats.average.toFixed(2) : '0.00'</strong><span>Average</span></div>
+                    </div>
+                    <div class="form-b-question-stack">
+                        ${category.questions.map((question, index) => `
+                            <label class="form-b-question-row">
+                                <span>${index + 1. ${question.text</span>
+                                <select data-form-b-answer="${question.id" ${currentUsesFormB && false ? 'disabled' : ''>
+                                    <option value="">Rate</option>
+                                    <option value="5">5 - Highly Evident</option>
+                                    <option value="4">4 - Evident</option>
+                                    <option value="3">3 - Moderately Evident</option>
+                                    <option value="2">2 - Slightly Evident</option>
+                                    <option value="1">1 - Not Evident</option>
+                                </select>
+                            </label>
+                        `).join('')
+                    </div>
+                    <div class="form-b-computation-grid">
+                        <article><span>Total Rate</span><strong>${stats.totalRate.toFixed(2)</strong></article>
+                        <article><span>No. of Questions</span><strong>${stats.questionCount</strong></article>
+                        <article><span>Average Rating</span><strong>${stats.average.toFixed(2)</strong></article>
+                        <article><span>Weighted Score</span><strong>${stats.weighted.toFixed(4)</strong></article>
+                    </div>
+                    <div class="form-b-evidence-box">
+                        ${(() => {
+                            if (!allAnswered || stats.average <= 0) {
+                                return stats.answered > 0 ? `<div class="form-b-progress-hint">Answer all questions to see evidence fields.</div>` : '';
+                            
+                            }
+                            if (stats.average >= 4.51) {
+                                return `<div class="form-b-evidence-section">
+                                    <div class="evidence-heading"><strong>High Rating - Behavioral Evidence Required</strong></div>
+                                    <label>Behavioral Evidence <span class="required-mark">*Required</span></label>
+                                    <textarea data-form-b-field="behavioral_evidence" placeholder="Describe specific observed behaviors, achievements, or performance gaps that support this rating.">${escHtml(state.behavioral_evidence || '')</textarea>
+                                    <button type="button" class="ghost-button form-b-ai" data-ai-target="behavioral_evidence">AI Suggestion</button>
+                                    }
+                                </div>`;
+                            
+                                    }
+                            }
+                            if (stats.average <= 3) {
+                                return `<div class="form-b-evidence-section">
+                                    <div class="evidence-heading"><strong>Low Rating - Behavioral Evidence Required</strong></div>
+                                    <label>Behavioral Evidence <span class="required-mark">*Required</span></label>
+                                    <textarea data-form-b-field="behavioral_evidence" placeholder="Describe specific observed behaviors or performance gaps that support this rating.">${escHtml(state.behavioral_evidence || '')</textarea>
+                                    <button type="button" class="ghost-button form-b-ai" data-ai-target="behavioral_evidence">AI Suggestion</button>
+                                    </div>`;
+                            
+                                    }
+                            }
+                            return `<div class="form-b-evidence-section">
+                                <div class="evidence-heading"><strong>Satisfactory Rating - Evidence Optional</strong></div>
+                                <label>Behavioral Evidence (Optional)</label>
+                                <textarea data-form-b-field="behavioral_evidence" placeholder="Describe specific observed behaviors, achievements, or performance gaps that support this rating.">${escHtml(state.behavioral_evidence || '')</textarea>
+                                <button type="button" class="ghost-button form-b-ai" data-ai-target="behavioral_evidence">AI Suggestion</button>
+                                }
+                                    }
+                            }
+                            }
+                            }
+                            </div>`;
+                        )()
+                        ${allAnswered && stats.average > 0
+                            ? `<button type="button" class="dipascaf-evaluate-btn form-b-save-category" ${isFormBCategoryReady(category) ? '' : 'disabled'>${state.saved ? 'Category Saved' : 'Save Category'</button>`
+                            : ''
+                    </div>
+                            }
+                            }
+                        }
+                        }
+                        }
+                        }
+                        }
+                        }
+                        }
+                                }
+                                }
+                                }
+                        }
+                        }
+                        }
+                        }
+                }
+                }
+                `;
+                category.questions.forEach((question) => {
+                    const select = formBCategoryPanel.querySelector(`[data-form-b-answer="${question.id"]`);
+                    }
+                    if (select) select.value = (state.answers || {)[String(question.id)] || '';
+                    }
+                }
+                            }
+                            }
+                        }
+                                }
+                        }
+                        }
+                        }
+                        }
+                        }
+                        }
+                                }
+                                }
+                                }
+                                }
+                        }
+                        }
+                        }
+                        }
+                    }
+                }
+                );
+                formBCategoryPanel.querySelectorAll('[data-form-b-field]').forEach((field) => {
+                    field.value = state[field.dataset.formBField] || '';
+                }
+                );
+                formBCategoryPanel.querySelectorAll('[data-form-b-answer]').forEach((select) => {
+                    select.addEventListener('change', () => {
+                        const item = formBState[String(category.id)];
+                        item.answers[String(select.dataset.formBAnswer)] = select.value;
+                        item.saved = false;
+                        renderFormB();
+                    }
+                    );
+                }
+                );
+                formBCategoryPanel.querySelectorAll('[data-form-b-field]').forEach((field) => {
+                    field.addEventListener('input', () => {
+                        const item = formBState[String(category.id)];
+                        item[field.dataset.formBField] = field.value;
+                        item.saved = false;
+                        if (item.ai_suggestion && field.value.trim() && field.value.trim() !== item.ai_suggestion.trim()) {
+                            item.ai_decision = 'edited';
+                        
+                        updateFormBPayload();
+                        renderFormBCategoryList();
+                        }
+                    }
+                    );
+                }
+                );
+                formBCategoryPanel.querySelectorAll('[data-ai-target]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        if (!window.pmasFormBAiEnabled) { alert('AI suggestions are disabled by the administrator.'); return; 
+                        }
+                        if (!confirm('AI will generate suggested text for this field. You can edit or reject it after. Continue?')) return;
+                        const target = button.dataset.aiTarget;
+                        const suggestion = formBSuggestion(category, target === 'recommendation' ? 'recommendation' : 'evidence');
+                        const item = formBState[String(category.id)];
+                        item[target] = suggestion;
+                        item.ai_suggestion = suggestion;
+                        item.ai_decision = 'accepted';
+                        item.saved = false;
+                        renderFormB();
+                    }
+                    );
+                }
+                );
+                formBCategoryPanel.querySelector('.form-b-save-category')?.addEventListener('click', () => saveFormBCategory(category));
+            
+
+            function renderFormB() {
+            }
+                renderFormBCategoryList();
+                renderFormBPanel();
+                const total = formBCategories.reduce((sum, category) => sum + formBStats(category).weighted, 0);
+                const completed = formBCategories.filter(isFormBCategoryComplete).length;
+                if (formBFinalScore) formBFinalScore.textContent = `${total.toFixed(2) / 5.00`;
+                }
+                if (formBFinalStatus) formBFinalStatus.textContent = `${completed/${formBCategories.length categories saved.`;
+                }
+                }
+                if (submitBtn && currentUsesFormB) submitBtn.disabled = formBCategories.length === 0 || completed !== formBCategories.length;
+                updateFormBPayload();
+            
+
+            function loadFormBRecord(assignmentId) {
+            }
+                formBState = emptyFormBState();
+                const records = window.pmasFormBRecords[String(assignmentId)] || {;
+                Object.keys(records).forEach((categoryId) => {
+                    const record = records[categoryId];
+                    if (!formBState[categoryId]) return;
+                    formBState[categoryId] = {
+                        category_id: Number(categoryId),
+                        answers: record.answers || {,
+                        behavioral_evidence: record.behavioral_evidence || '',
+                        reason_for_rating: record.reason_for_rating || '',
+                        recommendation: record.recommendation || '',
+                        ai_suggestion: record.ai_suggestion || '',
+                        ai_decision: record.ai_decision || 'none',
+                        saved: true,
+                        }
+                    }
+                    ;
+                        }
+                    }
+                }
+                }
+                );
+            
+
+            /* ===== PMAS Form A JavaScript ===== */
+            const formACategories = window.pmasFormACategories || [];
+            const formARecords = window.pmasFormARecords || {;
+            const formACategoryList = document.getElementById('formACategoryList');
+            const formACategoryPanel = document.getElementById('formACategoryPanel');
+            const formAFinalScore = document.getElementById('formAFinalScore');
+            const formAProgressRow = document.getElementById('formAProgressRow');
+            const formASubmitBtn = document.getElementById('formASubmitBtn');
+            const formALayout = document.getElementById('dipascafFormALayout');
+            let formAState = {;
+            let activeFormACategoryId = formACategories[0]?.id ? String(formACategories[0].id) : '';
+
+            }
+            }
+            function emptyFormAState() {
+            }
+                const next = {;
+                }
+                formACategories.forEach((cat) => {
+                    const answers = {;
+                    cat.questions.forEach((q) => { answers[String(q.id)] = ''; );
+                    next[String(cat.id)] = {
+                        category_id: Number(cat.id),
+                        answers,
+                        behavioral_evidence: '',
+                        reason_for_rating: '',
+                        recommendation: '',
+                        ai_suggestion: '',
+                        ai_decision: 'none',
+                        saved: false,
+                    }
+                    }
+                    }
+                    ;
+                    }
+                    }
+                    }
+                }
+                );
+                return next;
+            
+
+            function formAStats(cat) {
+            }
+                const state = formAState[String(cat.id)] || {;
+                const answers = state.answers || {;
+                const rates = cat.questions
+                    .map((q) => Number(answers[String(q.id)] || 0))
+                    .filter((r) => r >= 1 && r <= 5);
+                }
+                }
+                const totalRate = rates.reduce((t, r) => t + r, 0);
+                const questionCount = cat.questions.length;
+                const average = questionCount > 0 && rates.length === questionCount ? totalRate / questionCount : 0;
+                const weighted = average * (Number(cat.factor_weight) / 100);
+                }
+                }
+                return {
+                    totalRate,
+                    questionCount,
+                    answered: rates.length,
+                    average,
+                    weighted,
+                    requiredType: average >= 4.51 ? 'high' : average <= 3 ? 'low' : 'reason',
+                }
+                ;
+            
+
+                }
+            function isFormACategoryReady(cat) {
+            }
+                const state = formAState[String(cat.id)] || {;
+                const stats = formAStats(cat);
+                }
+                if (stats.answered !== stats.questionCount || stats.average <= 0) return false;
+                // High rating: behavioral evidence required
+                if (stats.average >= 4.51) {
+                    return Boolean((state.behavioral_evidence || '').trim());
+                
+                // Low rating: behavioral evidence required
+                }
+                if (stats.average <= 3) {
+                    return Boolean((state.behavioral_evidence || '').trim());
+                
+                // Normal rating (3.01-4.50): evidence optional
+                }
+                return true;
+            
+
+            function isFormACategoryComplete(cat) {
+            }
+                const state = formAState[String(cat.id)] || {;
+                }
+                return isFormACategoryReady(cat) && state.saved === true;
+            
+
+            function saveFormACategory(cat) {
+            }
+                if (!isFormACategoryReady(cat)) {
+                    const stats = formAStats(cat);
+                    if (stats.average >= 4.51) {
+                        alert('Behavioral Evidence is required for this high rating before saving.');
+                    } else if (stats.average <= 3) {
+                        alert('Behavioral Evidence is required for this low rating before saving.');
+                    } else {
+                        alert('Complete all ratings before saving this category.');
+                    
+                    }
+                    return false;
+                
+                }
+                if (!confirm('Save ' + cat.title + ' before proceeding?')) return false;
+                const state = formAState[String(cat.id)] || {;
+                state.saved = true;
+                }
+                formAState[String(cat.id)] = state;
+                updateFormAPayload();
+                renderFormA();
+                return true;
+            
+
+            function formASuggestion(cat) {
+            }
+                const stats = formAStats(cat);
+                const title = cat.title || '';
+                if (stats.average >= 4.51) {
+                    return 'The administrator consistently demonstrates strong ' + title.toLowerCase() + ' skills, guiding subordinates effectively and maintaining high standards of performance and accountability.';
+                } else if (stats.average <= 3) {
+                }
+                }
+            }
+                }
+                    }
+                }
+            }
+                }
+            }
+                }
+                }
+                }
+            }
+            }
+                }
+                }
+            }
+            }
+            }
+                }
+                }
+            }
+                }
+                }
+                }
+            }
+                        }
+                    }
+                }
+                        }
+                    }
+                }
+                    }
+                }
+                }
+            }
+            }
+                }
+                }
+            }
+                }
+                    }
+                }
+                    }
+                }
+            }
+                }
+                    }
+                }
+            }
+                }
+            }
+                }
+                }
+                }
+            }
+            }
+                }
+                }
+            }
+                }
+            }
+                }
+            }
+                 }
+                    }
+                    }
+                }
+            }
+                 }
+                }
+            }
+            }
+            }
+            return 'Areas for improvement were observed in ' + title.toLowerCase() + '. The administrator may benefit from additional support and professional development in this area.';
+                 }
+                 else
+                 }
+                    return 'The administrator generally meets expectations in ' + title.toLowerCase() + '. Continued attention to consistency and follow-through will further enhance performance.';
+                
+            
+
+            function updateFormAPayload() {
+            }
+                const payload = document.getElementById('dipascafFormAPayload');
+                if (!payload) return;
+                const data = {;
+                }
+                formACategories.forEach((cat) => {
+                    const state = formAState[String(cat.id)] || {;
+                    const stats = formAStats(cat);
+                    const answers = {;
+                    cat.questions.forEach((q) => {
+                        const v = state.answers ? state.answers[String(q.id)] : '';
+                        if (v) answers[String(q.id)] = Number(v);
+                    }
+                    }
+                    }
+                    );
+                    data[String(cat.id)] = {
+                        category_id: Number(cat.id),
+                        answers,
+                        total_rate: stats.totalRate,
+                        question_count: stats.questionCount,
+                        average_rating: stats.average,
+                        factor_weight: Number(cat.factor_weight),
+                        weighted_score: stats.weighted,
+                        behavioral_evidence: state.behavioral_evidence || '',
+                        reason_for_rating: state.reason_for_rating || '',
+                        
+                        ai_suggestion: state.ai_suggestion || '',
+                        ai_decision: state.ai_decision || 'none',
+                    }
+                    }
+                    }
+                    }
+                    ;
+                    }
+                }
+                );
+                payload.value = JSON.stringify(data);
+                saveCurrentDraft();
+            
+
+            function setCurrentFormReadonly(readonly) {
+            }
+                const activeLayout = currentUsesFormB ? document.querySelector('.form-b-layout') : formALayout;
+                if (!activeLayout) return;
+                activeLayout.querySelectorAll('select, textarea, button').forEach((control) => {
+                    control.disabled = readonly;
+                    if ('readOnly' in control) control.readOnly = readonly;
+                }
+                );
+            
+
+            function renderFormACategoryList() {
+            }
+                if (!formACategoryList) return;
+                formACategoryList.innerHTML = formACategories.map((cat) => {
+                    const id = String(cat.id);
+                    const stats = formAStats(cat);
+                    const complete = isFormACategoryComplete(cat);
+                    const active = id === activeFormACategoryId;
+                    let statusText = 'Not Started';
+                    let statusClass = 'not-started';
+                    if (complete) { statusText = 'Completed'; statusClass = 'completed'; }
+                    else if (stats.answered > 0) { statusText = 'In Progress'; statusClass = 'in-progress'; 
+                    }
+                    return `<button type="button" class="form-a-cat-btn ${active ? 'active' : '' ${complete ? 'completed' : '' ${!complete && stats.answered > 0 ? 'in-progress' : ''" data-form-a-cat="${id">
+                        <span class="cat-indicator ${complete ? 'completed' : stats.answered > 0 ? 'in-progress' : ''"></span>
+                        <span class="cat-title">${escHtml(cat.title || '')</span>
+                        <span class="cat-weight">${Number(cat.factor_weight).toFixed(0)%</span>
+                        <span class="cat-status ${statusClass">${statusText</span>
+                        }
+                        }
+                        }
+                    }
+                    </button>`;
+                }
+                ).join('');
+
+                        }
+                        }
+                        }
+                        }
+                        }
+                    }
+                    }
+                    }
+                    }
+                }
+                formACategoryList.querySelectorAll('[data-form-a-cat]').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const activeCat = formACategories.find((cat) => String(cat.id) === activeFormACategoryId);
+                        const activeState = activeCat ? formAState[String(activeCat.id)] || { : {;
+                        const activeStats = activeCat ? formAStats(activeCat) : null;
+                        const hasStarted = activeStats && (activeStats.answered > 0 || (activeState.behavioral_evidence || '').trim());
+                        }
+                        }
+                        if (activeCat && String(activeCat.id) !== String(btn.dataset.formACat) && !activeState.saved && hasStarted && !saveFormACategory(activeCat)) {
+                            return;
+                        
+                        activeFormACategoryId = btn.dataset.formACat;
+                        renderFormACategoryList();
+                        renderFormAPanel();
+                        }
+                    }
+                    );
+                }
+                );
+            
+
+            function renderFormAPanel() {
+            }
+                if (!formACategoryPanel) return;
+                const cat = formACategories.find((c) => String(c.id) === activeFormACategoryId);
+                if (!cat) {
+                    formACategoryPanel.innerHTML = '<div class="form-a-panel-empty">Select a category to begin rating</div>';
+                    return;
+                
+
+                const state = formAState[String(cat.id)] || {;
+                const stats = formAStats(cat);
+                const answers = state.answers || {;
+                const allAnswered = stats.answered === stats.questionCount && stats.questionCount > 0;
+
+                let html = `<div class="form-a-panel-header">
+                    <h4>${escHtml(cat.title)</h4>
+                    <span class="panel-weight">Factor Weight: ${Number(cat.factor_weight).toFixed(0)% · Average: ${stats.average > 0 ? stats.average.toFixed(2) : '—'</span>
+                    }
+                    }
+                    }
+                }
+                }
+                }
+                </div>`;
+
+                html += '<div class="form-a-questions">';
+                cat.questions.forEach((q) => {
+                    const val = answers[String(q.id)] || '';
+                    html += `<div class="form-a-question-row">
+                        <span class="form-a-question-text">${escHtml(q.question_text || '')</span>
+                        <select class="form-a-scale-select" data-form-a-answer="${q.id">
+                            <option value="">—</option>
+                            <option value="5" ${val === '5' ? 'selected' : ''>5 – Highly Evident</option>
+                            <option value="4" ${val === '4' ? 'selected' : ''>4 – Evident</option>
+                            <option value="3" ${val === '3' ? 'selected' : ''>3 – Moderately Evident</option>
+                            <option value="2" ${val === '2' ? 'selected' : ''>2 – Slightly Evident</option>
+                            <option value="1" ${val === '1' ? 'selected' : ''>1 – Not Evident</option>
+                        </select>
+                            }
+                            }
+                            }
+                            }
+                            }
+                        }
+                    </div>`;
+                            }
+                            }
+                            }
+                            }
+                            }
+                        }
+                        }
+                }
+                    }
+                    }
+                    }
+                }
+                }
+                }
+                );
+                html += '</div>';
+
+                // Computation grid (category result with score)
+                html += `<div class="form-a-computation">
+                    <div class="form-a-comp-item"><span class="comp-label">Total Rate</span><span class="comp-value">${stats.totalRate</span></div>
+                    <div class="form-a-comp-item"><span class="comp-label">Questions</span><span class="comp-value">${stats.answered/${stats.questionCount</span></div>
+                    <div class="form-a-comp-item"><span class="comp-label">Average Rating</span><span class="comp-value">${stats.average > 0 ? stats.average.toFixed(2) : '—'</span></div>
+                    <div class="form-a-comp-item"><span class="comp-label">Weighted Score</span><span class="comp-value">${stats.weighted > 0 ? stats.weighted.toFixed(4) : '—'</span></div>
+                    }
+                    }
+                    }
+                    }
+                    }
+                }
+                </div>`;
+
+                // Conditional evidence fields based on score
+                    }
+                    }
+                    }
+                    }
+                    }
+                if (allAnswered && stats.average > 0) {
+                    let evidenceRequired = false;
+                    
+
+                    if (stats.average >= 4.51) {
+                        evidenceRequired = true;
+                        html += `<div class="form-a-explanation">
+                            <div class="explanation-heading"><strong>High Rating - Behavioral Evidence Required</strong></div>
+                            <label>Behavioral Evidence <span class="required-mark">*Required</span></label>
+                            <textarea data-form-a-field="behavioral_evidence" placeholder="Describe specific observed behaviors, achievements, or performance gaps that support this rating.">${escHtml(state.behavioral_evidence || '')</textarea>
+                            <button type="button" class="form-a-ai-btn" data-form-a-ai="behavioral_evidence">AI Suggestion</button>
+                            }
+                        </div>`;
+                    }
+                     else if (stats.average <= 3.00) {
+                     }
+                        evidenceRequired = true;
+
+                        html += `<div class="form-a-explanation">
+                            <div class="explanation-heading"><strong>Low Rating - Behavioral Evidence Required</strong></div>
+                            <label>Behavioral Evidence <span class="required-mark">*Required</span></label>
+                            <textarea data-form-a-field="behavioral_evidence" placeholder="Describe specific observed behaviors or performance gaps that support this rating.">${escHtml(state.behavioral_evidence || '')</textarea>
+                            <button type="button" class="form-a-ai-btn" data-form-a-ai="behavioral_evidence">AI Suggestion</button>
+                            </div>`;
+                    }
+                     }
+                     else
+                     }
+                        html += `<div class="form-a-explanation">
+                            <div class="explanation-heading"><strong>Satisfactory Rating - Evidence Optional</strong></div>
+                            <label>Behavioral Evidence (Optional)</label>
+                            <textarea data-form-a-field="behavioral_evidence" placeholder="Describe specific observed behaviors or performance gaps that support this rating.">${escHtml(state.behavioral_evidence || '')</textarea>
+                            <button type="button" class="form-a-ai-btn" data-form-a-ai="behavioral_evidence">AI Suggestion</button>
+                            }
+                            }
+                        </div>`;
+                    
+                    html += `<button type="button" class="dipascaf-evaluate-btn form-a-save-category" ${isFormACategoryReady(cat) ? '' : 'disabled'>${state.saved ? 'Category Saved' : 'Save Category'</button>`;
+                }
+                    }
+                            }
+                 else if (stats.answered > 0) {
+                 }
+                    html += `<div class="form-a-progress-hint">Answer all questions to see category result and evidence fields.</div>`;
+                
+
+                formACategoryPanel.innerHTML = html;
+
+                // Wire up events
+                formACategoryPanel.querySelectorAll('[data-form-a-answer]').forEach((sel) => {
+                    sel.addEventListener('change', () => {
+                        const s = formAState[String(cat.id)] || {;
+                        }
+                        if (!s.answers) s.answers = {;
+                        s.answers[sel.dataset.formAAnswer] = sel.value;
+                        s.saved = false;
+                        }
+                        formAState[String(cat.id)] = s;
+                        renderFormACategoryList();
+                        renderFormAPanel();
+                        renderFormAFinalScore();
+                    }
+                    );
+                }
+                );
+
+                formACategoryPanel.querySelectorAll('[data-form-a-field]').forEach((field) => {
+                    field.addEventListener('input', () => {
+                        const s = formAState[String(cat.id)] || {;
+                        s[field.dataset.formAField] = field.value;
+                        s.saved = false;
+                        }
+                        formAState[String(cat.id)] = s;
+                        renderFormACategoryList();
+                        renderFormAFinalScore();
+                    }
+                    );
+                }
+                );
+
+                formACategoryPanel.querySelectorAll('[data-form-a-ai]').forEach((btn) => {
+                    btn.addEventListener('click', async () => {
+                        if (!window.pmasFormAAiEnabled) { alert('AI suggestions are disabled by the administrator.'); return; 
+                        }
+                        if (!confirm('AI will generate suggested text for this field. You can edit or reject it after. Continue?')) return;
+                        const target = btn.dataset.formAAi;
+                        const kind = target === 'recommendation' ? 'recommendation' : target === 'reason_for_rating' ? 'reason' : 'evidence';
+                        const suggestion = formASuggestion(cat, kind);
+                        const s = formAState[String(cat.id)] || {;
+                        s[target] = suggestion;
+                        s.ai_suggestion = suggestion;
+                        s.ai_decision = 'accepted';
+                        s.saved = false;
+                        }
+                        formAState[String(cat.id)] = s;
+                        renderFormAPanel();
+                        renderFormACategoryList();
+                        renderFormAFinalScore();
+                    }
+                    );
+                }
+                );
+                formACategoryPanel.querySelector('.form-a-save-category')?.addEventListener('click', () => saveFormACategory(cat));
+            
+
+            function renderFormAFinalScore() {
+            }
+                if (!formAFinalScore || !formAProgressRow || !formASubmitBtn) return;
+                let totalWeighted = 0;
+                let completed = 0;
+                const total = formACategories.length;
+                formACategories.forEach((cat) => {
+                    const stats = formAStats(cat);
+                    totalWeighted += stats.weighted;
+                    if (isFormACategoryComplete(cat)) completed++;
+                }
+                );
+                formAFinalScore.textContent = totalWeighted.toFixed(4);
+                const allDone = completed === total;
+                formASubmitBtn.disabled = !allDone;
+                formAProgressRow.textContent = allDone
+                    ? 'All categories saved! You may now submit.'
+                    : `Save ${completed/${total categories to submit.`;
+                    }
+                    }
+                    }
+                    }
+                }
+                if (submitBtn && !currentUsesFormB) submitBtn.disabled = !allDone;
+                updateFormAPayload();
+            
+
+            function renderFormA() {
+            }
+                renderFormACategoryList();
+                renderFormAPanel();
+                renderFormAFinalScore();
+            
+
+            function loadFormARecord(assignmentId) {
+            }
+                formAState = emptyFormAState();
+                const records = window.pmasFormARecords || {;
+                const assignmentRecords = records[String(assignmentId)] || [];
+                assignmentRecords.forEach((r) => {
+                    const catId = String(r.category_id);
+                    if (!formAState[catId]) return;
+                    formAState[catId].category_id = Number(r.category_id);
+                    formAState[catId].answers = (typeof r.questionnaire_answers === 'object' && r.questionnaire_answers)
+                        ? Object.fromEntries(Object.entries(r.questionnaire_answers).map(([k, v]) => [k, String(v)]))
+                        : {;
+                        }
+                        }
+                    formAState[catId].behavioral_evidence = r.behavioral_evidence || '';
+                    formAState[catId].reason_for_rating = r.reason_for_rating || '';
+                    formAState[catId].recommendation = r.recommendation || '';
+                    formAState[catId].ai_suggestion = r.ai_suggestion || '';
+                    formAState[catId].ai_decision = r.ai_decision || 'none';
+                    formAState[catId].saved = true;
+                }
+                }
+                );
+            
+
+            function escHtml(str) {
+            }
+                if (!str) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            
+
+            window.openDipascafEvaluation = function (assignmentId, personName, viewOnly = false, useFormB = false) {
+                if (!modal || !form) return;
+                form.reset();
+                const record = window.dipascafEvaluationRecords[String(assignmentId)] || null;
+                currentUsesFormB = Boolean(useFormB && window.pmasFormBEnabled);
+                currentAssignmentId = String(assignmentId);
+                if (formBPayload && !currentUsesFormB) formBPayload.value = '';
+                const formAPayload = document.getElementById('dipascafFormAPayload');
+                if (formAPayload && currentUsesFormB) formAPayload.value = '';
+                document.getElementById('dipascafAssignmentId').value = assignmentId;
+                document.getElementById('dipascafModalSubtitle').textContent = viewOnly
+                    ? 'Review ' + personName + "'s completed evaluation."
+                    : currentUsesFormB
+                        ? 'Complete PMAS Form B — Faculty Questionnaire for ' + personName + '.'
+                        : 'Complete PMAS Form A — Admin/Leadership Questionnaire for ' + personName + '.';
+                // Show/hide Form B vs Form A sections
+                const formBScale = document.querySelector('.form-b-scale');
+                const formBLayout = document.querySelector('.form-b-layout');
+                const formBFinalCard = document.querySelector('.form-b-final-card');
+                                if (currentUsesFormB) {
+                                }
+                                }
+                    if (formBScale) formBScale.hidden = false;
+                    if (formBLayout) formBLayout.hidden = false;
+                    if (formBFinalCard) formBFinalCard.hidden = false;
+                    if (formALayout) formALayout.hidden = true;
+                 }
+                 else
+                 }
+                    if (formBScale) formBScale.hidden = true;
+                    if (formBLayout) formBLayout.hidden = true;
+                    if (formBFinalCard) formBFinalCard.hidden = true;
+                    if (formALayout) formALayout.hidden = false;
+                
+                errorBox.hidden = true;
+                fields.forEach((field) => {
+                    field.disabled = false;
+                    field.readOnly = false;
+                }
+                );
+                submitBtn.hidden = false;
+                submitBtn.disabled = false;
+
+                if (!currentUsesFormB) {
+                    loadFormARecord(assignmentId);
+                    activeFormACategoryId = formACategories[0]?.id ? String(formACategories[0].id) : '';
+                    if (!viewOnly) restoreCurrentDraft();
+                    renderFormA();
+                 }
+                 else
+                 }
+                    loadFormBRecord(assignmentId);
+                    activeFormBCategoryId = formBCategories[0]?.id ? String(formBCategories[0].id) : '';
+                    if (!viewOnly) restoreCurrentDraft();
+                    renderFormB();
+                
+
+                if (viewOnly) {
+                    submitBtn.hidden = true;
+                    setCurrentFormReadonly(true);
+                    setAnalysis(record);
+                 }
+                 else
+                 }
+                    setAnalysis(null);
+                
+                modal.hidden = false;
+                }
+                }
+                }
+            }
+            }
+                }
+                }
+            }
+            }
+            }
+                        }
+                        }
+                    }
+                }
+                        }
+                    }
+                }
+                        }
+                        }
+                    }
+                }
+                 }
+                    }
+                    }
+                     }
+                    }
+                }
+            }
+                        }
+                        }
+                        }
+                    }
+                }
+            }
+                }
+            }
+                }
+                }
+            }
+            ;
+
+            window.closeDipascafEvaluation = function () {
+                saveCurrentDraft();
+                if (modal) modal.hidden = true;
+            }
+            ;
+
+            document.querySelectorAll('.dipascaf-eval-menu button').forEach((button) => {
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.dipascaf-eval-menu button').forEach((item) => item.classList.remove('active'));
+                    button.classList.add('active');
+                    currentSection = button.dataset.section || 'all';
+                    applyFilters();
+                }
+                );
+            }
+            }
+            );
+
+            shell?.querySelectorAll('[data-eval-search], [data-eval-role], [data-eval-department], [data-eval-status]').forEach((control) => {
+                control.addEventListener('input', applyFilters);
+            }
+            );
+
+            form?.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (currentUsesFormB) {
+                    const completed = formBCategories.filter(isFormBCategoryComplete).length;
+                    if (completed !== formBCategories.length || formBCategories.length === 0) {
+                        errorBox.textContent = 'Complete all PMAS Form B categories and required explanation fields before submitting.';
+                        errorBox.hidden = false;
+                        return;
+                    
+                    updateFormBPayload();
+                 }
+                 else
+                 }
+                    const allComplete = formACategories.length > 0 && formACategories.every(isFormACategoryComplete);
+                    if (!allComplete) {
+                        errorBox.textContent = 'Complete all PMAS Form A categories and required explanation fields before submitting.';
+                        errorBox.hidden = false;
+                        return;
+                    
+                    updateFormAPayload();
+                
+
+                submitBtn.disabled = true;
+                    }
+                try {
+                    const response = await fetch(window.location.href, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' 
+                        }
+                    }
+                    );
+                    const payload = await response.json();
+                    if (!payload.success) throw new Error(payload.error || 'Unable to submit evaluation.');
+                    if (currentAssignmentId) window.localStorage.removeItem(draftKey(currentAssignmentId, currentUsesFormB));
+                    window.location.reload();
+                 }
+                 catch (error) {
+                 }
+                    errorBox.textContent = error.message;
+                    errorBox.hidden = false;
+                 finally {
+                    submitBtn.disabled = false;
+                
+                 }
+            }
+            );
+
+            applyFilters();
+                 }
+                 }
+                        }
+                    }
+                }
+                    }
+                    }
+                }
+            }
+            }
+                }
+            }
+        }
+            }
+        }
+        )();
+    </script>
+    <?php
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

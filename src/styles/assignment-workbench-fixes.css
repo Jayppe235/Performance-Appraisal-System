@@ -1,0 +1,147 @@
+/* Final, isolated layout contract for the Evaluation Assignment Workbench. */
+.assignment-workbench.module-wide {
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  gap: 14px !important;
+}
+
+.assignment-workbench.module-wide > * { min-width: 0 !important; }
+.assignment-workbench.module-wide > .mb-6 { margin-bottom: 0 !important; }
+
+.assignment-workbench.module-wide > .assignment-workbench-tabs {
+  box-sizing: border-box !important;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin: 0 0 8px !important;
+  padding: 9px !important;
+  gap: 9px !important;
+  overflow: visible !important;
+  container-type: normal !important;
+  border-radius: 16px !important;
+}
+
+.assignment-workbench.module-wide .assignment-workbench-tab {
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 54px !important;
+  padding: 9px 12px !important;
+  gap: 9px !important;
+  border-radius: 11px !important;
+  font-size: .81rem !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  overflow: hidden !important;
+}
+
+.assignment-workbench.module-wide .assignment-workbench-tab svg {
+  flex: 0 0 17px !important;
+  width: 17px !important;
+  height: 17px !important;
+}
+
+.assignment-workbench.module-wide .assignment-workbench-tab span {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  text-align: center !important;
+}
+
+@media (max-width: 760px) {
+  .assignment-workbench.module-wide > .assignment-workbench-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .assignment-workbench.module-wide > .assignment-workbench-tabs .assignment-workbench-tab:last-child:nth-child(odd) {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .assignment-workbench.module-wide > .assignment-workbench-tabs {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.category-monitor-self-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 20px 14px;
+  border: 1px solid color-mix(in srgb, var(--theme-primary, #168358) 24%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--theme-primary-soft, #eaf8f0), var(--theme-surface, #fff));
+  padding: 15px 17px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--theme-primary, #168358) 9%, transparent);
+}
+
+.category-monitor-self-copy {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.category-monitor-self-copy > span {
+  color: var(--theme-text, #10201b);
+  font-weight: 900;
+}
+
+.category-monitor-self-copy p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--theme-muted, #52665d);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.category-monitor-self-view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid #168358;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #168358, #0f9f78);
+  color: #fff;
+  padding: 0 15px;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 9px 20px rgba(22, 131, 88, .2);
+}
+
+.category-monitor-self-view:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 25px rgba(22, 131, 88, .27);
+}
+
+.evaluator-status-badge.status-not_started,
+.evaluator-status-badge.status-pending { background: #fff4d8; color: #9a5808; }
+.evaluator-status-badge.status-in_progress { background: #e8f2ff; color: #1d4ed8; }
+.evaluator-status-badge.status-reopened { background: #f4eaff; color: #6d28d9; }
+.evaluator-status-badge.status-not_required { background: #edf1f5; color: #52606d; }
+
+@media (max-width: 680px) {
+  .category-monitor-self-status { align-items: stretch; flex-direction: column; margin-inline: 12px; }
+  .category-monitor-self-view { width: 100%; }
+}

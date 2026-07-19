@@ -1,0 +1,46 @@
+# Dependencies
+vendor/
+node_modules/
+composer.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+includes/credentials.php
+
+# Local database dumps (keep versioned migration_*.sql files)
+database/pmas.sql
+database/*_before_*.sql
+database/*backup*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Build
+dist/
+build/
+release/
+
+# Cache
+*.cache
+.cache/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+nul
+
+# OS files
+Thumbs.db
+.DS_Store

@@ -1,0 +1,189 @@
+/* Final responsive layout for Dean/VPAA/Program Head self-evaluation review. */
+.dean-self-review,
+.dean-self-review > *,
+.dean-self-review-head > *,
+.dean-self-review-actions,
+.dean-self-review-actions .period-selector,
+.dean-self-review-actions .period-selector-select-wrapper {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dean-self-review .dean-self-review-head {
+  grid-template-columns: minmax(300px, 0.72fr) minmax(520px, 1.28fr) !important;
+  align-items: start !important;
+  gap: clamp(18px, 2.2vw, 38px) !important;
+}
+
+.dean-self-review .dean-self-review-title {
+  width: 100%;
+  max-width: 560px !important;
+}
+
+.dean-self-review .dean-self-review-title h2 {
+  max-width: 13ch;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-wrap: balance;
+  font-size: clamp(2rem, 3.1vw, 3rem) !important;
+}
+
+.dean-self-review .dean-self-review-title p:not(.eyebrow) {
+  max-width: 44ch !important;
+  overflow-wrap: anywhere;
+}
+
+.dean-self-review .dean-self-review-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center !important;
+  align-self: start;
+  width: 100%;
+  gap: 12px !important;
+}
+
+.dean-self-review .dean-self-review-actions .period-selector {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr) auto auto;
+  width: 100%;
+  min-height: 58px;
+  gap: 10px;
+}
+
+.dean-self-review .dean-self-review-actions .period-selector-select-wrapper,
+.dean-self-review .dean-self-review-actions .period-selector-select {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.dean-self-review .dean-self-review-actions > .evaluation-nav-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.dean-self-review-summary,
+.dean-self-review-toolbar {
+  min-width: 0;
+}
+
+@media (max-width: 1280px) {
+  .dean-self-review .dean-self-review-head {
+    grid-template-columns: 1fr !important;
+    min-height: 0 !important;
+  }
+
+  .dean-self-review .dean-self-review-title {
+    max-width: 760px !important;
+  }
+
+  .dean-self-review .dean-self-review-title h2 {
+    max-width: none;
+  }
+
+  .dean-self-review .dean-self-review-title p:not(.eyebrow) {
+    max-width: 62ch !important;
+  }
+
+  .dean-self-review .dean-self-review-actions {
+    align-self: stretch;
+  }
+
+  .dean-self-review-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .dean-self-review-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .dean-self-review {
+    gap: 12px !important;
+    border-radius: 14px !important;
+  }
+
+  .dean-self-review .dean-self-review-head {
+    gap: 16px !important;
+    min-height: 0 !important;
+    padding: 18px 16px !important;
+    border-radius: 16px !important;
+  }
+
+  .dean-self-review .dean-self-review-title .eyebrow {
+    margin-bottom: 7px !important;
+    font-size: 0.7rem !important;
+  }
+
+  .dean-self-review .dean-self-review-title h2 {
+    font-size: clamp(1.65rem, 8vw, 2.25rem) !important;
+    line-height: 1.08 !important;
+  }
+
+  .dean-self-review .dean-self-review-title p:not(.eyebrow) {
+    margin-top: 9px !important;
+    font-size: 0.9rem !important;
+    line-height: 1.5 !important;
+  }
+
+  .dean-self-review .dean-self-review-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    min-height: 52px;
+    padding: 8px 10px;
+  }
+
+  .dean-self-review .dean-self-review-actions > .evaluation-nav-btn {
+    width: 100%;
+  }
+
+  .dean-self-review-summary,
+  .dean-self-review-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dean-self-review-card {
+    min-width: 0;
+  }
+
+  .dean-self-review-panel {
+    padding: 12px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .dean-self-review .dean-self-review-head {
+    padding: 15px 13px !important;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-status {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .dean-self-review .dean-self-review-actions .period-selector-refresh {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .dean-self-review .dean-self-review-title h2 {
+    font-size: clamp(1.5rem, 9vw, 1.9rem) !important;
+  }
+
+  .dean-self-review-card {
+    padding: 13px !important;
+  }
+
+  .dean-self-review-fab {
+    right: 10px !important;
+    bottom: 82px !important;
+  }
+}

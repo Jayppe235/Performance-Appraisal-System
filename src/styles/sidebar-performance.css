@@ -1,0 +1,276 @@
+/* Final sidebar motion rules: loaded last so legacy theme layers cannot override them. */
+@media (min-width:1121px) {
+  .admin-body .admin-sidebar,
+  .admin-dashboard-body .admin-sidebar,
+  .dean-body .admin-sidebar {
+    will-change:auto!important;
+    contain:paint;
+    transition:width 170ms cubic-bezier(.2,.75,.25,1)!important;
+  }
+
+  .admin-body .admin-main,
+  .admin-dashboard-body .admin-main,
+  .dean-body .admin-main {
+    will-change:auto!important;
+    transition:margin-left 170ms cubic-bezier(.2,.75,.25,1)!important;
+  }
+
+  .admin-body .sidebar-brand-copy,
+  .admin-body .sidebar-item-label,
+  .admin-body .auto-badge {
+    animation:none!important;
+    transition:opacity 80ms linear,visibility 0s linear!important;
+  }
+
+  .admin-body.sidebar-collapsed :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge) {
+    transition:opacity 60ms linear,visibility 0s linear 80ms!important;
+  }
+
+  .admin-body .sidebar-menu a,
+  .admin-body .menu-icon,
+  .admin-body .sidebar-collapse,
+  .admin-body .sidebar-collapse-icon {
+    will-change:auto!important;
+    animation:none!important;
+  }
+
+  .admin-body.dark-mode .admin-sidebar,
+  .admin-dashboard-body.dark-mode .admin-sidebar,
+  .dean-body.dark-mode .admin-sidebar {
+    background-image:none!important;
+    box-shadow:none!important;
+    filter:none!important;
+  }
+
+  .admin-body.dark-mode .sidebar-menu a,
+  .admin-body.dark-mode .menu-icon {
+    filter:none!important;
+    box-shadow:none!important;
+  }
+}
+
+.admin-body .admin-sidebar::before,
+.admin-body .admin-sidebar::after,
+.admin-dashboard-body .admin-sidebar::before,
+.admin-dashboard-body .admin-sidebar::after {
+  content:none!important;
+  display:none!important;
+  animation:none!important;
+  filter:none!important;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .admin-body .admin-sidebar,
+  .admin-dashboard-body .admin-sidebar,
+  .dean-body .admin-sidebar,
+  .admin-body .admin-main,
+  .admin-dashboard-body .admin-main,
+  .dean-body .admin-main {
+    transition:none!important;
+  }
+}
+
+/* Mobile drawer close: animate only compositor-friendly properties.
+   Hiding the drawer contents immediately on close avoids repainting the
+   complete navigation while it travels off screen. */
+@media (max-width:720px) {
+  .admin-body .admin-sidebar,
+  .admin-dashboard-body .admin-sidebar,
+  .dean-body .admin-sidebar {
+    contain:layout paint;
+    will-change:transform;
+    backface-visibility:hidden;
+    transform:translate3d(-105%,0,0)!important;
+    transition:none!important;
+  }
+
+  .admin-body.sidebar-open .admin-sidebar,
+  .admin-dashboard-body.sidebar-open .admin-sidebar,
+  .dean-body.sidebar-open .admin-sidebar {
+    transform:translate3d(0,0,0)!important;
+    transition:none!important;
+  }
+
+  .admin-body .sidebar-overlay,
+  .admin-dashboard-body .sidebar-overlay,
+  .dean-body .sidebar-overlay {
+    will-change:auto;
+    opacity:0!important;
+    visibility:hidden;
+    transition:none!important;
+  }
+
+  .admin-body.sidebar-open .sidebar-overlay,
+  .admin-dashboard-body.sidebar-open .sidebar-overlay,
+  .dean-body.sidebar-open .sidebar-overlay {
+    opacity:1!important;
+    visibility:visible;
+    transition:none!important;
+  }
+
+  .admin-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge),
+  .admin-dashboard-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge),
+  .dean-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge) {
+    transition:none!important;
+  }
+}
+
+/* Closing the desktop/tablet rail must not animate width and page margin
+   together; that forces a full layout on every animation frame. Opening can
+   still ease in, but the closed state is applied in one frame. */
+@media (min-width:721px) {
+  .admin-body .admin-sidebar,
+  .admin-dashboard-body .admin-sidebar,
+  .dean-body .admin-sidebar,
+  .admin-body .admin-main,
+  .admin-dashboard-body .admin-main,
+  .dean-body .admin-main,
+  .admin-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge),
+  .admin-dashboard-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge),
+  .dean-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge) {
+    transition:none!important;
+    will-change:auto!important;
+  }
+
+  .admin-body.sidebar-collapsed .admin-sidebar,
+  .admin-dashboard-body.sidebar-collapsed .admin-sidebar,
+  .dean-body.sidebar-collapsed .admin-sidebar,
+  .admin-body.sidebar-collapsed .admin-main,
+  .admin-dashboard-body.sidebar-collapsed .admin-main,
+  .dean-body.sidebar-collapsed .admin-main {
+    transition:none!important;
+    will-change:auto!important;
+  }
+}
+
+@media (min-width:721px) and (max-width:1120px) {
+  .admin-body .admin-sidebar,
+  .admin-dashboard-body .admin-sidebar,
+  .dean-body .admin-sidebar,
+  .admin-body .admin-main,
+  .admin-dashboard-body .admin-main,
+  .dean-body .admin-main,
+  .admin-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge),
+  .admin-dashboard-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge),
+  .dean-body :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge) {
+    transition:none!important;
+    will-change:auto!important;
+  }
+}
+
+/* Dark-mode motion rules have higher selector specificity in the theme
+   layer, so lock them here as well to prevent the slide from returning. */
+.admin-body.dark-mode .admin-sidebar,
+.admin-dashboard-body.dark-mode .admin-sidebar,
+.dean-body.dark-mode .admin-sidebar,
+.admin-body.dark-mode .admin-main,
+.admin-dashboard-body.dark-mode .admin-main,
+.dean-body.dark-mode .admin-main,
+.admin-body.dark-mode :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge),
+.admin-dashboard-body.dark-mode :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge),
+.dean-body.dark-mode :is(.sidebar-brand-copy,.sidebar-item-label,.auto-badge) {
+  transition:none!important;
+  will-change:auto!important;
+}
+
+.admin-body.dark-mode .sidebar-overlay,
+.admin-dashboard-body.dark-mode .sidebar-overlay,
+.dean-body.dark-mode .sidebar-overlay {
+  transition:none!important;
+}
+
+/* Responsive drawer lock for phone browsers reporting wide CSS viewports. */
+.admin-body>.sidebar-overlay,
+.admin-dashboard-body>.sidebar-overlay,
+.dean-body>.sidebar-overlay {
+  display:none!important;
+  position:fixed!important;
+  inset:0!important;
+  z-index:4900!important;
+  width:100vw!important;
+  height:100dvh!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:rgba(3,12,24,.58)!important;
+  box-shadow:none!important;
+  opacity:0!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+
+@media(max-width:1200px){
+  .admin-body>.sidebar-overlay,
+  .admin-dashboard-body>.sidebar-overlay,
+  .dean-body>.sidebar-overlay{display:block!important}
+
+  .admin-body.sidebar-open>.sidebar-overlay,
+  .admin-dashboard-body.sidebar-open>.sidebar-overlay,
+  .dean-body.sidebar-open>.sidebar-overlay{opacity:1!important;visibility:visible!important;pointer-events:auto!important}
+
+  .admin-body>.admin-sidebar,.admin-body.sidebar-collapsed>.admin-sidebar,
+  .admin-dashboard-body>.admin-sidebar,.admin-dashboard-body.sidebar-collapsed>.admin-sidebar,
+  .dean-body>.admin-sidebar,.dean-body.sidebar-collapsed>.admin-sidebar{
+    position:fixed!important;inset:0 auto 0 0!important;z-index:5000!important;
+    width:min(286px,86vw)!important;min-width:0!important;max-width:86vw!important;
+    transform:translate3d(-105%,0,0)!important;overflow-y:auto!important;overflow-x:hidden!important;
+    contain:layout paint;will-change:transform;transition:transform .22s ease!important
+  }
+
+  .admin-body.sidebar-open>.admin-sidebar,.admin-body.sidebar-open.sidebar-collapsed>.admin-sidebar,
+  .admin-dashboard-body.sidebar-open>.admin-sidebar,.admin-dashboard-body.sidebar-open.sidebar-collapsed>.admin-sidebar,
+  .dean-body.sidebar-open>.admin-sidebar,.dean-body.sidebar-open.sidebar-collapsed>.admin-sidebar{transform:translate3d(0,0,0)!important}
+
+  .admin-body>.admin-main,.admin-body.sidebar-collapsed>.admin-main,.admin-body.sidebar-open>.admin-main,
+  .admin-dashboard-body>.admin-main,.admin-dashboard-body.sidebar-collapsed>.admin-main,.admin-dashboard-body.sidebar-open>.admin-main,
+  .dean-body>.admin-main,.dean-body.sidebar-collapsed>.admin-main,.dean-body.sidebar-open>.admin-main{
+    position:relative!important;left:0!important;translate:none!important;transform:none!important;
+    width:100%!important;max-width:100%!important;min-width:0!important;margin-left:0!important
+  }
+
+  .admin-body.sidebar-collapsed .sidebar-brand-copy,.admin-body.sidebar-collapsed .sidebar-item-label,
+  .admin-dashboard-body.sidebar-collapsed .sidebar-brand-copy,.admin-dashboard-body.sidebar-collapsed .sidebar-item-label,
+  .dean-body.sidebar-collapsed .sidebar-brand-copy,.dean-body.sidebar-collapsed .sidebar-item-label{
+    max-width:190px!important;opacity:1!important;visibility:visible!important
+  }
+}
+
+/* Compact navigation rhythm: keep menu items grouped instead of visually
+   stretching down the full-height sidebar. */
+.admin-body .sidebar-menu,
+.admin-dashboard-body .sidebar-menu,
+.dean-body .sidebar-menu {
+  align-content:start!important;
+  grid-auto-rows:min-content!important;
+  gap:4px!important;
+  padding-top:10px!important;
+  padding-bottom:10px!important;
+}
+.admin-body .sidebar-menu a,
+.admin-dashboard-body .sidebar-menu a,
+.dean-body .sidebar-menu a {
+  min-height:44px!important;
+  height:44px!important;
+}
+@media (min-width:1121px) {
+  .admin-body.sidebar-collapsed .sidebar-menu,
+  .admin-dashboard-body.sidebar-collapsed .sidebar-menu,
+  .dean-body.sidebar-collapsed .sidebar-menu {
+    gap:7px!important;
+    padding:10px 8px!important;
+  }
+  .admin-body.sidebar-collapsed .sidebar-menu a,
+  .admin-dashboard-body.sidebar-collapsed .sidebar-menu a,
+  .dean-body.sidebar-collapsed .sidebar-menu a,
+  .admin-body.sidebar-collapsed .sidebar-menu a.active,
+  .admin-dashboard-body.sidebar-collapsed .sidebar-menu a.active,
+  .dean-body.sidebar-collapsed .sidebar-menu a.active {
+    width:52px!important;
+    height:52px!important;
+    min-height:52px!important;
+    margin-inline:auto!important;
+    padding:5px!important;
+  }
+}

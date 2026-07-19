@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-05-06T21:00:04.631Z",
+  "projectRoot": "C:\\xampp\\htdocs\\PMAS",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1778101204632
+}

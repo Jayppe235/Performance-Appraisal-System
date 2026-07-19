@@ -1,0 +1,1211 @@
+.people-management-actions{display:flex;flex-wrap:wrap;gap:10px}.people-management-actions button{min-height:44px;white-space:nowrap}.people-filter-panel:has(+.people-account-management),.people-management-page:has(.people-account-management) .people-filter-panel{grid-template-columns:minmax(260px,1.7fr) repeat(4,minmax(140px,1fr))}.people-search-field>div{position:relative}.people-search-clear{position:absolute;right:7px;top:50%;width:30px;height:30px;display:grid;place-items:center;transform:translateY(-50%);border:0;border-radius:8px;background:transparent;color:var(--theme-muted,#64748b)}.people-account-management{scroll-margin-top:88px}.people-account-management:focus{outline:none}.people-account-breadcrumb{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;color:var(--theme-muted,#64748b);font-size:.8rem}.people-account-breadcrumb button{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:var(--theme-primary-strong,#08734d);font-weight:750}.people-account-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:16px}.people-account-heading h2{margin:0;color:var(--theme-text,#17231f);font-size:1.35rem}.people-account-heading p{max-width:680px;margin:5px 0 0;color:var(--theme-muted,#64748b);font-size:.86rem}.people-account-heading>button,.dipascaf-empty>button{min-height:42px;padding:0 14px;display:inline-flex;align-items:center;gap:7px;border:0;border-radius:11px;background:linear-gradient(135deg,#159764,#08734d);color:#fff;font-weight:800;white-space:nowrap}.people-account-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.people-account-metrics article{padding:13px 15px;border:1px solid var(--theme-border,#dbe5df);border-radius:13px;background:var(--theme-surface,#fff)}.people-account-metrics span{display:block;color:var(--theme-muted,#64748b);font-size:.74rem;font-weight:700}.people-account-metrics strong{display:block;margin-top:3px;color:var(--theme-text,#17231f);font-size:1.35rem}.people-account-management .people-user-list-head button{padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.people-account-management .people-user-row{grid-template-columns:minmax(220px,1.35fr) minmax(115px,.65fr) minmax(180px,1fr) 90px minmax(270px,auto)}.people-account-management .people-card-actions{flex-wrap:wrap}.people-account-pagination{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 4px 0;color:var(--theme-muted,#64748b);font-size:.78rem}.people-account-pagination label,.people-account-pagination>div{display:flex;align-items:center;gap:8px}.people-account-pagination select{min-height:34px;border:1px solid var(--theme-border,#dbe5df);border-radius:8px;background:var(--theme-surface,#fff);color:var(--theme-text,#17231f)}.people-account-pagination button{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--theme-border,#dbe5df);border-radius:8px;background:var(--theme-surface,#fff);color:var(--theme-text,#17231f)}.people-account-pagination button:disabled{opacity:.4}.dipascaf-empty{gap:7px}.dipascaf-empty strong{display:block}.dipascaf-empty span{display:block;color:var(--theme-muted,#64748b)}.people-account-details-modal{width:min(600px,calc(100vw - 24px))}.people-account-details{padding:20px 24px 24px;display:grid;gap:15px}.people-account-details-person{display:flex;align-items:center;gap:13px;padding:14px;border:1px solid var(--theme-border,#dbe5df);border-radius:14px;background:var(--theme-primary-soft,#effaf5)}.people-account-details-person .people-user-avatar{width:58px;height:58px;font-size:1rem}.people-account-details-person h3,.people-account-details-person p{margin:0}.people-account-details-person p{margin:3px 0 7px;color:var(--theme-muted,#64748b)}.people-account-details section{padding:14px;border:1px solid var(--theme-border,#dbe5df);border-radius:13px}.people-account-details h4{margin:0 0 9px;color:var(--theme-primary-strong,#08734d);font-size:.76rem;text-transform:uppercase;letter-spacing:.04em}.people-account-details dl{margin:0;display:grid;gap:8px}.people-account-details dl>div{display:grid;grid-template-columns:130px 1fr;gap:10px;font-size:.82rem}.people-account-details dt{color:var(--theme-muted,#64748b)}.people-account-details dd{margin:0;color:var(--theme-text,#17231f);font-weight:700;overflow-wrap:anywhere}.people-account-details footer{display:flex;justify-content:flex-end;gap:9px}.people-account-details footer button{min-height:40px;padding:0 13px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--theme-border,#dbe5df);border-radius:10px;background:var(--theme-surface,#fff);color:var(--theme-text,#17231f);font-weight:750}.people-account-details footer button:first-child{border:0;background:#08734d;color:#fff}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-management{--theme-surface:#101b2c;--theme-text:#edf5ff;--theme-muted:#9fb0c5;--theme-border:#2b3e55;--theme-primary-soft:rgba(59,130,246,.10);--theme-primary-strong:#93c5fd}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading>button,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .dipascaf-empty>button,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details footer button:first-child{background:linear-gradient(135deg,#2563eb,#3b82f6,#60a5fa)}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-modal{--theme-surface:#101b2c;--theme-text:#edf5ff;--theme-muted:#9fb0c5;--theme-border:#2b3e55;--theme-primary-soft:rgba(59,130,246,.10);--theme-primary-strong:#93c5fd;background:#0f1929;color:#edf5ff}
+@media(max-width:1100px){.people-management-page:has(.people-account-management) .people-filter-panel{grid-template-columns:repeat(2,minmax(0,1fr))}.people-management-page:has(.people-account-management) .people-search-field{grid-column:1/-1}.people-account-management .people-user-list-head{display:none}.people-account-management .people-user-row{grid-template-columns:minmax(0,1fr) auto;gap:10px 14px}.people-account-management .people-user-identity{grid-column:1/-1}.people-account-management .people-card-actions{grid-column:1/-1}}
+@media(max-width:700px){.people-management-actions{width:100%;display:grid;grid-template-columns:1fr}.people-management-actions button{width:100%;justify-content:center}.people-account-heading{display:grid}.people-account-heading>button{width:100%;justify-content:center}.people-account-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.people-account-pagination{align-items:flex-start;flex-wrap:wrap}.people-account-breadcrumb span{display:none}.people-account-details{padding:14px}.people-account-details dl>div{grid-template-columns:1fr;gap:2px}}
+@media(max-width:430px){.people-management-page:has(.people-account-management) .people-filter-panel{grid-template-columns:1fr}.people-management-page:has(.people-account-management) .people-search-field{grid-column:auto}.people-account-metrics{gap:8px}.people-account-metrics article{padding:11px}.people-account-management .people-user-row{grid-template-columns:1fr}.people-account-management .people-card-actions>*{flex:1;justify-content:center}.people-account-pagination>span{width:100%}}
+
+/* Professional Manage Accounts presentation */
+.people-account-management{position:relative;overflow:hidden;padding:22px!important;border:1px solid #d9e9e1!important;border-radius:22px!important;background:linear-gradient(180deg,#ffffff 0%,#fbfefc 100%)!important;box-shadow:0 18px 44px rgba(20,63,44,.08)!important}.people-account-management::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,#0f7650,#22a66b,#7dd3a8)}.people-account-breadcrumb{margin:-4px 0 18px;padding-bottom:12px;border-bottom:1px solid #e3eee8}.people-account-breadcrumb button{min-height:36px;padding:0 10px;border:1px solid #d5e8de;border-radius:10px;background:#f7fbf9;color:#176e4d;transition:all .18s ease}.people-account-breadcrumb button:hover{border-color:#9ed2b8;background:#edf8f2;transform:translateX(-2px)}.people-account-breadcrumb span{color:#718078}.people-account-breadcrumb b{margin:0 5px;color:#b4c0ba}.people-account-heading{align-items:center;margin-bottom:20px;padding:4px 2px 2px}.people-account-heading-copy{display:flex;align-items:center;gap:14px}.people-account-heading-icon{flex:0 0 48px;width:48px;height:48px;display:grid;place-items:center;border:1px solid #b9dec9;border-radius:14px;background:linear-gradient(145deg,#e9f8f0,#f8fcfa);color:#168358;box-shadow:0 8px 18px rgba(22,131,88,.10)}.people-account-heading .eyebrow{margin:0 0 3px;color:#168358;font-size:.68rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.people-account-heading h2{font-size:clamp(1.35rem,2vw,1.75rem);font-weight:850;letter-spacing:-.025em}.people-account-heading>button{min-height:44px;padding:0 17px;box-shadow:0 10px 22px rgba(15,118,80,.18);transition:transform .18s ease,box-shadow .18s ease}.people-account-heading>button:hover{transform:translateY(-1px);box-shadow:0 14px 27px rgba(15,118,80,.24)}.people-account-metrics{gap:13px;margin-bottom:22px}.people-account-metrics article{position:relative;display:flex;align-items:center;gap:12px;min-height:96px;padding:15px 16px;overflow:hidden;border-color:#dbe9e2;border-radius:16px;background:#fff;box-shadow:0 8px 22px rgba(25,60,44,.055);transition:transform .18s ease,box-shadow .18s ease}.people-account-metrics article::after{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--metric-accent,#168358)}.people-account-metrics article:hover{transform:translateY(-2px);box-shadow:0 13px 27px rgba(25,60,44,.09)}.people-account-metrics article.total{--metric-accent:#2563eb;--metric-soft:#eff6ff;--metric-text:#1d4ed8}.people-account-metrics article.active{--metric-accent:#168358;--metric-soft:#edf9f2;--metric-text:#126b49}.people-account-metrics article.inactive{--metric-accent:#d97706;--metric-soft:#fff8e8;--metric-text:#b45309}.people-account-metrics article.admin{--metric-accent:#7c3aed;--metric-soft:#f5f1ff;--metric-text:#6d28d9}.people-account-metric-icon{flex:0 0 42px;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:var(--metric-soft);color:var(--metric-text)}.people-account-metrics article>div{min-width:0}.people-account-metrics article>div>span{font-size:.72rem;text-transform:uppercase;letter-spacing:.035em}.people-account-metrics strong{margin-top:0;font-size:1.55rem;line-height:1.05}.people-account-metrics small{display:block;margin-top:4px;color:#84918b;font-size:.68rem;white-space:nowrap}.people-account-table-title{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 -2px 10px;padding:14px 16px;border:1px solid #e0ebe5;border-radius:14px 14px 10px 10px;background:linear-gradient(135deg,#f7fbf9,#fbfdfc)}.people-account-table-title h3,.people-account-table-title p{margin:0}.people-account-table-title h3{color:#20332a;font-size:1rem}.people-account-table-title p{margin-top:3px;color:#74827b;font-size:.74rem}.people-account-table-title button{min-height:36px;padding:0 11px;display:inline-flex;align-items:center;gap:6px;border:1px solid #d4e5dc;border-radius:9px;background:#fff;color:#426054;font-weight:750}.people-account-management .people-user-list{overflow:hidden;border:1px solid #dfeae4;border-radius:14px;background:#fff}.people-account-management .people-user-list-head{min-height:48px;padding-inline:15px;background:#f2f8f5;color:#527064;border-bottom:1px solid #dfeae4}.people-account-management .people-user-row{padding:13px 15px;border-bottom:1px solid #edf3f0;background:#fff;transition:background .16s ease}.people-account-management .people-user-row:hover{background:#f8fcfa}.people-account-management .people-user-row:last-of-type{border-bottom:0}.people-account-management .people-user-avatar{border:2px solid #e1eee7;box-shadow:0 4px 10px rgba(24,81,56,.09)}.people-account-pagination{padding:14px 15px;border-top:1px solid #e2ebe7;background:#fafcfb}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-management{border-color:#293e55!important;background:linear-gradient(180deg,#101c2d 0%,#0c1726 100%)!important;box-shadow:0 18px 44px rgba(0,0,0,.22)!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-management::before{background:linear-gradient(90deg,#2563eb,#60a5fa,#38bdf8)}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-breadcrumb{border-bottom-color:#2a3e55}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-breadcrumb button{border-color:#314a68;background:#152439;color:#bfdbfe}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading-icon{border-color:rgba(96,165,250,.3);background:rgba(59,130,246,.13);color:#60a5fa;box-shadow:none}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading .eyebrow{color:#93c5fd}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics article{border-color:#2d435c;background:#132238;box-shadow:0 8px 22px rgba(0,0,0,.13)}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics article.total{--metric-soft:rgba(59,130,246,.15);--metric-text:#93c5fd}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics article.active{--metric-soft:rgba(34,197,94,.11);--metric-text:#86efac}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics article.inactive{--metric-soft:rgba(245,158,11,.12);--metric-text:#fbbf24}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics article.admin{--metric-soft:rgba(139,92,246,.14);--metric-text:#c4b5fd}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics small{color:#8fa2b8}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-table-title{border-color:#2b4058;background:linear-gradient(135deg,#142338,#101d30)}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-table-title h3{color:#edf5ff}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-table-title p{color:#9fb0c5}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-table-title button{border-color:#35506e;background:#18283d;color:#bfdbfe}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-management .people-user-list{border-color:#2c4159;background:#101c2d}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-management .people-user-list-head{border-bottom-color:#30465f;background:#17263a;color:#9fb9d5}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-management .people-user-row{border-bottom-color:#263a50;background:#101c2d}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-management .people-user-row:hover{background:#14243a}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-pagination{border-top-color:#2b4058;background:#0f1a2a}
+@media(max-width:700px){.people-account-management{padding:15px!important}.people-account-heading-copy{align-items:flex-start}.people-account-heading-icon{width:42px;height:42px;flex-basis:42px}.people-account-metrics article{min-height:88px;padding:12px}.people-account-metrics small{white-space:normal}.people-account-table-title{padding:12px}}
+@media(max-width:430px){.people-account-heading-copy{gap:10px}.people-account-heading-icon{display:none}.people-account-table-title{align-items:flex-start}.people-account-table-title button{font-size:0;width:36px;padding:0;justify-content:center}}
+
+/* Sort controls must remain table headers, not inherit primary button styling. */
+.people-account-management .people-user-list-head button {
+  width:auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  height:auto!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  background-image:none!important;
+  color:inherit!important;
+  box-shadow:none!important;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+  transform:none!important;
+}
+
+.admin-body .people-account-management .people-user-list-head>button,
+.admin-dashboard-body .people-account-management .people-user-list-head>button,
+body:has(.people-account-management) .people-account-management .people-user-list-head>button {
+  appearance:none!important;
+  width:fit-content!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:4px 6px!important;
+  margin:-4px -6px!important;
+  border:0!important;
+  border-radius:6px!important;
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+  color:inherit!important;
+  box-shadow:none!important;
+  font:inherit!important;
+  line-height:1.2!important;
+  letter-spacing:inherit!important;
+  text-transform:inherit!important;
+  justify-content:flex-start!important;
+  transform:none!important;
+}
+.admin-body .people-account-management .people-user-list-head>button:hover,
+.admin-dashboard-body .people-account-management .people-user-list-head>button:hover,
+body:has(.people-account-management) .people-account-management .people-user-list-head>button:hover {
+  background:rgba(22,131,88,.08)!important;
+  color:#126b49!important;
+  box-shadow:none!important;
+  transform:none!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-management .people-user-list-head>button:hover {
+  background:rgba(96,165,250,.10)!important;
+  color:#bfdbfe!important;
+}
+
+/* Keep account pagination clear and prevent global primary-button sizing. */
+body:has(.people-account-management) .people-account-pagination {
+  padding-right:112px;
+}
+body:has(.people-account-management) .people-account-pagination button {
+  width:36px!important;
+  min-width:36px!important;
+  max-width:36px!important;
+  height:36px!important;
+  min-height:36px!important;
+  max-height:36px!important;
+  padding:0!important;
+  margin:0!important;
+  display:grid!important;
+  place-items:center!important;
+  border:1px solid #22a66b!important;
+  border-radius:9px!important;
+  background:#f3fff8!important;
+  background-image:none!important;
+  color:#08734d!important;
+  box-shadow:0 0 0 3px rgba(34,166,107,.10),0 5px 14px rgba(15,118,80,.16)!important;
+  transform:none!important;
+}
+body:has(.people-account-management) .people-account-pagination button:hover:not(:disabled) {
+  border-color:#0f8a59!important;
+  background:#168358!important;
+  color:#fff!important;
+  box-shadow:0 0 0 4px rgba(34,166,107,.16),0 7px 18px rgba(15,118,80,.25)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-pagination button {
+  border-color:#2f9d70!important;
+  background:#102a22!important;
+  color:#6ee7b7!important;
+  box-shadow:0 0 0 3px rgba(52,211,153,.09),0 5px 15px rgba(0,0,0,.22)!important;
+}
+body:has(.people-account-management) .people-account-pagination button:disabled {
+  border-color:#d7e5de!important;
+  background:#f8fbf9!important;
+  color:#a9b9b1!important;
+  box-shadow:none!important;
+  opacity:.78!important;
+  cursor:not-allowed;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-pagination button:disabled {
+  border-color:#2d4053!important;
+  background:#121e2d!important;
+  color:#65778a!important;
+  box-shadow:none!important;
+}
+@media(max-width:700px){
+  body:has(.people-account-management) .people-account-pagination { padding-right:104px; }
+}
+
+/* Evaluation questionnaire action contrast fix. */
+.admin-body .question-add-button,
+.admin-dashboard-body .question-add-button,
+body .question-add-button {
+  width:fit-content!important;
+  min-width:0!important;
+  min-height:38px!important;
+  padding:0 14px!important;
+  border:1px solid #168358!important;
+  border-radius:10px!important;
+  background:linear-gradient(135deg,#168358,#22945f)!important;
+  color:#fff!important;
+  box-shadow:0 7px 16px rgba(22,131,88,.18)!important;
+}
+.admin-body .question-add-button svg,
+.admin-dashboard-body .question-add-button svg,
+body .question-add-button svg { color:#fff!important;stroke:#fff!important; }
+.admin-body .question-add-button:hover,
+.admin-dashboard-body .question-add-button:hover,
+body .question-add-button:hover {
+  border-color:#126b49!important;
+  background:linear-gradient(135deg,#126b49,#168358)!important;
+  color:#fff!important;
+  transform:translateY(-1px)!important;
+  box-shadow:0 10px 20px rgba(22,131,88,.24)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .question-add-button {
+  border-color:rgba(96,165,250,.45)!important;
+  background:linear-gradient(135deg,#2563eb,#3b82f6)!important;
+  box-shadow:0 7px 16px rgba(37,99,235,.23)!important;
+}
+
+/* Account details modal: polished hierarchy and phone-first responsiveness. */
+.people-account-details-modal{
+  width:min(760px,calc(100vw - 32px));
+  max-height:min(860px,calc(100dvh - 28px));
+  overflow:auto;
+  border:1px solid rgba(136,207,171,.72)!important;
+  border-radius:24px!important;
+  background:linear-gradient(155deg,#ffffff 0%,#f7fffb 52%,#effbf5 100%)!important;
+  box-shadow:0 30px 80px rgba(7,73,49,.22),0 8px 24px rgba(7,73,49,.10)!important;
+}
+.people-account-details-modal .people-modal-header{
+  position:relative;
+  overflow:hidden;
+  padding:22px 24px!important;
+  border-bottom:1px solid rgba(167,219,192,.62)!important;
+  background:linear-gradient(115deg,#f7fffb 0%,#ecfbf4 58%,#dcf8e9 100%)!important;
+}
+.people-account-details-modal .people-modal-header::after{
+  content:"";position:absolute;right:-55px;top:-80px;width:190px;height:190px;border-radius:50%;
+  background:radial-gradient(circle,rgba(31,180,112,.18),rgba(31,180,112,0) 68%);pointer-events:none;
+}
+.people-account-details-modal .people-modal-heading>span{
+  width:52px;height:52px;border:0;border-radius:16px;
+  background:linear-gradient(145deg,#0f9a64,#08734d);color:#fff;
+  box-shadow:0 12px 26px rgba(8,115,77,.25);
+}
+.people-account-details-modal .people-modal-heading h2{font-size:1.42rem;letter-spacing:-.025em}
+.people-account-details-modal .people-modal-heading p{margin-top:4px;line-height:1.45}
+.people-account-details-modal .modal-icon-close{
+  position:relative;z-index:1;width:44px;height:44px;border-color:#b7dfca!important;border-radius:14px!important;
+  background:rgba(255,255,255,.72)!important;backdrop-filter:blur(8px);transition:.18s ease!important;
+}
+.people-account-details-modal .modal-icon-close:hover{background:#fff!important;transform:rotate(4deg) scale(1.03)!important}
+.people-account-details{padding:22px 24px 24px;gap:18px}
+.people-account-details-person{
+  position:relative;gap:17px;padding:19px 20px;border-color:#9fdfbd;border-radius:19px;
+  background:linear-gradient(125deg,#e6fff1 0%,#d7f8e6 56%,#c9f2dc 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.72),0 10px 25px rgba(15,118,80,.08);
+}
+.people-account-details-person::after{content:"";position:absolute;right:10%;bottom:-45px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.2);pointer-events:none}
+.people-account-details-person .people-user-avatar{position:relative;z-index:1;flex:0 0 70px;width:70px;height:70px;border:3px solid rgba(255,255,255,.82);background:rgba(255,255,255,.64);color:#08734d;font-size:1.12rem;box-shadow:0 10px 25px rgba(8,115,77,.13)}
+.people-account-person-copy{position:relative;z-index:1;min-width:0;flex:1}
+.people-account-code{display:inline-flex;margin-bottom:5px;color:#16704f;font-size:.68rem;font-weight:850;letter-spacing:.065em;text-transform:uppercase}
+.people-account-details-person h3{color:#153c2d;font-size:clamp(1.05rem,2.3vw,1.3rem);line-height:1.25}
+.people-account-details-person p{margin:5px 0 0;color:#527064;font-size:.9rem;overflow-wrap:anywhere}
+.people-account-details-person>.people-status{position:relative;z-index:1;align-self:flex-start;padding:7px 12px;border:1px solid rgba(255,255,255,.72);border-radius:999px;box-shadow:0 6px 16px rgba(8,115,77,.10)}
+.people-account-detail-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:16px}
+.people-account-details section{position:relative;overflow:hidden;padding:18px 19px;border-color:#c8e7d7;border-radius:17px;background:rgba(255,255,255,.78);box-shadow:0 8px 22px rgba(20,78,54,.055)}
+.people-account-details section::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:linear-gradient(180deg,#14a36b,#76d5a5)}
+.people-account-system-card::before{background:linear-gradient(180deg,#3b82f6,#8bb9ff)!important}
+.people-account-details h4{display:flex;align-items:center;gap:7px;margin-bottom:14px;color:#116f4b;font-size:.73rem;font-weight:850;letter-spacing:.065em}
+.people-account-system-card h4{color:#275f9f}
+.people-account-details dl{gap:10px}
+.people-account-details dl>div{grid-template-columns:108px minmax(0,1fr);align-items:start;gap:12px;font-size:.84rem}
+.people-account-details dt{font-size:.78rem;line-height:1.5}
+.people-account-details dd{line-height:1.5}
+.people-account-details footer{padding-top:2px;gap:10px}
+.people-account-details footer button{min-height:46px;padding:0 18px;border-radius:13px;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+.people-account-details footer button:first-child{background:linear-gradient(135deg,#0e9661,#08734d 65%,#075f41);box-shadow:0 10px 23px rgba(8,115,77,.21)}
+.people-account-details footer button:first-child:hover{transform:translateY(-2px);box-shadow:0 14px 28px rgba(8,115,77,.28)}
+.people-account-details footer button:last-child{border-color:#b8ddca;background:rgba(255,255,255,.76)}
+
+@media(max-width:680px){
+  .people-account-details-modal{width:min(100% - 20px,600px);max-height:calc(100dvh - 16px);border-radius:20px!important}
+  .people-account-details-modal .people-modal-header{padding:17px 16px!important}
+  .people-account-details-modal .people-modal-heading{gap:11px}
+  .people-account-details-modal .people-modal-heading>span{width:44px;height:44px;border-radius:13px}
+  .people-account-details-modal .people-modal-heading h2{font-size:1.15rem}
+  .people-account-details-modal .people-modal-heading p{max-width:230px;font-size:.75rem}
+  .people-account-details-modal .modal-icon-close{width:40px;height:40px;border-radius:12px!important}
+  .people-account-details{padding:15px;gap:13px}
+  .people-account-details-person{align-items:flex-start;gap:12px;padding:15px}
+  .people-account-details-person .people-user-avatar{flex-basis:56px;width:56px;height:56px;font-size:.9rem}
+  .people-account-details-person>.people-status{position:absolute;right:12px;bottom:12px;padding:5px 9px;font-size:.66rem}
+  .people-account-person-copy{padding-right:3px;padding-bottom:25px}
+  .people-account-code{font-size:.61rem}
+  .people-account-details-person h3{font-size:1rem}
+  .people-account-details-person p{font-size:.78rem}
+  .people-account-detail-grid{grid-template-columns:1fr;gap:12px}
+  .people-account-details section{padding:15px 16px}
+  .people-account-details dl>div{grid-template-columns:92px minmax(0,1fr);gap:8px;font-size:.79rem}
+  .people-account-details footer{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .people-account-details footer button{width:100%;min-width:0;justify-content:center;padding:0 12px}
+}
+@media(max-width:390px){
+  .people-account-details-modal .people-modal-heading p{display:none}
+  .people-account-details-person{display:grid;grid-template-columns:52px minmax(0,1fr)}
+  .people-account-details-person .people-user-avatar{width:52px;height:52px}
+  .people-account-details dl>div{grid-template-columns:1fr;gap:2px;padding-bottom:7px;border-bottom:1px dashed #d9ebe2}
+  .people-account-details dl>div:last-child{padding-bottom:0;border-bottom:0}
+  .people-account-details footer{grid-template-columns:1fr}
+  .people-account-details footer button:first-child{order:1}
+}
+
+/* Email verification indicator in account forms. */
+.people-field-label{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.people-field-label-copy{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.people-email-verification{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid;border-radius:999px;font-size:.65rem;font-weight:850;letter-spacing:.015em;line-height:1;white-space:nowrap}
+.people-email-verification.is-verified{border-color:#93d9b4;background:linear-gradient(135deg,#e9fbf1,#d8f6e6);color:#08734d;box-shadow:0 3px 9px rgba(8,115,77,.08)}
+.people-email-verification.is-unverified{border-color:#f1cd88;background:linear-gradient(135deg,#fff9e9,#fff0c8);color:#9a5b08;box-shadow:0 3px 9px rgba(154,91,8,.07)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-email-verification.is-verified{border-color:#287b5a;background:#123629;color:#72e6b2}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-email-verification.is-unverified{border-color:#7b5b25;background:#352813;color:#ffd27a}
+@media(max-width:430px){.people-field-label{align-items:flex-start;flex-wrap:wrap}.people-email-verification{font-size:.61rem;padding:4px 7px}}
+
+/* Modern birth-date picker (replaces the browser-specific native calendar). */
+.people-date-picker{position:relative;width:100%}
+.people-date-trigger{width:100%;min-height:48px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;padding:0 14px;border:1px solid #bfdccb!important;border-radius:13px;background:linear-gradient(135deg,#fff 0%,#f6fdf9 100%)!important;color:#183f31!important;text-align:left;box-shadow:inset 0 1px 0 rgba(255,255,255,.8);transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}
+.people-date-trigger>span{color:#183f31!important;font-weight:750;text-shadow:none!important;opacity:1!important}
+.people-date-trigger>svg:first-child{color:#159263!important;stroke:#159263!important}.people-date-trigger>svg:last-child{color:#4e7465!important;stroke:#4e7465!important;transition:transform .2s ease}
+.people-date-trigger .is-placeholder{color:#71877e!important;font-weight:600}
+.people-date-trigger:hover{border-color:#63bd91;background:linear-gradient(135deg,#fff,#edfbf4)}
+.people-date-picker.is-open .people-date-trigger{border-color:#159263;box-shadow:0 0 0 4px rgba(21,146,99,.13)}
+.people-date-picker.is-open .people-date-trigger>svg:last-child{transform:rotate(180deg)}
+.people-date-popover{position:absolute;z-index:120;top:calc(100% + 9px);left:0;width:min(350px,calc(100vw - 48px));overflow:hidden;border:1px solid rgba(81,167,124,.6);border-radius:19px;background:rgba(255,255,255,.98);box-shadow:0 22px 55px rgba(12,71,49,.23),0 5px 16px rgba(12,71,49,.1);backdrop-filter:blur(18px);animation:peopleCalendarIn .2s cubic-bezier(.2,.75,.25,1)}
+@keyframes peopleCalendarIn{from{opacity:0;transform:translateY(-8px) scale(.975)}to{opacity:1;transform:translateY(0) scale(1)}}
+.people-date-popover-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 15px;border-bottom:1px solid #d8eee2;background:linear-gradient(120deg,#edfff5,#d9f8e8)}
+.people-date-popover-heading span{display:inline-flex;align-items:center;gap:7px;color:#08734d;font-size:.82rem;font-weight:850}
+.people-date-popover-heading small{margin:0;overflow:hidden;color:#5b756a;font-size:.66rem;text-overflow:ellipsis;white-space:nowrap}
+.people-date-jump{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:8px;padding:11px 14px 0}
+.people-date-jump select,.people-year-trigger{width:100%!important;height:38px!important;margin:0!important;padding:0 11px!important;border:1px solid #c4e2d2!important;border-radius:10px!important;background:#f3fcf7!important;color:#174936!important;font-size:.78rem!important;font-weight:800!important;box-shadow:none!important;outline:none!important}
+.people-date-jump select{cursor:pointer}.people-date-jump select:focus,.people-year-trigger:focus{border-color:#159263!important;box-shadow:0 0 0 3px rgba(21,146,99,.12)!important}
+.people-year-picker{position:relative;min-width:0}.people-year-trigger{display:flex!important;align-items:center;justify-content:space-between;gap:5px;cursor:pointer}.people-year-trigger svg{color:#16885c;transition:transform .18s ease}.people-year-picker.is-open .people-year-trigger svg{transform:rotate(180deg)}
+.people-year-options{position:absolute;z-index:8;top:calc(100% + 6px);right:0;width:110px;max-height:220px;display:grid;grid-template-columns:1fr;gap:3px;overflow-y:auto;padding:6px;border:1px solid #afd9c4;border-radius:12px;background:rgba(255,255,255,.98);box-shadow:0 15px 35px rgba(9,75,50,.22);scrollbar-width:thin;scrollbar-color:#83bea1 #edf8f2}
+.people-year-options button{width:100%!important;min-height:34px!important;padding:0 8px!important;border:0!important;border-radius:8px!important;background:transparent!important;color:#234b3b!important;font-size:.76rem!important;font-weight:750!important;box-shadow:none!important}
+.people-year-options button:hover{background:#e5f7ed!important;color:#08734d!important}.people-year-options button.is-selected{background:linear-gradient(135deg,#20b77a,#08734d)!important;color:#fff!important;box-shadow:0 5px 12px rgba(8,115,77,.22)!important}
+.people-date-popover .rdp-root{--rdp-accent-color:#0b8b5c;--rdp-accent-background-color:#ddf7e9;--rdp-day_button-border-radius:11px;--rdp-day_button-width:38px;--rdp-day_button-height:38px;--rdp-day-width:42px;--rdp-day-height:40px;margin:0;padding:13px 12px 8px;color:#183f31}
+.people-date-popover .rdp-months,.people-date-popover .rdp-month{width:100%;max-width:none}
+.people-date-popover .rdp-month_caption{height:38px;padding-inline:42px}
+.people-date-popover .rdp-caption_label{font-size:.85rem;font-weight:850}
+/* Legacy DayPicker dropdowns are disabled: native year menus can escape the modal. */
+.people-date-popover .rdp-dropdowns{display:none!important;pointer-events:none!important}
+.people-date-popover .rdp-dropdown_root{pointer-events:none!important}
+.people-date-popover .rdp-dropdown{display:none!important;visibility:hidden!important;pointer-events:none!important}
+.people-date-popover .rdp-chevron{fill:#16885c}
+.people-date-popover .rdp-button_previous,.people-date-popover .rdp-button_next{width:36px;height:36px;border-radius:10px;background:#effaf4}
+.people-date-popover .rdp-button_previous:hover,.people-date-popover .rdp-button_next:hover{background:#dff5e9}
+.people-date-popover .rdp-weekday{color:#638075;font-size:.67rem;font-weight:850;text-transform:uppercase}
+.people-date-popover .rdp-day_button{font-size:.78rem;font-weight:700;transition:background .15s ease,color .15s ease,transform .15s ease}
+.people-date-popover .rdp-day_button:hover{background:#e3f8ed;transform:scale(1.06)}
+.people-date-popover .rdp-selected .rdp-day_button{border:0;background:linear-gradient(145deg,#17a66e,#08734d);color:#fff;box-shadow:0 6px 13px rgba(8,115,77,.27)}
+.people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border:1px solid #39ad79;color:#08734d}
+.people-date-popover .rdp-outside{opacity:.35}.people-date-popover .rdp-disabled{opacity:.23}
+.people-date-actions{display:flex;justify-content:space-between;gap:10px;padding:10px 14px 13px;border-top:1px solid #e1f0e8;background:#fbfffd}
+.people-date-actions button{min-height:34px;padding:0 13px;border:0;border-radius:9px;background:transparent;color:#08734d;font-size:.72rem;font-weight:850}
+.people-date-actions button:hover{background:#e2f7ec}.people-date-actions button:last-child{background:linear-gradient(135deg,#18a76f,#08734d);color:#fff;box-shadow:0 5px 12px rgba(8,115,77,.18)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-trigger{border-color:#355b4c!important;background:linear-gradient(135deg,#12251e,#102019)!important;color:#e8fff4!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-trigger>span{color:#e8fff4!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-trigger .is-placeholder{color:#a2b8af!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover{border-color:#316b51;background:rgba(13,31,24,.98);color:#e8fff4}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover-heading{border-color:#284c3d;background:linear-gradient(120deg,#173c2d,#102c22)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover-heading small{color:#9bb8ac}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-jump select,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-trigger{border-color:#315944!important;background:#17372a!important;color:#e8fff4!important;color-scheme:dark}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-options{border-color:#315944;background:rgba(13,31,24,.99);box-shadow:0 16px 38px rgba(0,0,0,.42);scrollbar-color:#376a53 #142b21}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-options button{color:#dceee6!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-options button:hover{background:#183e2f!important;color:#fff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-root{color:#e8fff4}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-dropdown_root,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-button_previous,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-button_next{border-color:#315944;background:#17372a;color:#e8fff4}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-actions{border-color:#284c3d;background:#10271e}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-day_button{border:1px solid transparent!important;background:transparent!important;color:#dceee6!important;box-shadow:none!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-day_button:hover{border-color:#315e49!important;background:#183e2f!important;color:#fff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-selected .rdp-day_button{border-color:#2dc987!important;background:linear-gradient(145deg,#20b477,#0c8056)!important;color:#fff!important;box-shadow:0 6px 15px rgba(0,0,0,.28)!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border-color:#299b6b!important;color:#6fe1ad!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-outside .rdp-day_button{color:#708d81!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-disabled .rdp-day_button{color:#52685f!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-weekday{color:#91ada1!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-button_previous,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-button_next{border:1px solid #315944!important;background:#17372a!important;color:#75dbaa!important;opacity:1!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-chevron{fill:#75dbaa!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-dropdown_root{border-color:#315944!important;background:#17372a!important;color:#e8fff4!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-dropdown{color:#e8fff4!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-actions button:first-child{color:#75dbaa!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-actions button:first-child:hover{background:#183e2f!important}
+@media(max-width:520px){.people-date-popover{position:fixed;top:50%;left:50%;width:min(350px,calc(100vw - 24px));max-height:calc(100dvh - 24px);transform:translate(-50%,-50%);overflow:auto;animation:peopleCalendarMobileIn .2s cubic-bezier(.2,.75,.25,1)}@keyframes peopleCalendarMobileIn{from{opacity:0;transform:translate(-50%,calc(-50% + 12px)) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}.people-date-popover-heading{position:sticky;top:0;z-index:3}.people-date-popover .rdp-root{--rdp-day_button-width:36px;--rdp-day_button-height:36px;--rdp-day-width:40px;--rdp-day-height:38px;padding-inline:8px}.people-date-actions{position:sticky;bottom:0;z-index:3}}
+
+/* Account details modal: complete dark-mode surface and readable information cards. */
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-modal{border-color:#294866!important;background:linear-gradient(145deg,#101d2d 0%,#0d1927 100%)!important;box-shadow:0 30px 80px rgba(0,0,0,.55)!important;color:#edf6ff}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-modal .people-modal-header{border-color:#294866!important;background:linear-gradient(115deg,#13263a 0%,#102235 58%,#123328 100%)!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-modal .people-modal-heading h2{color:#f3f8ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-modal .people-modal-heading p{color:#9db1c7!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-modal .modal-icon-close{border-color:#355674!important;background:#17283b!important;color:#b9d7f5!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-modal .modal-icon-close:hover{background:#213a52!important;color:#fff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-person{border-color:#27634e;background:linear-gradient(125deg,#13372b 0%,#102e25 58%,#10271f 100%);box-shadow:inset 0 1px 0 rgba(122,225,178,.08),0 10px 25px rgba(0,0,0,.18)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-person .people-user-avatar{border-color:#315f4c;background:#173a2d;color:#78dfae}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-code{color:#6edaa8}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-person h3{color:#f1fff8}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details-person p{color:#a8c6b9}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details section{border-color:#29445e;background:linear-gradient(145deg,#132238,#101d2d);box-shadow:0 8px 22px rgba(0,0,0,.18)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details h4{color:#71dfae}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-system-card h4{color:#7eb9ff}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details dt{color:#8fa5ba!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details dd{color:#edf6ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details footer button:last-child{border-color:#355674!important;background:#17283b!important;color:#dceaff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-details footer button:last-child:hover{background:#213a52!important;color:#fff!important}
+
+.profile-password-required{display:flex!important;align-items:flex-start;gap:10px;padding:12px 14px!important;border:1px solid #ebc56f!important;border-radius:12px!important;background:linear-gradient(135deg,#fff9e8,#fff1c7)!important;color:#7b4b09!important}
+.profile-password-required>svg{flex:0 0 auto;margin-top:2px}.profile-password-required>span{display:grid;gap:2px}.profile-password-required strong{font-size:.82rem}.profile-password-required span{font-size:.73rem;line-height:1.4}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .profile-password-required{border-color:#7e6229!important;background:linear-gradient(135deg,#3a2c13,#2e2412)!important;color:#ffd783!important}
+
+/* Verification controls inside the signed-in user's Profile Settings. */
+.profile-email-field{align-content:start}
+.profile-email-label{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.profile-email-verification-controls{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;margin-top:8px}
+.profile-email-verification-controls>button,.profile-email-verification-controls>div>button{min-height:38px!important;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 12px!important;border:1px solid #91d4b1!important;border-radius:10px!important;background:linear-gradient(135deg,#e9fbf1,#d9f6e6)!important;color:#08734d!important;font-size:.72rem!important;font-weight:850!important;white-space:nowrap;box-shadow:none!important}
+.profile-email-verification-controls>button:hover:not(:disabled),.profile-email-verification-controls>div>button:hover:not(:disabled){border-color:#168358!important;background:linear-gradient(135deg,#168358,#08734d)!important;color:#fff!important}
+.profile-email-verification-controls button:disabled{opacity:.52;cursor:not-allowed}
+.profile-email-verification-controls>div{display:grid;grid-template-columns:minmax(110px,1fr) auto;gap:7px}
+.profile-email-verification-controls>div>input{width:100%!important;min-width:0!important;height:38px!important;margin:0!important;padding:0 10px!important;border:1px solid #c9e4d6!important;border-radius:10px!important;background:#fff!important;color:#173f30!important;font-size:.78rem!important;font-weight:750!important;letter-spacing:.12em;text-align:center}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-verification-controls>button,body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-verification-controls>div>button{border-color:#287b5a!important;background:#123629!important;color:#72e6b2!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-verification-controls>div>input{border-color:#365469!important;background:#101d2c!important;color:#eef7ff!important}
+@media(max-width:560px){.profile-email-label{align-items:flex-start;flex-wrap:wrap}.profile-email-verification-controls{grid-template-columns:1fr}.profile-email-verification-controls>button{width:100%}.profile-email-verification-controls>div{grid-template-columns:minmax(0,1fr) auto}}
+
+/* Polished profile editor surfaces for light and dark themes. */
+.profile-modal-panel{border:1px solid #bfe4d1!important;border-radius:24px!important;background:linear-gradient(145deg,#fbfffd 0%,#f2fbf7 100%)!important;box-shadow:0 28px 75px rgba(10,74,50,.24)!important}
+.profile-modal-panel>.box-title{border-bottom:1px solid #cce9da!important;background:linear-gradient(120deg,#f8fffb 0%,#e8faf1 55%,#d9f5e7 100%)!important}
+.profile-modal-panel>.box-title::after{content:"";position:absolute;right:10%;top:-80px;width:210px;height:210px;border-radius:50%;background:radial-gradient(circle,rgba(42,190,124,.17),transparent 68%);pointer-events:none}
+.profile-modal-panel>.box-title>div,.profile-modal-panel>.box-title>button{position:relative;z-index:1}
+.profile-modal-panel .profile-form{background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(241,250,246,.75))!important}
+.profile-modal-panel .profile-field-grid{gap:18px}
+.profile-modal-panel .profile-field-grid>label{padding:15px;border:1px solid #d5e9df;border-radius:16px;background:rgba(255,255,255,.76);box-shadow:0 7px 18px rgba(15,91,61,.045)}
+.profile-email-input-wrap{position:relative;display:block}
+.profile-email-input-wrap>svg{position:absolute;z-index:2;left:15px;top:50%;transform:translateY(-50%);color:#159263;pointer-events:none}
+.profile-email-input-wrap>input{padding-left:43px!important;background:linear-gradient(135deg,#fff,#f5fcf8)!important}
+.profile-email-field.has-email-change{border-color:#e4c875!important;background:linear-gradient(145deg,#fffdf6,#fff8df)!important}
+.profile-email-change-note{display:block;margin-top:7px;color:#93620d;font-size:.68rem;line-height:1.4}
+.profile-modal-panel .profile-password-section{border-color:#cfe6da!important;border-radius:17px!important;background:linear-gradient(145deg,#f8fdfb,#edf8f3)!important;box-shadow:inset 0 1px 0 #fff}
+.profile-modal-panel .profile-form-actions{padding-top:16px;border-top:1px solid #d7ebe1}
+.profile-modal-panel .profile-form-actions button{min-height:44px!important;border-radius:12px!important;transition:transform .18s ease,box-shadow .18s ease!important}
+.profile-modal-panel .profile-form-actions button:hover:not(:disabled){transform:translateY(-2px)}
+.profile-modal-panel .profile-form-actions button[type="submit"]{border:1px solid #1bad73!important;background:linear-gradient(135deg,#40c98b 0%,#18a86d 48%,#08734d 100%)!important;color:#fff!important;box-shadow:0 10px 24px rgba(8,115,77,.24)!important}
+.profile-modal-panel .profile-form-actions .ghost-button{border:1px solid #b9ddca!important;background:linear-gradient(135deg,#fff,#edf9f3)!important;color:#235b45!important}
+.profile-modal-panel .profile-form-actions .ghost-button:hover{box-shadow:0 8px 18px rgba(15,91,61,.11)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel{border-color:#2c5267!important;background:linear-gradient(145deg,#101e2d 0%,#0c1825 100%)!important;box-shadow:0 30px 85px rgba(0,0,0,.58)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel>.box-title{border-color:#294b5f!important;background:linear-gradient(120deg,#14283a 0%,#102536 55%,#12352b 100%)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-form{background:linear-gradient(180deg,rgba(15,29,43,.8),rgba(10,23,35,.92))!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-field-grid>label{border-color:#29475a;background:linear-gradient(145deg,#142539,#101f30);box-shadow:0 8px 20px rgba(0,0,0,.16)}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-input-wrap>input{border-color:#35566a!important;background:linear-gradient(135deg,#112335,#0f1e2e)!important;color:#f1f7ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-field.has-email-change{border-color:#735e2e!important;background:linear-gradient(145deg,#302914,#242314)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-change-note{color:#f0ca78}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-password-section{border-color:#29475a!important;background:linear-gradient(145deg,#132337,#101e2e)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-form-actions{border-color:#29475a}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-form-actions .ghost-button{border-color:#36586d!important;background:linear-gradient(135deg,#172b3e,#132438)!important;color:#d9eaff!important}
+@media(max-width:719px){.profile-modal-panel .profile-field-grid>label{padding:12px}.profile-email-verification-controls>div{grid-template-columns:minmax(0,1fr) auto}.profile-modal-panel .profile-form-actions{display:grid!important;grid-template-columns:1fr 1fr}.profile-modal-panel .profile-form-actions button[type="submit"]{grid-column:1/-1;order:-1}}
+
+/* Compact, structured profile modal layout. */
+.profile-modal-panel{width:min(940px,calc(100vw - 32px))!important}
+.profile-modal-panel .profile-form{gap:16px!important;padding:20px 22px!important}
+.profile-editor-head{grid-template-columns:76px minmax(170px,1fr) auto!important;align-items:center!important;gap:18px!important;padding:15px 17px!important;border:1px solid #cce7d9!important;border-radius:17px!important;background:linear-gradient(120deg,#edfbf4,#e2f7ec 62%,#d7f3e5)!important}
+.profile-editor-avatar{width:76px!important;height:76px!important;border:3px solid rgba(255,255,255,.85)!important;border-radius:18px!important;background:rgba(255,255,255,.62)!important;box-shadow:0 9px 22px rgba(8,115,77,.13);font-size:1.7rem!important}
+.profile-buttons-row{display:flex!important;justify-content:flex-end;gap:10px!important}
+.profile-editor-summary{display:grid;gap:4px;min-width:0}.profile-editor-summary strong{color:#174332;font-size:.9rem}.profile-editor-summary small{color:#668175;font-size:.7rem;line-height:1.4}
+.profile-buttons-row .profile-upload-button,.profile-buttons-row .profile-remove-photo{width:auto!important;min-width:150px;min-height:42px!important;border-radius:12px!important}
+.profile-upload-button{border-color:#18a86d!important;background:linear-gradient(135deg,#27bd7d,#0d8659)!important;box-shadow:0 8px 18px rgba(8,115,77,.18)}
+.profile-remove-photo{border-color:#c7e4d5!important;background:rgba(255,255,255,.72)!important;color:#537266!important}
+.profile-section-heading{display:flex;align-items:center;gap:11px;margin:1px 1px -3px}
+.profile-section-heading>span{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(145deg,#1cad72,#08734d);color:#fff;box-shadow:0 6px 14px rgba(8,115,77,.17)}
+.profile-section-heading>div{display:grid;gap:2px}.profile-section-heading strong{color:#183d30;font-size:.88rem}.profile-section-heading small{color:#72877e;font-size:.68rem}
+@media(min-width:760px){.profile-modal-panel .profile-field-grid{grid-template-columns:minmax(0,1.45fr) minmax(220px,.55fr)!important;grid-template-areas:"name role" "email email" "department program" "birth birth";gap:13px!important}.profile-modal-panel .profile-field-grid>label:nth-child(1){grid-area:name!important}.profile-modal-panel .profile-field-grid>label:nth-child(2){grid-area:email!important}.profile-modal-panel .profile-field-grid>label:nth-child(3){grid-area:role!important}.profile-modal-panel .profile-field-grid>label:nth-child(4){grid-area:department!important}.profile-modal-panel .profile-field-grid>label:nth-child(5){grid-area:program!important}.profile-modal-panel .profile-field-grid>label:nth-child(6){grid-area:birth!important}}
+.profile-modal-panel .profile-field-grid>label{padding:12px 13px!important;border-radius:14px!important;gap:7px!important}.profile-modal-panel .profile-field-grid>label>input,.profile-email-input-wrap>input{min-height:46px!important;border-radius:11px!important}
+.profile-password-section{padding:0!important;overflow:hidden;gap:0!important;transition:border-color .18s ease,box-shadow .18s ease}
+.profile-password-section.is-open{border-color:#8fd1af!important;box-shadow:0 9px 24px rgba(10,92,61,.08)!important}
+.profile-password-section-toggle{width:100%;min-height:70px;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:12px 16px!important;border:0!important;background:linear-gradient(120deg,#f4fbf7,#eaf7f1)!important;color:#173f30!important;text-align:left;box-shadow:none!important}
+.profile-password-section-toggle>span{display:flex;align-items:center;gap:11px}.profile-password-section-toggle>span>i{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#d9f3e6;color:#08734d;font-style:normal}.profile-password-section-toggle>span>span{display:grid;gap:3px}.profile-password-section-toggle strong{font-size:.86rem}.profile-password-section-toggle small{color:#6e8379;font-size:.68rem;font-weight:650}.profile-password-section-toggle>svg{color:#648174;transition:transform .2s ease}.profile-password-section.is-open .profile-password-section-toggle>svg{transform:rotate(180deg)}
+.profile-password-editor{display:grid;gap:13px;padding:15px 16px 17px;border-top:1px solid #d4eadf;background:rgba(255,255,255,.55)}
+.profile-password-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}.profile-password-grid label{min-width:0}.profile-password-grid input{min-height:44px!important;border-radius:10px!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-editor-head{border-color:#2b5846!important;background:linear-gradient(120deg,#15372c,#122d25 62%,#10271f)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-editor-avatar{border-color:#2e5d4b!important;background:#173c2e!important;color:#7ce2b1!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-editor-summary strong{color:#eef9ff}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-editor-summary small{color:#94adbb}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-remove-photo{border-color:#34566b!important;background:#172a3b!important;color:#b5c9d9!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-section-heading strong{color:#edf8ff}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-section-heading small{color:#90a7b8}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-password-section-toggle{background:linear-gradient(120deg,#14283a,#122b30)!important;color:#edf8ff!important}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-password-section-toggle>span>i{background:#183e30;color:#74dfad}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-password-section-toggle small{color:#91a8b8}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-password-editor{border-color:#29475a;background:rgba(13,29,43,.68)}
+@media(max-width:759px){.profile-modal-panel{width:min(100% - 16px,600px)!important;max-height:calc(100dvh - 12px)!important}.profile-modal-panel .profile-form{padding:14px!important}.profile-editor-head{grid-template-columns:62px minmax(0,1fr)!important;padding:12px!important}.profile-editor-avatar{width:62px!important;height:62px!important;border-radius:15px!important;font-size:1.35rem!important}.profile-buttons-row{grid-column:1/-1;display:grid!important;grid-template-columns:1fr 1fr!important}.profile-buttons-row .profile-upload-button,.profile-buttons-row .profile-remove-photo{min-width:0!important;width:100%!important}.profile-modal-panel .profile-field-grid{grid-template-columns:1fr!important;grid-template-areas:none!important;gap:11px!important}.profile-modal-panel .profile-field-grid>label{grid-area:auto!important}.profile-password-grid{grid-template-columns:1fr}.profile-password-section-toggle{min-height:64px;padding:10px 12px!important}}
+@media(max-width:430px){.profile-editor-head{grid-template-columns:1fr!important;text-align:center}.profile-editor-avatar{margin:auto}.profile-editor-summary{justify-items:center}.profile-buttons-row{width:100%}.profile-section-heading small{display:none}.profile-password-section-toggle small{max-width:210px}.profile-email-verification-controls>div{grid-template-columns:1fr}.profile-email-verification-controls>div>button{width:100%}}
+
+/* Green profile theme for light mode. Amber remains reserved for verification warnings. */
+.profile-modal-panel{border-color:#b7dfcc!important;background:linear-gradient(145deg,#fcfffd,#f0faf5)!important;box-shadow:0 28px 75px rgba(15,118,80,.2)!important}
+.profile-modal-panel>.box-title{border-color:#c4e4d4!important;background:linear-gradient(120deg,#f8fdfb 0%,#eaf8f1 55%,#daf2e6 100%)!important}
+.profile-modal-panel>.box-title::after{background:radial-gradient(circle,rgba(34,160,107,.2),transparent 68%)!important}
+.profile-modal-panel .profile-form{background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(239,250,245,.84))!important}
+.profile-editor-head{border-color:#b9dfcc!important;background:linear-gradient(120deg,#edf9f3,#e2f5eb 62%,#d6f0e3)!important}
+.profile-editor-avatar{border-color:rgba(255,255,255,.92)!important;background:rgba(255,255,255,.72)!important;color:#168358!important;box-shadow:0 9px 22px rgba(22,131,88,.15)!important}
+.profile-editor-summary strong{color:#154f38}.profile-editor-summary small{color:#607f70}
+.profile-upload-button,.profile-modal-panel .profile-form-actions button[type="submit"]{border-color:#168358!important;background:linear-gradient(135deg,#26a66f 0%,#168358 52%,#0f7650 100%)!important;box-shadow:0 10px 24px rgba(15,118,80,.25)!important}
+.profile-remove-photo{border-color:#c6dfd2!important;background:rgba(255,255,255,.78)!important;color:#567567!important}
+.profile-section-heading>span{background:linear-gradient(145deg,#2ba975,#147b55)!important;box-shadow:0 6px 14px rgba(22,131,88,.2)!important}.profile-section-heading strong{color:#174f39}.profile-section-heading small{color:#6c8579}
+.profile-modal-panel .profile-field-grid>label{border-color:#cce4d8!important;background:rgba(255,255,255,.8)!important;box-shadow:0 7px 18px rgba(15,118,80,.055)!important}
+.profile-email-input-wrap>svg{color:#168358!important}.profile-email-input-wrap>input{background:linear-gradient(135deg,#fff,#f3fbf7)!important}
+.profile-email-verification-controls>button,.profile-email-verification-controls>div>button{border-color:#a8d9c0!important;background:linear-gradient(135deg,#effaf5,#ddf3e8)!important;color:#126b49!important}
+.profile-email-verification-controls>button:hover:not(:disabled),.profile-email-verification-controls>div>button:hover:not(:disabled){border-color:#168358!important;background:linear-gradient(135deg,#24a36d,#147b55)!important;color:#fff!important}
+.profile-email-verification-controls>div>input{border-color:#c2e0d1!important;background:#f8fdfb!important;color:#174f39!important}
+.profile-email-field .people-email-verification.is-verified{border-color:#a8d9c0!important;background:linear-gradient(135deg,#effaf5,#ddf3e8)!important;color:#126b49!important}
+.profile-password-section{border-color:#c5e2d4!important}.profile-password-section.is-open{border-color:#80c9a4!important;box-shadow:0 9px 24px rgba(22,131,88,.1)!important}
+.profile-password-section-toggle{background:linear-gradient(120deg,#f3fbf7,#e7f6ee)!important;color:#174f39!important}.profile-password-section-toggle>span>i{background:#dcf2e7!important;color:#147b55!important}.profile-password-section-toggle small{color:#6c8579!important}.profile-password-section-toggle>svg{color:#4f8069!important}
+.profile-password-editor{border-color:#c9e3d6!important;background:rgba(255,255,255,.64)!important}
+.profile-modal-panel .profile-form-actions{border-color:#cce4d8!important}.profile-modal-panel .profile-form-actions .ghost-button{border-color:#bddcca!important;background:linear-gradient(135deg,#fff,#edf8f2)!important;color:#315f4a!important}.profile-modal-panel .profile-form-actions .ghost-button:hover{box-shadow:0 8px 18px rgba(22,131,88,.12)!important}
+.profile-modal-panel .notice.success:not(.profile-password-required){border-color:#93d4b2!important;background:linear-gradient(135deg,#effaf5,#dcf3e8)!important;color:#175f43!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel{border-color:#2e5f8c!important;background:linear-gradient(145deg,#0e1d2e,#0a1725)!important;box-shadow:0 30px 85px rgba(0,0,0,.6)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel>.box-title{border-color:#28557d!important;background:linear-gradient(120deg,#122942,#10243a 58%,#123358 100%)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-form{background:linear-gradient(180deg,rgba(12,29,46,.86),rgba(8,22,35,.95))!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-editor-head{border-color:#295d8a!important;background:linear-gradient(120deg,#12304e,#102940 62%,#10243a)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-editor-avatar{border-color:#326894!important;background:#153652!important;color:#7fc0ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-editor-summary strong{color:#edf7ff}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-editor-summary small{color:#91acc3}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-field-grid>label{border-color:#294e70!important;background:linear-gradient(145deg,#12273d,#0f2033)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-input-wrap>input{border-color:#37658c!important;background:linear-gradient(135deg,#10263b,#0d1f31)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-verification-controls>button,body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-verification-controls>div>button{border-color:#326b9c!important;background:#123352!important;color:#83c4ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-email-verification-controls>div>input{border-color:#345d80!important;background:#0e2134!important;color:#edf7ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-password-section{border-color:#294e70!important}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-password-section-toggle{background:linear-gradient(120deg,#122940,#10243a)!important}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-password-section-toggle>span>i{background:#153b5c!important;color:#82c3ff!important}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-password-editor{border-color:#294e70!important;background:rgba(9,27,43,.75)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .notice.success:not(.profile-password-required){border-color:#28639a!important;background:linear-gradient(135deg,#123657,#102b47)!important;color:#8ac9ff!important}
+
+/* Essential-only administrator dashboard: balanced six-card layout. */
+.admin-dashboard-body .admin-dashboard-unified .dashboard-metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+@media(max-width:1100px){.admin-dashboard-body .admin-dashboard-unified .dashboard-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:680px){.admin-dashboard-body .admin-dashboard-unified .dashboard-metric-grid{grid-template-columns:1fr!important}}
+
+/* Blue birthday calendar theme. */
+.people-date-trigger{border-color:#b7d6f5!important;background:linear-gradient(135deg,#fff,#f1f7ff)!important;color:#173f70!important}
+.people-date-trigger>span{color:#173f70!important}.people-date-trigger>svg:first-child{color:#3478df!important;stroke:#3478df!important}.people-date-trigger>svg:last-child{color:#587a9e!important;stroke:#587a9e!important}
+.people-date-trigger:hover{border-color:#69a7eb!important;background:linear-gradient(135deg,#fff,#e8f3ff)!important}.people-date-picker.is-open .people-date-trigger{border-color:#3478df!important;box-shadow:0 0 0 4px rgba(52,120,223,.14)!important}
+.people-date-popover{border-color:#7eb3ea!important;background:rgba(251,253,255,.99)!important;box-shadow:0 22px 55px rgba(26,86,155,.24),0 5px 16px rgba(26,86,155,.1)!important}
+.people-date-popover-heading{border-color:#c8def5!important;background:linear-gradient(120deg,#edf6ff,#dcecff)!important}.people-date-popover-heading span{color:#2468c9!important}.people-date-popover-heading small{color:#5f7893!important}
+.people-date-jump select,.people-year-trigger{border-color:#bfd8f1!important;background:#f1f7ff!important;color:#174574!important}.people-date-jump select:focus,.people-year-trigger:focus{border-color:#3478df!important;box-shadow:0 0 0 3px rgba(52,120,223,.13)!important}.people-year-trigger svg{color:#3478df!important}
+.people-year-options{border-color:#a9cdf1!important;background:rgba(255,255,255,.99)!important;box-shadow:0 15px 35px rgba(28,88,157,.23)!important;scrollbar-color:#82afe0 #edf5fd!important}.people-year-options button{color:#264d78!important}.people-year-options button:hover{background:#e4f0fd!important;color:#1f62b6!important}.people-year-options button.is-selected{background:linear-gradient(135deg,#4e90ee,#2468cf)!important;color:#fff!important;box-shadow:0 5px 12px rgba(37,99,235,.24)!important}
+.people-date-popover .rdp-root{--rdp-accent-color:#3478df;--rdp-accent-background-color:#dcecff;color:#173f70!important}.people-date-popover .rdp-chevron{fill:#3478df!important}.people-date-popover .rdp-button_previous,.people-date-popover .rdp-button_next{background:#edf5ff!important;color:#3478df!important}.people-date-popover .rdp-button_previous:hover,.people-date-popover .rdp-button_next:hover{background:#dcecff!important}.people-date-popover .rdp-weekday{color:#66809b!important}.people-date-popover .rdp-day_button{color:#244b75!important}.people-date-popover .rdp-day_button:hover{background:#e1effd!important}.people-date-popover .rdp-selected .rdp-day_button{background:linear-gradient(145deg,#4f91ef,#2468cf)!important;color:#fff!important;box-shadow:0 6px 13px rgba(37,99,235,.28)!important}.people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border-color:#4f91ef!important;color:#2468cf!important}
+.people-date-actions{border-color:#d6e6f6!important;background:#f8fbff!important}.people-date-actions button{color:#2468c9!important}.people-date-actions button:hover{background:#e1effd!important}.people-date-actions button:last-child{background:linear-gradient(135deg,#4f91ef,#2468cf)!important;color:#fff!important;box-shadow:0 5px 12px rgba(37,99,235,.2)!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-trigger{border-color:#315d85!important;background:linear-gradient(135deg,#10263b,#0e2033)!important;color:#e8f4ff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-trigger>span{color:#e8f4ff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-trigger>svg:first-child{color:#67b1ff!important;stroke:#67b1ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover{border-color:#32648f!important;background:rgba(8,24,38,.99)!important;color:#e8f4ff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover-heading{border-color:#294f70!important;background:linear-gradient(120deg,#12304c,#10283f)!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover-heading span{color:#72b9ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-jump select,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-trigger{border-color:#315d85!important;background:#12304a!important;color:#e8f4ff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-trigger svg{color:#67b1ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-options{border-color:#315d85!important;background:rgba(8,25,40,.99)!important;scrollbar-color:#396c98 #10273b!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-options button{color:#dcecff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-year-options button:hover{background:#173b59!important;color:#fff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-root{color:#e8f4ff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-day_button{color:#dcecff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-day_button:hover{border-color:#376b99!important;background:#173b59!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-selected .rdp-day_button{border-color:#63adf7!important;background:linear-gradient(145deg,#438ce8,#2468cf)!important;color:#fff!important;box-shadow:0 6px 15px rgba(0,0,0,.3)!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border-color:#428bd1!important;color:#77bdff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-chevron{fill:#72b9ff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-button_previous,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-button_next{border-color:#315d85!important;background:#12304a!important;color:#72b9ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-actions{border-color:#294f70!important;background:#0e2437!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-actions button:first-child{color:#72b9ff!important}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-actions button:first-child:hover{background:#173b59!important}
+
+.profile-birth-date-field>span{position:relative;display:block}.profile-birth-date-field>span>svg{position:absolute;z-index:2;left:15px;top:50%;transform:translateY(-50%);color:#3478df;pointer-events:none}.profile-birth-date-field input[type="date"]{width:100%;min-height:46px;padding:8px 13px 8px 43px;border:1px solid #c3d9ef;border-radius:11px;background:linear-gradient(135deg,#fff,#f3f8ff);color:#173f70;font-size:.9rem;font-weight:750;outline:none;color-scheme:light}.profile-birth-date-field input[type="date"]:focus{border-color:#3478df;box-shadow:0 0 0 3px rgba(52,120,223,.13)}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-birth-date-field input[type="date"]{border-color:#37658c;background:linear-gradient(135deg,#10263b,#0d1f31);color:#edf7ff;color-scheme:dark}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-birth-date-field>span>svg{color:#67b1ff}
+
+/* Refined dark-mode presentation for submitted Self Evaluation Preview. */
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-task-panel:has(.self-eval-submitted-preview){border:1px solid #2c5c87!important;background:linear-gradient(145deg,#0b1929,#081522)!important;box-shadow:0 32px 90px rgba(0,0,0,.65)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-task-panel:has(.self-eval-submitted-preview)>.dipascaf-modal-close{border:1px solid #3b6c96!important;background:linear-gradient(145deg,#193651,#122b43)!important;color:#b9dcff!important;box-shadow:0 8px 22px rgba(0,0,0,.3)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-task-panel:has(.self-eval-submitted-preview)>.dipascaf-modal-close:hover{border-color:#62a7e8!important;background:#214869!important;color:#fff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview{border:0!important;background:linear-gradient(180deg,#0d1c2e,#091724)!important;color:#eaf4ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview>.self-eval-modern-header{position:relative;overflow:hidden;border:1px solid #315d84!important;border-radius:18px!important;background:linear-gradient(125deg,#142e48 0%,#10263d 58%,#12395a 100%)!important;box-shadow:0 12px 30px rgba(0,0,0,.24)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview>.self-eval-modern-header::after{content:"";position:absolute;right:12%;top:-85px;width:210px;height:210px;border-radius:50%;background:radial-gradient(circle,rgba(73,151,229,.22),transparent 68%);pointer-events:none}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .dipascaf-modal-header-text{position:relative;z-index:1}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .dipascaf-modal-header-text h2{color:#f4f9ff!important;text-shadow:none!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .dipascaf-modal-header-text p{color:#a9bfd5!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview>.self-eval-modern-header>.self-eval-status{position:relative;z-index:1;border:1px solid #377f69!important;background:linear-gradient(135deg,#164a3b,#123d32)!important;color:#7ee6b7!important;box-shadow:0 6px 16px rgba(0,0,0,.2)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-summary{gap:16px}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-modern-meta{gap:12px!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-modern-meta>div{position:relative;overflow:hidden;border:1px solid #2e5c87!important;border-radius:14px!important;background:linear-gradient(145deg,#112842,#0e2035)!important;box-shadow:0 9px 22px rgba(0,0,0,.19)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-modern-meta>div::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(180deg,#5ca8f4,#286fc5)}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-modern-meta span{color:#82bfff!important;font-size:.68rem!important;letter-spacing:.045em}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-modern-meta strong{color:#f1f7ff!important;line-height:1.35}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-score-grid article{position:relative;overflow:hidden;border-color:#294b6d!important;background:linear-gradient(145deg,#111f35,#0d192c)!important;box-shadow:0 10px 25px rgba(0,0,0,.2)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-score-grid article::after{content:"";position:absolute;inset:auto 14px 0;height:3px;border-radius:999px 999px 0 0;background:linear-gradient(90deg,#397fd3,#63b2fa)}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-score-grid span{color:#9fb8d0!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-score-grid strong{color:#fff!important;font-size:1.42rem!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-card{border-color:#294b6d!important;background:linear-gradient(145deg,#101e32,#0c192a)!important;box-shadow:0 12px 30px rgba(0,0,0,.2)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-card>h3{padding-bottom:10px;border-bottom:1px solid #294866;color:#dcebfa!important;font-size:1rem!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview :is(.self-eval-preview-category-list,.self-eval-preview-output-list,.self-eval-preview-text-grid) article{border-color:#2b4865!important;background:linear-gradient(135deg,#192a40,#16263a)!important;color:#e9f3ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-output-list article{border-left-color:#438ddd!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview :is(.self-eval-preview-category-list,.self-eval-preview-output-list,.self-eval-preview-text-grid) article:hover{border-color:#3c6c98!important;background:linear-gradient(135deg,#1c314a,#182b41)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-category-list b{background:#153c59!important;color:#75bdff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-card p{color:#c4d5e5!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-card span{color:#9fb4c9!important}
+@media(max-width:900px){body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-score-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview>.self-eval-modern-header{padding:16px!important;border-radius:14px!important}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-score-grid{grid-template-columns:1fr}body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .self-eval-submitted-preview .self-eval-preview-text-grid{grid-template-columns:1fr}.self-eval-submitted-preview .self-eval-modern-meta{grid-template-columns:1fr!important}}
+
+/* Calendar navigation arrows: explicit rendering survives global button themes. */
+.people-date-popover .rdp-button_previous,.people-date-popover .rdp-button_next{display:grid!important;place-items:center!important;font-size:0!important;opacity:1!important}
+.people-date-popover .rdp-button_previous svg,.people-date-popover .rdp-button_next svg{display:none!important}
+.people-date-popover .rdp-button_previous::after,.people-date-popover .rdp-button_next::after{display:block;color:#3478df;font-size:1.2rem;font-weight:900;line-height:1}
+.people-date-popover .rdp-button_previous::after{content:"‹"}.people-date-popover .rdp-button_next::after{content:"›"}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-button_previous::after,body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-date-popover .rdp-button_next::after{color:#8ac8ff!important}
+
+/* Shared calendar dark mode for Admin, Dean, VPAA, Program Head, and Faculty surfaces. */
+:is(.dark-mode) .people-date-trigger,
+body:has(.dean-body.dark-mode) .people-date-trigger{
+  border-color:#315b4b!important;
+  background:linear-gradient(135deg,#12271f,#0c1d17)!important;
+  color:#e8fff4!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+:is(.dark-mode) .people-date-trigger>span,
+body:has(.dean-body.dark-mode) .people-date-trigger>span{color:#e8fff4!important}
+:is(.dark-mode) .people-date-trigger .is-placeholder,
+body:has(.dean-body.dark-mode) .people-date-trigger .is-placeholder{color:#91aa9f!important}
+:is(.dark-mode) .people-date-trigger>svg,
+body:has(.dean-body.dark-mode) .people-date-trigger>svg{color:#6ee7b7!important;stroke:#6ee7b7!important}
+:is(.dark-mode) .people-date-picker.is-open .people-date-trigger,
+body:has(.dean-body.dark-mode) .people-date-picker.is-open .people-date-trigger{border-color:#35c58b!important;box-shadow:0 0 0 4px rgba(52,211,153,.14)!important}
+:is(.dark-mode) .people-date-popover,
+body:has(.dean-body.dark-mode) .people-date-popover{border-color:#315f4c!important;background:rgba(7,22,17,.99)!important;color:#eafff5!important;box-shadow:0 25px 60px rgba(0,0,0,.58)!important}
+:is(.dark-mode) .people-date-popover-heading,
+body:has(.dean-body.dark-mode) .people-date-popover-heading{border-color:#284b3d!important;background:linear-gradient(120deg,#17382b,#10271f)!important}
+:is(.dark-mode) .people-date-popover-heading span,
+body:has(.dean-body.dark-mode) .people-date-popover-heading span{color:#7ce7b8!important}
+:is(.dark-mode) .people-date-popover-heading small,
+body:has(.dean-body.dark-mode) .people-date-popover-heading small{color:#9ab6aa!important}
+:is(.dark-mode) .people-date-jump select,
+:is(.dark-mode) .people-year-trigger,
+body:has(.dean-body.dark-mode) .people-date-jump select,
+body:has(.dean-body.dark-mode) .people-year-trigger{border-color:#315746!important;background:#132f24!important;color:#e8fff4!important;color-scheme:dark}
+:is(.dark-mode) .people-year-trigger svg,
+body:has(.dean-body.dark-mode) .people-year-trigger svg{color:#70dfac!important}
+:is(.dark-mode) .people-year-options,
+body:has(.dean-body.dark-mode) .people-year-options{border-color:#315746!important;background:#0b2119!important;box-shadow:0 18px 42px rgba(0,0,0,.55)!important}
+:is(.dark-mode) .people-year-options button,
+body:has(.dean-body.dark-mode) .people-year-options button{color:#d5ede3!important}
+:is(.dark-mode) .people-year-options button:hover,
+body:has(.dean-body.dark-mode) .people-year-options button:hover{background:#1a4131!important;color:#fff!important}
+:is(.dark-mode) .people-date-popover .rdp-root,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-root{--rdp-accent-color:#34d399;--rdp-accent-background-color:#173f30;color:#e9fff5!important}
+:is(.dark-mode) .people-date-popover .rdp-caption_label,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-caption_label{color:#e8fff4!important}
+:is(.dark-mode) .people-date-popover .rdp-weekday,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-weekday{color:#86a99a!important}
+:is(.dark-mode) .people-date-popover .rdp-day_button,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-day_button{border:1px solid transparent!important;background:transparent!important;color:#d6ece2!important;box-shadow:none!important}
+:is(.dark-mode) .people-date-popover .rdp-day_button:hover,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-day_button:hover{border-color:#356a54!important;background:#183c2e!important;color:#fff!important}
+:is(.dark-mode) .people-date-popover .rdp-selected .rdp-day_button,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-selected .rdp-day_button{border-color:#45d89b!important;background:linear-gradient(145deg,#20ad73,#0b7650)!important;color:#fff!important;box-shadow:0 6px 16px rgba(0,0,0,.36)!important}
+:is(.dark-mode) .people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border-color:#31b77e!important;color:#6ee7b7!important}
+:is(.dark-mode) .people-date-popover .rdp-outside .rdp-day_button,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-outside .rdp-day_button{color:#58776a!important;opacity:.7}
+:is(.dark-mode) .people-date-popover .rdp-disabled .rdp-day_button,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-disabled .rdp-day_button{color:#3f5a4f!important;opacity:.55}
+:is(.dark-mode) .people-date-popover .rdp-button_previous,
+:is(.dark-mode) .people-date-popover .rdp-button_next,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_previous,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_next{border:1px solid #315746!important;background:#153629!important}
+:is(.dark-mode) .people-date-popover .rdp-button_previous::after,
+:is(.dark-mode) .people-date-popover .rdp-button_next::after,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_previous::after,
+body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_next::after{color:#72e2b0!important}
+:is(.dark-mode) .people-date-actions,
+body:has(.dean-body.dark-mode) .people-date-actions{border-color:#284b3d!important;background:#0d261c!important}
+:is(.dark-mode) .people-date-actions button:first-child,
+body:has(.dean-body.dark-mode) .people-date-actions button:first-child{color:#72e2b0!important}
+:is(.dark-mode) .people-date-actions button:first-child:hover,
+body:has(.dean-body.dark-mode) .people-date-actions button:first-child:hover{background:#183c2e!important}
+:is(.dark-mode) .people-date-actions button:last-child,
+body:has(.dean-body.dark-mode) .people-date-actions button:last-child{background:linear-gradient(135deg,#20ad73,#0b7650)!important;color:#fff!important}
+
+/* Light-mode calendar uses a clear blue date-selection theme. */
+.people-date-trigger{border-color:#b7d6f5!important;background:linear-gradient(135deg,#fff,#f1f7ff)!important;color:#173f70!important}
+.people-date-trigger>span{color:#173f70!important}
+.people-date-trigger .is-placeholder{color:#71849a!important}
+.people-date-trigger>svg:first-child{color:#3478df!important;stroke:#3478df!important}
+.people-date-trigger>svg:last-child{color:#587a9e!important;stroke:#587a9e!important}
+.people-date-trigger:hover{border-color:#69a7eb!important;background:linear-gradient(135deg,#fff,#e8f3ff)!important}
+.people-date-picker.is-open .people-date-trigger{border-color:#3478df!important;box-shadow:0 0 0 4px rgba(52,120,223,.14)!important}
+.people-date-popover{border-color:#7eb3ea!important;background:rgba(251,253,255,.99)!important;box-shadow:0 22px 55px rgba(26,86,155,.24),0 5px 16px rgba(26,86,155,.1)!important}
+.people-date-popover-heading{border-color:#c8def5!important;background:linear-gradient(120deg,#edf6ff,#dcecff)!important}
+.people-date-popover-heading span{color:#2468c9!important}
+.people-date-popover-heading small{color:#5f7893!important}
+.people-date-jump select,.people-year-trigger{border-color:#bfd8f1!important;background:#f1f7ff!important;color:#174574!important}
+.people-date-jump select:focus,.people-year-trigger:focus{border-color:#3478df!important;box-shadow:0 0 0 3px rgba(52,120,223,.13)!important}
+.people-year-trigger svg{color:#3478df!important}
+.people-year-options{border-color:#a9cdf1!important;background:rgba(255,255,255,.99)!important;box-shadow:0 15px 35px rgba(28,88,157,.23)!important;scrollbar-color:#82afe0 #edf5fd!important}
+.people-year-options button{color:#264d78!important}
+.people-year-options button:hover{background:#e4f0fd!important;color:#1f62b6!important}
+.people-year-options button.is-selected{background:linear-gradient(135deg,#4e90ee,#2468cf)!important;color:#fff!important;box-shadow:0 5px 12px rgba(37,99,235,.24)!important}
+.people-date-popover .rdp-root{--rdp-accent-color:#3478df;--rdp-accent-background-color:#dcecff;color:#173f70!important}
+.people-date-popover .rdp-caption_label{color:#173f70!important}
+.people-date-popover .rdp-weekday{color:#66809b!important}
+.people-date-popover .rdp-day_button{color:#244b75!important}
+.people-date-popover .rdp-day_button:hover{border-color:#94bfe9!important;background:#e1effd!important;color:#1f62b6!important}
+.people-date-popover .rdp-selected .rdp-day_button{border-color:#3478df!important;background:linear-gradient(145deg,#4f91ef,#2468cf)!important;color:#fff!important;box-shadow:0 6px 13px rgba(37,99,235,.28)!important}
+.people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border-color:#4f91ef!important;color:#2468cf!important}
+.people-date-popover .rdp-button_previous,.people-date-popover .rdp-button_next{border-color:#c6dcf2!important;background:#edf5ff!important;color:#3478df!important}
+.people-date-popover .rdp-button_previous:hover,.people-date-popover .rdp-button_next:hover{background:#dcecff!important}
+.people-date-popover .rdp-button_previous::after,.people-date-popover .rdp-button_next::after{color:#3478df!important}
+.people-date-popover .rdp-chevron{fill:#3478df!important}
+.people-date-actions{border-color:#d6e6f6!important;background:#f8fbff!important}
+.people-date-actions button{color:#2468c9!important}
+.people-date-actions button:hover{background:#e1effd!important}
+.people-date-actions button:last-child{background:linear-gradient(135deg,#4f91ef,#2468cf)!important;color:#fff!important;box-shadow:0 5px 12px rgba(37,99,235,.2)!important}
+
+/* Final accessible green calendar palette. Explicit day backgrounds prevent
+   global button colors from turning every calendar cell into a filled tile. */
+.people-date-trigger{border-color:#8fceb0!important;background:linear-gradient(135deg,#fff,#f0faf5)!important;color:#164b35!important}
+.people-date-trigger>span{color:#164b35!important}.people-date-trigger>svg:first-child{color:#168358!important;stroke:#168358!important}.people-date-trigger>svg:last-child{color:#36725a!important;stroke:#36725a!important}
+.people-date-trigger:hover{border-color:#3fad79!important;background:linear-gradient(135deg,#fff,#e7f7ef)!important}.people-date-picker.is-open .people-date-trigger{border-color:#168358!important;box-shadow:0 0 0 4px rgba(22,131,88,.16)!important}
+.people-date-popover{border-color:#66bd91!important;background:#fcfffd!important;box-shadow:0 22px 55px rgba(8,115,77,.2),0 5px 16px rgba(8,115,77,.08)!important}
+.people-date-popover-heading{border-color:#bfe5d1!important;background:linear-gradient(120deg,#edfff5,#d9f5e7)!important}.people-date-popover-heading span{color:#08734d!important}.people-date-popover-heading small{color:#526f62!important}
+.people-date-jump select,.people-year-trigger{border-color:#add9c2!important;background:#f1faf5!important;color:#164b35!important}.people-date-jump select:focus,.people-year-trigger:focus{border-color:#168358!important;box-shadow:0 0 0 3px rgba(22,131,88,.14)!important}.people-year-trigger svg{color:#168358!important}
+.people-year-options{border-color:#91cdae!important;background:#fff!important;box-shadow:0 15px 35px rgba(8,115,77,.2)!important;scrollbar-color:#70b993 #edf8f2!important}.people-year-options button{color:#1d4f39!important}.people-year-options button:hover{background:#e3f6ec!important;color:#08734d!important}.people-year-options button.is-selected{background:linear-gradient(135deg,#22a76f,#08734d)!important;color:#fff!important;box-shadow:0 5px 12px rgba(8,115,77,.23)!important}
+.people-date-popover .rdp-root{--rdp-accent-color:#168358;--rdp-accent-background-color:#dcf4e7;color:#173f30!important}.people-date-popover .rdp-caption_label{color:#173f30!important}.people-date-popover .rdp-weekday{color:#607c6f!important}
+.people-date-popover .rdp-day_button{border:1px solid transparent!important;background:transparent!important;color:#193f30!important;box-shadow:none!important}
+.people-date-popover .rdp-day_button:hover{border-color:#8acbab!important;background:#e3f6ec!important;color:#075f40!important}
+.people-date-popover .rdp-selected .rdp-day_button{border-color:#168358!important;background:linear-gradient(145deg,#24a971,#08734d)!important;color:#fff!important;box-shadow:0 6px 13px rgba(8,115,77,.27)!important}
+.people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border-color:#2eaa75!important;background:#edf9f3!important;color:#075f40!important}
+.people-date-popover .rdp-outside .rdp-day_button{color:#8ba398!important;opacity:.62!important}.people-date-popover .rdp-disabled .rdp-day_button{color:#a8bab2!important;opacity:.48!important}
+.people-date-popover .rdp-button_previous,.people-date-popover .rdp-button_next{border-color:#c2e3d2!important;background:#edf9f3!important;color:#168358!important}.people-date-popover .rdp-button_previous:hover,.people-date-popover .rdp-button_next:hover{background:#d9f1e4!important}.people-date-popover .rdp-button_previous::after,.people-date-popover .rdp-button_next::after{color:#168358!important}.people-date-popover .rdp-chevron{fill:#168358!important}
+.people-date-actions{border-color:#d1e8dc!important;background:#f8fdfb!important}.people-date-actions button{color:#08734d!important}.people-date-actions button:hover{background:#e0f4e9!important}.people-date-actions button:last-child{background:linear-gradient(135deg,#22a76f,#08734d)!important;color:#fff!important;box-shadow:0 5px 12px rgba(8,115,77,.2)!important}
+
+/* Dark mode keeps the same green identity with stronger contrast. */
+:is(.dark-mode) .people-date-popover .rdp-day_button,body:has(.dean-body.dark-mode) .people-date-popover .rdp-day_button{border-color:transparent!important;background:transparent!important;color:#dff7ec!important;box-shadow:none!important}
+:is(.dark-mode) .people-date-popover .rdp-day_button:hover,body:has(.dean-body.dark-mode) .people-date-popover .rdp-day_button:hover{border-color:#438266!important;background:#194231!important;color:#fff!important}
+:is(.dark-mode) .people-date-popover .rdp-selected .rdp-day_button,body:has(.dean-body.dark-mode) .people-date-popover .rdp-selected .rdp-day_button{border-color:#62e3aa!important;background:linear-gradient(145deg,#22b879,#0a7650)!important;color:#fff!important;box-shadow:0 0 0 2px rgba(74,222,128,.12),0 7px 17px rgba(0,0,0,.4)!important}
+:is(.dark-mode) .people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button,body:has(.dean-body.dark-mode) .people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border-color:#43c88f!important;background:rgba(22,131,88,.16)!important;color:#8aefbf!important}
+:is(.dark-mode) .people-date-popover .rdp-outside .rdp-day_button,body:has(.dean-body.dark-mode) .people-date-popover .rdp-outside .rdp-day_button{color:#739486!important;opacity:.55!important}
+
+/* Dark-mode calendar: deep navy surfaces with clear light-blue accents. */
+:is(.dark-mode) .people-date-trigger,body:has(.dean-body.dark-mode) .people-date-trigger{border-color:#3d78a8!important;background:linear-gradient(135deg,#10283b,#0c2031)!important;color:#edf8ff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important}
+:is(.dark-mode) .people-date-trigger>span,body:has(.dean-body.dark-mode) .people-date-trigger>span{color:#edf8ff!important}
+:is(.dark-mode) .people-date-trigger>svg,body:has(.dean-body.dark-mode) .people-date-trigger>svg{color:#75c4ff!important;stroke:#75c4ff!important}
+:is(.dark-mode) .people-date-picker.is-open .people-date-trigger,body:has(.dean-body.dark-mode) .people-date-picker.is-open .people-date-trigger{border-color:#62b5f5!important;box-shadow:0 0 0 4px rgba(96,165,250,.17),0 0 18px rgba(56,189,248,.1)!important}
+:is(.dark-mode) .people-date-popover,body:has(.dean-body.dark-mode) .people-date-popover{border-color:#376d98!important;background:rgba(7,22,34,.99)!important;color:#edf8ff!important;box-shadow:0 25px 60px rgba(0,0,0,.58),0 0 24px rgba(56,189,248,.08)!important}
+:is(.dark-mode) .people-date-popover-heading,body:has(.dean-body.dark-mode) .people-date-popover-heading{border-color:#315b7d!important;background:linear-gradient(120deg,#153650,#102a40)!important}
+:is(.dark-mode) .people-date-popover-heading span,body:has(.dean-body.dark-mode) .people-date-popover-heading span{color:#83ccff!important}
+:is(.dark-mode) .people-date-popover-heading small,body:has(.dean-body.dark-mode) .people-date-popover-heading small{color:#a9c5d8!important}
+:is(.dark-mode) .people-date-jump select,:is(.dark-mode) .people-year-trigger,body:has(.dean-body.dark-mode) .people-date-jump select,body:has(.dean-body.dark-mode) .people-year-trigger{border-color:#37698f!important;background:#14344d!important;color:#edf8ff!important;color-scheme:dark}
+:is(.dark-mode) .people-date-jump select:focus,:is(.dark-mode) .people-year-trigger:focus,body:has(.dean-body.dark-mode) .people-date-jump select:focus,body:has(.dean-body.dark-mode) .people-year-trigger:focus{border-color:#62b5f5!important;box-shadow:0 0 0 3px rgba(96,165,250,.17)!important}
+:is(.dark-mode) .people-year-trigger svg,body:has(.dean-body.dark-mode) .people-year-trigger svg{color:#75c4ff!important}
+:is(.dark-mode) .people-year-options,body:has(.dean-body.dark-mode) .people-year-options{border-color:#37698f!important;background:#0b2538!important;box-shadow:0 18px 42px rgba(0,0,0,.55)!important;scrollbar-color:#4c83ad #102b40!important}
+:is(.dark-mode) .people-year-options button,body:has(.dean-body.dark-mode) .people-year-options button{color:#dcefff!important}
+:is(.dark-mode) .people-year-options button:hover,body:has(.dean-body.dark-mode) .people-year-options button:hover{background:#194563!important;color:#fff!important}
+:is(.dark-mode) .people-year-options button.is-selected,body:has(.dean-body.dark-mode) .people-year-options button.is-selected{background:linear-gradient(135deg,#4299e8,#2168b5)!important;color:#fff!important;box-shadow:0 5px 14px rgba(37,99,235,.34)!important}
+:is(.dark-mode) .people-date-popover .rdp-root,body:has(.dean-body.dark-mode) .people-date-popover .rdp-root{--rdp-accent-color:#75c4ff;--rdp-accent-background-color:#173f5d;color:#edf8ff!important}
+:is(.dark-mode) .people-date-popover .rdp-caption_label,body:has(.dean-body.dark-mode) .people-date-popover .rdp-caption_label{color:#edf8ff!important}
+:is(.dark-mode) .people-date-popover .rdp-weekday,body:has(.dean-body.dark-mode) .people-date-popover .rdp-weekday{color:#94b6cc!important}
+:is(.dark-mode) .people-date-popover .rdp-day_button,body:has(.dean-body.dark-mode) .people-date-popover .rdp-day_button{border-color:transparent!important;background:transparent!important;color:#dcefff!important}
+:is(.dark-mode) .people-date-popover .rdp-day_button:hover,body:has(.dean-body.dark-mode) .people-date-popover .rdp-day_button:hover{border-color:#4d86ae!important;background:#194563!important;color:#fff!important}
+:is(.dark-mode) .people-date-popover .rdp-selected .rdp-day_button,body:has(.dean-body.dark-mode) .people-date-popover .rdp-selected .rdp-day_button{border-color:#83ccff!important;background:linear-gradient(145deg,#4299e8,#2168b5)!important;color:#fff!important;box-shadow:0 0 0 2px rgba(125,211,252,.13),0 7px 17px rgba(0,0,0,.4)!important}
+:is(.dark-mode) .people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button,body:has(.dean-body.dark-mode) .people-date-popover .rdp-today:not(.rdp-selected) .rdp-day_button{border-color:#62b5f5!important;background:rgba(59,130,246,.14)!important;color:#8fd2ff!important}
+:is(.dark-mode) .people-date-popover .rdp-outside .rdp-day_button,body:has(.dean-body.dark-mode) .people-date-popover .rdp-outside .rdp-day_button{color:#66869b!important;opacity:.55!important}
+:is(.dark-mode) .people-date-popover .rdp-button_previous,:is(.dark-mode) .people-date-popover .rdp-button_next,body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_previous,body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_next{border-color:#37698f!important;background:#143b56!important;color:#83ccff!important}
+:is(.dark-mode) .people-date-popover .rdp-button_previous:hover,:is(.dark-mode) .people-date-popover .rdp-button_next:hover,body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_previous:hover,body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_next:hover{background:#1b4a69!important}
+:is(.dark-mode) .people-date-popover .rdp-button_previous::after,:is(.dark-mode) .people-date-popover .rdp-button_next::after,body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_previous::after,body:has(.dean-body.dark-mode) .people-date-popover .rdp-button_next::after{color:#83ccff!important}
+:is(.dark-mode) .people-date-popover .rdp-chevron,body:has(.dean-body.dark-mode) .people-date-popover .rdp-chevron{fill:#83ccff!important}
+:is(.dark-mode) .people-date-actions,body:has(.dean-body.dark-mode) .people-date-actions{border-color:#315b7d!important;background:#0d293d!important}
+:is(.dark-mode) .people-date-actions button:first-child,body:has(.dean-body.dark-mode) .people-date-actions button:first-child{color:#83ccff!important}
+:is(.dark-mode) .people-date-actions button:first-child:hover,body:has(.dean-body.dark-mode) .people-date-actions button:first-child:hover{background:#194563!important}
+:is(.dark-mode) .people-date-actions button:last-child,body:has(.dean-body.dark-mode) .people-date-actions button:last-child{background:linear-gradient(135deg,#4299e8,#2168b5)!important;color:#fff!important;box-shadow:0 6px 15px rgba(37,99,235,.3)!important}
+
+/* Shared responsive dashboard shell: phone and narrow tablet browsers. */
+@media(max-width:1200px){
+  html,body,#root{max-width:100%;overflow-x:hidden}
+  :is(.admin-body,.admin-dashboard-body,.dean-body){width:100%;min-width:0;overflow-x:hidden}
+  :is(.admin-body,.admin-dashboard-body,.dean-body)>.admin-sidebar{position:fixed!important;inset:0 auto 0 0!important;z-index:5000!important;width:min(286px,86vw)!important;transform:translateX(-105%)!important;box-shadow:20px 0 50px rgba(0,0,0,.3)!important;transition:transform .25s ease!important}
+  :is(.admin-body,.admin-dashboard-body,.dean-body).sidebar-open>.admin-sidebar{transform:translateX(0)!important}
+  :is(.admin-body,.admin-dashboard-body,.dean-body)>.admin-main{width:100%!important;max-width:100%!important;min-width:0!important;margin-left:0!important;overflow-x:hidden!important}
+  :is(.admin-body,.admin-dashboard-body,.dean-body) .admin-header{grid-template-columns:44px minmax(0,1fr) auto!important;gap:10px!important;width:100%;max-width:100%;padding:10px 14px!important}
+  :is(.admin-body,.admin-dashboard-body,.dean-body) .admin-search{display:none!important}
+  :is(.admin-body,.admin-dashboard-body,.dean-body) .admin-actions .role-context,:is(.admin-body,.admin-dashboard-body,.dean-body) .admin-actions .dean-header-context{display:none!important}
+  :is(.admin-body,.admin-dashboard-body,.dean-body) .admin-header-info{min-width:0!important}.admin-header-info h1,.admin-header-note{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  :is(.admin-body,.admin-dashboard-body,.dean-body) :is(.admin-content,.admin-module,.dashboard,.role-dashboard-content){width:100%;max-width:100%;min-width:0;padding-inline:clamp(12px,2.4vw,22px)!important;overflow-x:hidden}
+  :is(.admin-body,.admin-dashboard-body,.dean-body) :is(.admin-box,.panel,.people-section,.hero-card,.people-management-page,.people-management-hero){max-width:100%;min-width:0}
+  .people-management-hero{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:18px!important;padding:clamp(18px,3vw,26px)!important}
+  .people-management-hero>div:first-child{width:100%!important;max-width:100%!important;min-width:0!important}.people-management-hero h2{max-width:100%!important;font-size:clamp(1.7rem,5vw,2.25rem)!important;line-height:1.08!important}.people-management-hero p:not(.eyebrow){max-width:720px!important;font-size:.95rem!important;line-height:1.55!important;overflow-wrap:normal!important;word-break:normal!important}
+  .people-management-actions{width:100%!important;display:flex!important;flex-wrap:wrap!important;justify-content:flex-start!important;gap:10px!important}.people-management-actions button{flex:1 1 210px;max-width:100%;justify-content:center!important}
+  .people-filter-panel,.people-management-page:has(.people-account-management) .people-filter-panel{width:100%;max-width:100%;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;padding:16px!important}.people-filter-panel .people-search-field,.people-management-page:has(.people-account-management) .people-search-field{grid-column:1/-1!important}.people-filter-panel label,.people-filter-panel input,.people-filter-panel select{min-width:0!important;width:100%!important;max-width:100%!important}
+  .people-section>.box-title{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:10px!important}.people-section>.box-title>div,.people-directory-title-actions{max-width:100%;display:flex;flex-wrap:wrap;gap:8px!important}.people-section>.box-title button{max-width:100%;white-space:normal!important}
+  :is(.people-department-grid,.people-user-grid,.people-program-grid){grid-template-columns:repeat(2,minmax(0,1fr))!important}.people-department-card,.people-user-card,.people-program-row{min-width:0!important;max-width:100%!important}
+  .people-program-list,.people-user-list,.self-eval-table-wrap,.evaluation-table-wrap,.admin-report-table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .people-modal-panel,.dipascaf-modal-panel,.evaluation-form-modal{max-width:calc(100vw - 20px)!important}
+  .floating-chat-toggle{right:14px!important;bottom:14px!important;transform:scale(.88);transform-origin:bottom right}.floating-chat-panel{right:10px!important;bottom:82px!important;width:min(390px,calc(100vw - 20px))!important;max-height:calc(100dvh - 110px)!important}
+}
+@media(max-width:680px){
+  :is(.admin-body,.admin-dashboard-body,.dean-body) .admin-header{grid-template-columns:40px minmax(0,1fr) auto!important;padding:9px 10px!important}.admin-header-note{display:none!important}.admin-header-info h1{font-size:1rem!important}.admin-actions{gap:5px!important}.notification-button,.profile-button,.menu-toggle{width:36px!important;height:36px!important;min-height:36px!important;flex-basis:36px!important}
+  :is(.admin-body,.admin-dashboard-body,.dean-body) :is(.admin-content,.admin-module,.dashboard,.role-dashboard-content){padding-inline:10px!important}
+  .people-management-hero{padding:17px!important;border-radius:16px!important}.people-management-hero h2{font-size:1.65rem!important}.people-management-actions{display:grid!important;grid-template-columns:1fr!important}.people-management-actions button{width:100%!important}
+  .people-filter-panel,.people-management-page:has(.people-account-management) .people-filter-panel{grid-template-columns:1fr!important;padding:12px!important}.people-filter-panel .people-search-field,.people-management-page:has(.people-account-management) .people-search-field{grid-column:auto!important}
+  :is(.people-department-grid,.people-user-grid,.people-program-grid){grid-template-columns:1fr!important}.people-department-card-body{grid-template-columns:auto minmax(0,1fr)!important}.people-card-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}.people-card-actions button{min-width:0!important;width:100%!important;justify-content:center!important}
+  .people-section>.box-title,.people-directory-title-actions{align-items:stretch!important;flex-direction:column!important}.people-directory-title-actions button{width:100%!important;justify-content:center!important}
+  .people-account-metrics{grid-template-columns:1fr 1fr!important}.people-account-pagination{display:grid!important;grid-template-columns:1fr!important}.profile-modal-panel,.people-modal-panel,.dipascaf-modal-panel{width:calc(100vw - 12px)!important;max-height:calc(100dvh - 12px)!important;border-radius:16px!important}
+}
+@media(max-width:390px){.people-account-metrics{grid-template-columns:1fr!important}.people-card-actions{grid-template-columns:1fr!important}.admin-actions .notification-center{display:none}.people-management-hero h2{font-size:1.45rem!important}}
+
+/* Account administration hero: floating iconography and restrained glow. */
+@keyframes account-icon-float {
+  0%,100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-5px) rotate(1deg); }
+}
+
+@keyframes account-button-glow {
+  0%,100% { box-shadow: 0 10px 24px rgba(22,131,88,.22), 0 0 0 0 rgba(52,211,153,0); }
+  50% { box-shadow: 0 13px 30px rgba(22,131,88,.32), 0 0 18px rgba(52,211,153,.2); }
+}
+
+.people-account-heading {
+  position: relative;
+  padding: 12px 14px 14px !important;
+  border: 1px solid rgba(22,131,88,.12);
+  border-radius: 18px;
+  background: linear-gradient(135deg,rgba(240,250,245,.9),rgba(255,255,255,.78));
+}
+
+.people-account-heading-icon {
+  position: relative;
+  flex-basis: 58px !important;
+  width: 58px !important;
+  height: 58px !important;
+  border-radius: 17px !important;
+  background: linear-gradient(145deg,#e4f8ed,#f7fdfa) !important;
+  box-shadow: 0 12px 28px rgba(22,131,88,.16), 0 0 20px rgba(52,211,153,.12) !important;
+  animation: account-icon-float 3.4s ease-in-out infinite;
+}
+
+.people-account-heading-icon::after {
+  content:"";
+  position:absolute;
+  inset:-5px;
+  z-index:-1;
+  border-radius:21px;
+  background:rgba(52,211,153,.12);
+  filter:blur(8px);
+}
+
+.people-account-heading>button {
+  min-height: 48px !important;
+  padding: 0 20px !important;
+  border: 1px solid rgba(255,255,255,.24) !important;
+  border-radius: 13px !important;
+  background: linear-gradient(135deg,#168358,#22a06b) !important;
+  animation: account-button-glow 3s ease-in-out infinite;
+}
+
+.people-account-heading>button:hover {
+  transform: translateY(-3px) !important;
+  background: linear-gradient(135deg,#117149,#1d915f) !important;
+  box-shadow: 0 16px 34px rgba(22,131,88,.34),0 0 22px rgba(52,211,153,.22) !important;
+}
+
+.people-account-heading>button:focus-visible {
+  outline: 3px solid rgba(52,211,153,.4);
+  outline-offset: 3px;
+}
+
+.people-account-metrics article {
+  isolation: isolate;
+  min-height: 108px !important;
+  border-radius: 18px !important;
+}
+
+.people-account-metrics article::before {
+  content:"";
+  position:absolute;
+  top:-38px;
+  right:-32px;
+  z-index:-1;
+  width:100px;
+  height:100px;
+  border-radius:50%;
+  background:var(--metric-soft,#edf9f2);
+  opacity:.72;
+  filter:blur(3px);
+}
+
+.people-account-metrics article:hover {
+  transform: translateY(-4px) !important;
+  border-color:var(--metric-accent,#168358) !important;
+  box-shadow:0 16px 34px rgba(20,63,44,.12),0 0 18px color-mix(in srgb,var(--metric-accent,#168358) 14%,transparent) !important;
+}
+
+.people-account-metric-icon {
+  flex-basis:48px !important;
+  width:48px !important;
+  height:48px !important;
+  border:1px solid color-mix(in srgb,var(--metric-accent,#168358) 22%,transparent);
+  border-radius:14px !important;
+  box-shadow:0 9px 20px color-mix(in srgb,var(--metric-accent,#168358) 15%,transparent);
+  transition:transform .2s ease,box-shadow .2s ease;
+}
+
+.people-account-metrics article:hover .people-account-metric-icon {
+  transform:translateY(-3px) scale(1.05);
+  box-shadow:0 12px 24px color-mix(in srgb,var(--metric-accent,#168358) 24%,transparent);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading {
+  border-color:rgba(74,222,128,.17);
+  background:linear-gradient(135deg,rgba(10,39,31,.9),rgba(12,29,37,.86));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 12px 34px rgba(0,0,0,.14);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading-icon {
+  border-color:rgba(74,222,128,.32) !important;
+  background:linear-gradient(145deg,rgba(22,131,88,.28),rgba(16,82,60,.3)) !important;
+  color:#86efac !important;
+  box-shadow:0 12px 30px rgba(0,0,0,.24),0 0 22px rgba(52,211,153,.18) !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading .eyebrow {
+  color:#86efac !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading>button {
+  background:linear-gradient(135deg,#168358,#249a67) !important;
+  color:#fff !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics article {
+  border-color:color-mix(in srgb,var(--metric-accent,#168358) 25%,#253b50) !important;
+  background:linear-gradient(145deg,#14263a,#102033) !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics article:hover {
+  border-color:var(--metric-accent,#168358) !important;
+  box-shadow:0 18px 38px rgba(0,0,0,.27),0 0 20px color-mix(in srgb,var(--metric-accent,#168358) 18%,transparent) !important;
+}
+
+@media(max-width:700px) {
+  .people-account-heading { padding:12px !important; }
+  .people-account-heading-icon { width:48px !important;height:48px !important;flex-basis:48px !important; }
+  .people-account-metrics article { min-height:96px !important; }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .people-account-heading-icon,.people-account-heading>button { animation:none !important; }
+  .people-account-heading>button,.people-account-metrics article,.people-account-metric-icon { transition:none !important; }
+}
+
+/* Keep the account glyph optically centered inside its floating tile. */
+.people-account-heading-icon {
+  box-sizing:border-box !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:0 !important;
+  overflow:visible !important;
+  line-height:0 !important;
+}
+
+.people-account-heading-icon > svg {
+  position:static !important;
+  display:block !important;
+  width:27px !important;
+  height:27px !important;
+  margin:0 !important;
+  padding:0 !important;
+  transform:none !important;
+  stroke-width:2 !important;
+  flex:0 0 27px !important;
+}
+
+@media(max-width:700px) {
+  .people-account-heading-icon > svg {
+    width:24px !important;
+    height:24px !important;
+    flex-basis:24px !important;
+  }
+}
+
+/* Metric icon tiles need stronger specificity than the generic card span rule. */
+.people-account-metrics article > .people-account-metric-icon {
+  box-sizing:border-box !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  align-self:center !important;
+  flex:0 0 48px !important;
+  width:48px !important;
+  height:48px !important;
+  margin:0 !important;
+  padding:0 !important;
+  line-height:0 !important;
+}
+
+.people-account-metrics article > .people-account-metric-icon > svg {
+  position:static !important;
+  display:block !important;
+  width:21px !important;
+  height:21px !important;
+  margin:0 !important;
+  padding:0 !important;
+  transform:none !important;
+  flex:0 0 21px !important;
+}
+
+.people-account-metrics article:hover > .people-account-metric-icon > svg {
+  transform:none !important;
+}
+
+@media(max-width:700px) {
+  .people-account-metrics article > .people-account-metric-icon {
+    flex-basis:44px !important;
+    width:44px !important;
+    height:44px !important;
+  }
+}
+
+/* Responsive profile scrolling: expanded password fields remain reachable on
+   short desktop screens, tablets, and mobile browsers. */
+.profile-modal-backdrop{
+  overscroll-behavior:contain;
+}
+
+body:has(.profile-modal-backdrop){
+  overflow:hidden!important;
+}
+
+.profile-modal-panel{
+  width:min(940px,calc(100vw - 24px))!important;
+  max-width:calc(100vw - 24px)!important;
+  max-height:calc(100dvh - 24px)!important;
+  overflow:hidden!important;
+}
+
+.profile-modal-panel>.box-title{
+  flex:0 0 auto!important;
+}
+
+.profile-modal-panel .profile-form{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain!important;
+  scrollbar-gutter:stable;
+  scrollbar-width:auto;
+  scrollbar-color:#4aaa7a #e8f5ee;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:clamp(26px,5vh,54px)!important;
+}
+
+.profile-modal-panel .profile-form::-webkit-scrollbar{width:11px}
+.profile-modal-panel .profile-form::-webkit-scrollbar-track{background:#e8f5ee;border-radius:999px}
+.profile-modal-panel .profile-form::-webkit-scrollbar-thumb{border:3px solid #e8f5ee;border-radius:999px;background:#4aaa7a}
+.profile-modal-panel .profile-form::-webkit-scrollbar-thumb:hover{background:#168358}
+
+.profile-password-section{
+  scroll-margin-block:18px;
+  min-width:0;
+}
+
+.profile-password-editor,
+.profile-password-grid,
+.profile-password-grid label,
+.profile-password-grid input{
+  min-width:0!important;
+  max-width:100%!important;
+}
+
+.profile-password-editor .profile-section-title{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px 16px;
+}
+
+.profile-password-toggle{
+  display:inline-flex!important;
+  grid-template-columns:none!important;
+  align-items:center!important;
+  gap:7px!important;
+  white-space:normal;
+}
+
+.profile-modal-panel .profile-form-actions{
+  margin-top:2px;
+  padding-bottom:4px;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-form{
+  scrollbar-color:#5aa9df #102a3e;
+}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-form::-webkit-scrollbar-track{background:#102a3e}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-form::-webkit-scrollbar-thumb{border-color:#102a3e;background:#5aa9df}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-form::-webkit-scrollbar-thumb:hover{background:#83ccff}
+
+@media(min-width:760px) and (max-width:1050px){
+  .profile-password-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .profile-password-grid label:last-child{grid-column:1/-1}
+}
+
+@media(max-width:759px){
+  .profile-modal-panel{width:calc(100vw - 12px)!important;max-width:calc(100vw - 12px)!important;max-height:calc(100dvh - 12px)!important;border-radius:16px!important}
+  .profile-modal-panel>.box-title{padding:14px 16px!important}
+  .profile-modal-panel .profile-form{padding:14px 14px 36px!important;scrollbar-gutter:auto}
+  .profile-password-grid{grid-template-columns:1fr!important}
+  .profile-password-grid label:last-child{grid-column:auto}
+  .profile-password-editor{padding:14px 12px 18px!important}
+}
+
+@media(max-width:430px){
+  .profile-password-editor .profile-section-title{align-items:flex-start;flex-direction:column}
+  .profile-password-toggle{width:100%;justify-content:flex-start}
+  .profile-password-section-toggle>span{min-width:0}
+  .profile-password-section-toggle>span>span{min-width:0}
+  .profile-password-section-toggle small{max-width:none!important;white-space:normal}
+  .profile-modal-panel .profile-form-actions{grid-template-columns:1fr!important}
+  .profile-modal-panel .profile-form-actions button{width:100%!important;grid-column:auto!important;order:initial!important}
+  .profile-modal-panel .profile-form-actions button[type="submit"]{order:-1!important}
+}
+
+@media(max-height:720px){
+  .profile-modal-panel{max-height:calc(100dvh - 10px)!important}
+  .profile-modal-panel>.box-title{padding-block:12px!important}
+  .profile-modal-panel .profile-form{gap:12px!important;padding-top:12px!important;padding-bottom:34px!important}
+  .profile-editor-head{padding:11px 13px!important}
+  .profile-password-section-toggle{min-height:58px!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .profile-modal-panel .profile-form{scroll-behavior:auto}
+}
+
+/* Expanded password editor must use its natural content height. */
+.profile-modal-panel .profile-password-section.is-open{
+  height:auto!important;
+  min-height:max-content!important;
+  max-height:none!important;
+  overflow:visible!important;
+  contain:none!important;
+  scroll-margin-top:12px!important;
+}
+
+.profile-modal-panel .profile-password-section.is-open .profile-password-editor{
+  position:relative!important;
+  display:grid!important;
+  visibility:visible!important;
+  height:auto!important;
+  min-height:190px!important;
+  max-height:none!important;
+  overflow:visible!important;
+  opacity:1!important;
+}
+
+.profile-modal-panel .profile-password-section.is-open .profile-password-grid{
+  display:grid!important;
+  height:auto!important;
+  min-height:72px!important;
+  overflow:visible!important;
+}
+
+.profile-modal-panel .profile-password-section.is-open .profile-password-grid input{
+  display:block!important;
+  min-height:46px!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+
+@media(max-width:759px){
+  .profile-modal-panel .profile-password-section.is-open .profile-password-editor{min-height:330px!important}
+  .profile-modal-panel .profile-password-section.is-open .profile-password-grid{min-height:225px!important}
+}
+
+/* Final password panel layout: keep the editor in normal document flow so the
+   modal actions can never slide underneath its inputs or strength meter. */
+.profile-modal-panel .profile-password-section{
+  display:block!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border-radius:18px!important;
+}
+
+.profile-modal-panel .profile-password-section-toggle{
+  min-height:68px!important;
+  padding:12px 18px!important;
+  border-radius:17px!important;
+}
+
+.profile-modal-panel .profile-password-section.is-open .profile-password-section-toggle{
+  border-radius:17px 17px 0 0!important;
+}
+
+.profile-modal-panel .profile-password-section.is-open .profile-password-editor{
+  position:static!important;
+  box-sizing:border-box!important;
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:20px 22px 24px!important;
+  overflow:visible!important;
+}
+
+.profile-modal-panel .profile-password-editor .profile-section-title{
+  margin:0 0 18px!important;
+  padding:0!important;
+}
+
+.profile-modal-panel .profile-password-editor .profile-section-title>strong{
+  color:#173d2f!important;
+  font-size:1rem!important;
+  line-height:1.3!important;
+}
+
+.profile-modal-panel .profile-password-grid,
+.profile-modal-panel .profile-password-section.is-open .profile-password-grid{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  align-items:start!important;
+  gap:14px!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  overflow:visible!important;
+}
+
+.profile-modal-panel .profile-password-grid>label{
+  display:grid!important;
+  grid-template-rows:auto minmax(50px,auto)!important;
+  align-content:start!important;
+  gap:8px!important;
+  margin:0!important;
+  color:#3f5168!important;
+  font-size:.8rem!important;
+  font-weight:850!important;
+}
+
+.profile-modal-panel .profile-password-grid input{
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:50px!important;
+  min-height:50px!important;
+  margin:0!important;
+  padding:0 15px!important;
+  border:1px solid #cfe2d8!important;
+  border-radius:12px!important;
+  background:#fff!important;
+  color:#183b2e!important;
+  font-size:.84rem!important;
+  font-weight:650!important;
+  box-shadow:0 5px 14px rgba(16,83,56,.04)!important;
+}
+
+.profile-modal-panel .profile-password-grid input:focus{
+  border-color:#24a66f!important;
+  box-shadow:0 0 0 4px rgba(36,166,111,.12)!important;
+  outline:none!important;
+}
+
+.profile-modal-panel .profile-password-strength{
+  display:grid!important;
+  gap:8px!important;
+  width:100%!important;
+  margin:17px 0 0!important;
+  padding:0!important;
+  clear:both!important;
+}
+
+.profile-modal-panel .profile-password-strength>span{height:7px!important}
+.profile-modal-panel .profile-password-strength small{line-height:1.35!important}
+.profile-modal-panel .profile-form-actions{position:relative!important;z-index:1!important;clear:both!important;margin-top:18px!important}
+
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-password-editor .profile-section-title>strong{color:#edf8ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-password-grid>label{color:#c2d4e2!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-password-grid input{border-color:#355970!important;background:#0d2031!important;color:#edf7ff!important;box-shadow:0 7px 18px rgba(0,0,0,.17)!important}
+body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-modal-panel .profile-password-grid input:focus{border-color:#71c6f6!important;box-shadow:0 0 0 4px rgba(96,165,250,.15)!important}
+
+@media(min-width:760px) and (max-width:1050px){
+  .profile-modal-panel .profile-password-grid,.profile-modal-panel .profile-password-section.is-open .profile-password-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .profile-modal-panel .profile-password-grid>label:last-child{grid-column:1/-1!important}
+}
+
+@media(max-width:759px){
+  .profile-modal-panel .profile-password-section.is-open .profile-password-editor{min-height:0!important;padding:17px 14px 22px!important}
+  .profile-modal-panel .profile-password-grid,.profile-modal-panel .profile-password-section.is-open .profile-password-grid{grid-template-columns:1fr!important;min-height:0!important}
+  .profile-modal-panel .profile-password-grid>label:last-child{grid-column:auto!important}
+}

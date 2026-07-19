@@ -1,0 +1,846 @@
+/* =========================================================
+   Department Profile Page — Polish & Refinements
+   Micro-interactions, animations, scrollbar styling,
+   modal transitions, and visual hierarchy enhancements.
+   ========================================================= */
+
+/* ── Scrollbar styling for the people tab panels ──────────── */
+.department-people-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.25) transparent;
+  transition: scrollbar-color 200ms ease;
+}
+
+.department-people-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.department-people-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.department-people-scroll::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.2);
+  border-radius: 12px;
+  transition: background 200ms ease;
+}
+
+.department-people-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.4);
+}
+
+/* ── People card entry stagger animation ─────────────────── */
+.dept-profile-person-card {
+  animation: peopleCardFadeIn 340ms ease-out both;
+  animation-delay: calc(var(--people-card-index, 0) * 45ms);
+  will-change: transform, opacity;
+}
+
+@keyframes peopleCardFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── People card hover glow ring ─────────────────────────── */
+.dept-profile-person-card {
+  --card-glow-color: rgba(96, 165, 250, 0.08);
+}
+
+.dept-profile-person-card:hover {
+  border-color: rgba(147, 197, 253, 0.32) !important;
+  box-shadow:
+    0 20px 42px rgba(3, 10, 24, 0.22),
+    0 0 0 4px var(--card-glow-color);
+  transition:
+    transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.dept-profile-person-card:active {
+  transform: scale(0.985);
+}
+
+/* ── Rating view button micro-interaction ────────────────── */
+.rating-view-button {
+  position: relative;
+  overflow: hidden;
+  transition:
+    all 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.rating-view-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    transparent 48%
+  );
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+.rating-view-button:hover::after {
+  opacity: 1;
+}
+
+.rating-view-button:hover {
+  transform: translateY(-1px);
+}
+
+.rating-view-button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.rating-view-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.rating-view-button:disabled::after {
+  opacity: 0;
+}
+
+/* ── People tab animation ────────────────────────────────── */
+.department-people-tab {
+  position: relative;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+/* Inactive tabs must remain visually secondary. A broad green button rule
+   elsewhere in the dashboard can otherwise make every tab look selected. */
+.admin-body:not(.dark-mode) .department-people-directory .department-people-tab:not(.active),
+.admin-dashboard-body:not(.dark-mode) .department-people-directory .department-people-tab:not(.active) {
+  opacity: 1;
+  border: 1px solid rgba(22, 131, 88, 0.2);
+  background: linear-gradient(145deg, #ffffff 0%, #f3faf6 100%);
+  color: #254c3d;
+  box-shadow:
+    0 7px 18px rgba(15, 77, 56, 0.07),
+    inset 0 1px 0 #ffffff;
+}
+
+.admin-body:not(.dark-mode) .department-people-directory .department-people-tab:not(.active) strong,
+.admin-dashboard-body:not(.dark-mode) .department-people-directory .department-people-tab:not(.active) strong {
+  background: #e4f4eb;
+  color: #126b49;
+  box-shadow: inset 0 0 0 1px rgba(22, 131, 88, 0.08);
+}
+
+.admin-body:not(.dark-mode) .department-people-directory .department-people-tab:not(.active):hover,
+.admin-dashboard-body:not(.dark-mode) .department-people-directory .department-people-tab:not(.active):hover {
+  border-color: rgba(22, 131, 88, 0.42);
+  background: linear-gradient(145deg, #f5fcf8, #e7f6ed);
+  color: #123f2e;
+  box-shadow: 0 10px 24px rgba(15, 77, 56, 0.11);
+}
+
+.department-people-tab:hover:not(.active) {
+  background: linear-gradient(145deg, #f4fcf7, #eaf8f0);
+  border-color: rgba(22, 131, 88, 0.34);
+  color: #174b37;
+}
+
+.department-people-tab.active {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.2), transparent 34%),
+    linear-gradient(135deg, #249b61 0%, #168358 58%, #0f6c4d 100%);
+  border-color: #168358;
+  color: #ffffff;
+  box-shadow:
+    0 12px 26px rgba(22, 131, 88, 0.22),
+    0 0 0 3px rgba(22, 131, 88, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  font-weight: 900;
+}
+
+.department-people-tab.active strong {
+  min-width: 32px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f5138;
+  box-shadow: 0 3px 10px rgba(4, 47, 31, 0.18);
+}
+
+.department-people-tab:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.6);
+  outline-offset: 2px;
+}
+
+/* ── Tab panel transition ────────────────────────────────── */
+.department-people-tab-panel {
+  animation: tabPanelFadeIn 260ms ease-out;
+}
+
+@keyframes tabPanelFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── People filter row styling ───────────────────────────── */
+.department-people-filter-row {
+  transition: all 200ms ease;
+}
+
+.department-people-filter-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  border-radius: 10px;
+  border: 1px solid rgba(132, 178, 239, 0.14);
+  background: rgba(15, 23, 42, 0.34);
+  padding: 6px 10px;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.department-people-filter-row label:focus-within {
+  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(15, 23, 42, 0.42);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.08);
+}
+
+.department-people-filter-row label svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: opacity 180ms ease;
+}
+
+.department-people-filter-row label:focus-within svg {
+  opacity: 0.8;
+}
+
+.department-people-filter-row input,
+.department-people-filter-row select {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 0.8125rem;
+  padding: 2px 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.department-people-filter-row input:focus,
+.department-people-filter-row select:focus {
+  outline: none;
+}
+
+.department-people-reset {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(132, 178, 239, 0.14);
+  background: transparent;
+  color: rgba(148, 163, 184, 0.7);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 180ms ease;
+  white-space: nowrap;
+}
+
+.department-people-reset:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(147, 197, 253, 0.24);
+  color: #94a3b8;
+}
+
+.department-people-reset:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ── Light-mode overrides for people filter / search ────── */
+.admin-body:not(.dark-mode) .department-people-filter-row label,
+.admin-dashboard-body:not(.dark-mode) .department-people-filter-row label {
+  background: rgba(241, 245, 249, 0.7);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.admin-body:not(.dark-mode) .department-people-filter-row label:focus-within,
+.admin-dashboard-body:not(.dark-mode) .department-people-filter-row label:focus-within {
+  background: #ffffff;
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.admin-body:not(.dark-mode) .programs-search-box > div,
+.admin-dashboard-body:not(.dark-mode) .programs-search-box > div {
+  background: rgba(241, 245, 249, 0.7);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.admin-body:not(.dark-mode) .programs-search-box > div:focus-within,
+.admin-dashboard-body:not(.dark-mode) .programs-search-box > div:focus-within {
+  background: #ffffff;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.admin-body:not(.dark-mode) .department-people-reset,
+.admin-dashboard-body:not(.dark-mode) .department-people-reset {
+  border-color: rgba(148, 163, 184, 0.2);
+  color: rgba(71, 85, 105, 0.6);
+}
+
+.admin-body:not(.dark-mode) .department-people-reset:hover:not(:disabled),
+.admin-dashboard-body:not(.dark-mode) .department-people-reset:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.18);
+  color: #475569;
+}
+
+/* ── Program table row entrance ──────────────────────────── */
+.programs-table-row {
+  animation: programRowFadeIn 260ms ease-out both;
+  animation-delay: calc(var(--program-row-index, 0) * 30ms);
+}
+
+@keyframes programRowFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ── Program table header sort button ────────────────────── */
+.programs-th {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 150ms ease;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.programs-th:hover {
+  color: rgba(147, 197, 253, 0.9);
+}
+
+.programs-th:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Program action buttons ──────────────────────────────── */
+.program-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    all 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.program-action-btn.edit:hover {
+  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(147, 197, 253, 0.22);
+  transform: translateY(-1px);
+}
+
+.program-action-btn.archive:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  transform: translateY(-1px);
+}
+
+.program-action-btn:active {
+  transform: scale(0.9);
+}
+
+.program-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.program-action-btn:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.5);
+  outline-offset: 1px;
+}
+
+/* ── Program insights strip ──────────────────────────────── */
+.programs-insight-strip article {
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.programs-insight-strip article:hover {
+  transform: translateY(-2px);
+  background: rgba(96, 165, 250, 0.06);
+}
+
+/* ── Search box in programs ──────────────────────────────── */
+.programs-search-box {
+  position: relative;
+}
+
+.programs-search-box > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(132, 178, 239, 0.14);
+  background: rgba(15, 23, 42, 0.3);
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.programs-search-box > div:focus-within {
+  border-color: rgba(96, 165, 250, 0.38);
+  background: rgba(15, 23, 42, 0.4);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.08);
+}
+
+.programs-search-box input {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 0.85rem;
+  width: 100%;
+  padding: 2px 0;
+}
+
+.programs-search-box input:focus {
+  outline: none;
+}
+
+.programs-search-box input::placeholder {
+  color: rgba(148, 163, 184, 0.4);
+}
+
+.programs-search-box svg {
+  flex-shrink: 0;
+  opacity: 0.4;
+  transition: opacity 180ms ease;
+}
+
+.programs-search-box > div:focus-within svg {
+  opacity: 0.7;
+}
+
+/* ── Program modal animation ─────────────────────────────── */
+.program-modal-panel {
+  animation: modalSlideIn 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.people-modal-backdrop {
+  animation: backdropFadeIn 200ms ease-out;
+}
+
+@keyframes backdropFadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ── Modal close button ──────────────────────────────────── */
+.modal-icon-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(132, 178, 239, 0.12);
+  background: transparent;
+  cursor: pointer;
+  transition: all 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-icon-close:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  transform: rotate(90deg) scale(1.05);
+}
+
+.modal-icon-close:active {
+  transform: rotate(90deg) scale(0.92);
+}
+
+/* ── Form error alert ────────────────────────────────────── */
+.program-form-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  font-size: 0.84rem;
+  animation: shakeAlert 360ms ease-out;
+}
+
+@keyframes shakeAlert {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+/* ── Primary button polish ───────────────────────────────── */
+.primary-button {
+  position: relative;
+  overflow: hidden;
+  transition:
+    all 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.primary-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.18), transparent 50%);
+  opacity: 0;
+  transition: opacity 240ms ease;
+  pointer-events: none;
+}
+
+.primary-button:hover::after {
+  opacity: 1;
+}
+
+.primary-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.28);
+}
+
+.primary-button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Ghost button polish ─────────────────────────────────── */
+.ghost-button {
+  transition:
+    all 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ghost-button:hover {
+  background: rgba(96, 165, 250, 0.08);
+  border-color: rgba(147, 197, 253, 0.18);
+  transform: translateY(-1px);
+}
+
+.ghost-button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ── Stats module card hover ─────────────────────────────── */
+.stat-grid article {
+  transition:
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+  cursor: default;
+  will-change: transform;
+}
+
+.stat-grid article:hover {
+  transform: translateY(-4px);
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(59, 130, 246, 0.04));
+  border-color: rgba(147, 197, 253, 0.18);
+  box-shadow: 0 12px 28px rgba(3, 10, 24, 0.14);
+}
+
+/* ── Dean showcase card ──────────────────────────────────── */
+.dept-dean-showcase {
+  transition:
+    transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 240ms ease,
+    border-color 240ms ease;
+}
+
+.dept-dean-showcase:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 48px rgba(3, 10, 24, 0.18);
+  border-color: rgba(147, 197, 253, 0.18);
+}
+
+.dept-dean-profile-row {
+  transition: background 180ms ease;
+}
+
+/* ── People avatar refinements ───────────────────────────── */
+.person-avatar {
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.dept-profile-person-card:hover .person-avatar {
+  transform: scale(1.06);
+  border-color: rgba(147, 197, 253, 0.3);
+  box-shadow: 0 6px 16px rgba(96, 165, 250, 0.12);
+}
+
+.dept-dean-avatar {
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 200ms ease;
+}
+
+.dept-dean-showcase:hover .dept-dean-avatar {
+  transform: scale(1.05);
+}
+
+/* ── Status badge mini glow ──────────────────────────────── */
+.status-badge.active {
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.12);
+  transition: box-shadow 200ms ease;
+}
+
+.status-badge.active:hover {
+  box-shadow: 0 0 18px rgba(34, 197, 94, 0.2);
+}
+
+/* ── Program head helper text ────────────────────────────── */
+.program-head-helper {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: rgba(148, 163, 184, 0.7);
+  line-height: 1.4;
+}
+
+/* ── Skeleton loading animation ──────────────────────────── */
+.programs-table-skeleton,
+.department-people-skeleton {
+  animation: skeletonPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.programs-table-skeleton span,
+.department-people-skeleton span:not(.sr-only) {
+  display: block;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.06) 0%, rgba(147, 197, 253, 0.1) 30%, rgba(96, 165, 250, 0.06) 60%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Department people directory heading icon ────────────── */
+.department-people-heading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(147, 197, 253, 0.14);
+  color: rgba(147, 197, 253, 0.7);
+  flex-shrink: 0;
+}
+
+/* ── Page-level section stagger entrance ────────────────── */
+.department-profile-page {
+  --stagger-delay-base: 60ms;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+/* Keep every department module in the single full-width page track. The
+   peer monitor used to inherit a narrow implicit grid column and then clip
+   its cards because the inner panel intentionally hides overflow. */
+.department-profile-page > * {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.department-profile-page .peer-monitor-section,
+.department-profile-page .peer-monitor-section > .peer-assignment-panel {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.department-profile-page .peer-monitor-section .peer-assignment-head > div:first-child,
+.department-profile-page .peer-monitor-section .peer-assignment-group,
+.department-profile-page .peer-monitor-section .peer-assignment-list,
+.department-profile-page .peer-monitor-section .peer-assignment-card,
+.department-profile-page .peer-monitor-section .peer-pair-main,
+.department-profile-page .peer-monitor-section .peer-person,
+.department-profile-page .peer-monitor-section .peer-person > div:last-child {
+  min-width: 0;
+}
+
+@media (min-width: 1081px) {
+  .department-profile-page .peer-monitor-section .peer-assignment-groups.is-compact .peer-assignment-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .department-profile-page .peer-monitor-section .peer-assignment-head {
+    flex-direction: column;
+  }
+
+  .department-profile-page .peer-monitor-section .peer-assignment-score {
+    width: 100%;
+  }
+
+  .department-profile-page .peer-monitor-section .peer-assignment-stats {
+    padding-inline: 14px;
+  }
+}
+
+.dept-profile-page-section {
+  animation: sectionFadeSlideIn 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--section-index, 0) * var(--stagger-delay-base, 60ms));
+  will-change: transform, opacity;
+}
+
+/* Nested sections within already-animated parents get their own
+   subtle entrance when they first render (e.g. programs table). */
+.dept-profile-page-section-nested {
+  animation: sectionFadeSlideIn 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--section-index, 0) * 30ms);
+  will-change: transform, opacity;
+}
+
+@keyframes sectionFadeSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Screen reader only utilities ────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ── Reduced motion — suppress animations ───────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .dept-profile-page-section,
+  .dept-profile-page-section-nested,
+  .dept-profile-person-card,
+  .department-people-tab-panel,
+  .programs-table-row,
+  .program-modal-panel,
+  .people-modal-backdrop,
+  .program-form-error,
+  .programs-table-skeleton,
+  .department-people-skeleton,
+  .programs-table-skeleton span,
+  .department-people-skeleton span,
+  strong[data-counted] {
+    animation: none !important;
+  }
+
+  .dept-profile-page-section,
+  .dept-profile-page-section-nested,
+  .dept-profile-person-card,
+  .stat-grid article,
+  .dept-dean-showcase,
+  .person-avatar,
+  .dept-dean-avatar,
+  .rating-view-button,
+  .primary-button,
+  .ghost-button,
+  .program-action-btn,
+  .modal-icon-close,
+  .department-people-tab,
+  .programs-insight-strip article,
+  .programs-search-box > div,
+  .department-people-filter-row label {
+    transition: none !important;
+  }
+
+  .dept-profile-page-section:hover,
+  .dept-profile-page-section-nested:hover,
+  .dept-profile-person-card:hover,
+  .stat-grid article:hover,
+  .dept-dean-showcase:hover {
+    transform: none !important;
+  }
+}

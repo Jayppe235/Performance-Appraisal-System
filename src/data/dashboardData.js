@@ -1,0 +1,9 @@
+export const aiSuggestions = {};
+export const metrics = {};
+export const people = [];
+export const departments = [];
+export const casPrograms = [];
+export const factors = [];
+export const departmentAiInsights = [];
+export const reports = [];
+export const evaluations = [];

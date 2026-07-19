@@ -1,0 +1,375 @@
+/* Dark-mode color consistency for the existing People Management dialogs. */
+.people-account-modal .people-modal-heading>span {
+  border:1px solid rgba(15,118,80,.18);
+  background:linear-gradient(145deg,#159764,#08734d);
+  color:#fff!important;
+  box-shadow:0 8px 18px rgba(8,115,77,.20);
+}
+.people-account-modal .people-modal-heading>span svg {
+  color:#fff!important;
+  stroke:#fff!important;
+  stroke-width:2.1;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.people-account-modal,.people-inline-modal) {
+  --dark-accent-primary:#60a5fa;
+  --dark-accent-secondary:#38bdf8;
+  --dark-accent-soft:#93c5fd;
+  --dark-accent-surface:rgba(59,130,246,.10);
+  --dark-accent-border:rgba(96,165,250,.35);
+  --dark-focus-ring:rgba(96,165,250,.30);
+  --theme-primary:#60a5fa;
+  --theme-primary-strong:#93c5fd;
+  --theme-primary-soft:rgba(59,130,246,.10);
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-modal-heading>span {
+  border:1px solid rgba(96,165,250,.25)!important;
+  background:rgba(59,130,246,.16)!important;
+  color:#60a5fa!important;
+  box-shadow:0 9px 20px rgba(30,64,175,.14)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-modal-heading>span svg {
+  color:#60a5fa!important;
+  stroke:#60a5fa!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-avatar-card {
+  border-color:rgba(96,165,250,.35)!important;
+  background:rgba(30,64,175,.08)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-avatar-card:hover {
+  border-color:rgba(96,165,250,.55)!important;
+  background:rgba(59,130,246,.10)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal :is(.people-field-label,.people-form-section legend,.people-file-control,.people-inline-add) svg { color:#60a5fa!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-form-section legend { color:#93c5fd!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-generate-password {
+  border:0!important;background:linear-gradient(135deg,#2563eb,#3b82f6,#60a5fa)!important;color:#fff!important;box-shadow:0 8px 18px rgba(37,99,235,.22)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-generate-password:hover { transform:translateY(-1px);filter:brightness(1.07); }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-generate-password:active { transform:none; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-generate-password:focus-visible { outline:3px solid rgba(96,165,250,.30);outline-offset:2px; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-status-control { background:#172235!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-status-control button.active {
+  border:1px solid rgba(96,165,250,.35)!important;background:rgba(59,130,246,.16)!important;color:#93c5fd!important;box-shadow:none!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-status-control button.active svg { color:#38bdf8!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-cancel-account {
+  border-color:rgba(148,163,184,.25)!important;background:#1e293b!important;color:#e2e8f0!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-cancel-account:hover {
+  border-color:rgba(96,165,250,.40)!important;background:rgba(59,130,246,.12)!important;color:#bfdbfe!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-save-account {
+  background:linear-gradient(135deg,#2563eb,#3b82f6,#60a5fa)!important;color:#fff!important;box-shadow:0 10px 24px rgba(37,99,235,.24)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-password-rules span.met { color:#93c5fd!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-password-rules span.met svg { color:#38bdf8!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal :is(input,select,textarea):focus,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-inline-modal :is(input,select,textarea):focus {
+  border-color:#60a5fa!important;box-shadow:0 0 0 3px rgba(96,165,250,.18)!important;outline:none!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-input-action button:hover { background:rgba(96,165,250,.14)!important;color:#93c5fd!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-inline-modal header>span { border:1px solid rgba(96,165,250,.25)!important;background:rgba(59,130,246,.16)!important;color:#60a5fa!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-inline-modal-actions button[type=submit] { background:linear-gradient(135deg,#2563eb,#3b82f6,#60a5fa)!important;color:#fff!important; }
+
+/* Department modal uses the same navy/light-blue dark-mode system. */
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal {
+  --theme-surface:#101b2c;
+  --theme-text:#edf5ff;
+  --theme-muted:#9fb0c5;
+  --theme-border:#2b4059;
+  --theme-primary:#60a5fa;
+  --theme-primary-strong:#93c5fd;
+  --theme-primary-soft:rgba(59,130,246,.10);
+  border-color:#2b4059!important;
+  background:#0c1728!important;
+  color:#edf5ff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-modal-header {
+  border-bottom-color:#29415e!important;
+  background:#0d192b!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-modal-heading>span {
+  border:1px solid rgba(96,165,250,.28)!important;
+  background:rgba(59,130,246,.16)!important;
+  color:#60a5fa!important;
+  box-shadow:0 8px 18px rgba(30,64,175,.16)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .modal-icon-close {
+  border-color:rgba(96,165,250,.42)!important;
+  background:#2563b9!important;
+  color:#fff!important;
+  box-shadow:0 0 0 4px rgba(59,130,246,.14)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-form-section {
+  border-color:#2b4059!important;
+  background:#111e31!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-form-section legend,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal :is(.people-field-label svg,.people-form-section legend svg) {
+  color:#93c5fd!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal :is(input,select,textarea) {
+  border-color:#405b7b!important;
+  background:#0d1b2e!important;
+  color:#edf5ff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal :is(input,textarea)::placeholder { color:#8292a8!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal :is(input,select,textarea):focus {
+  border-color:#60a5fa!important;
+  box-shadow:0 0 0 3px rgba(96,165,250,.18)!important;
+  outline:none!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-department-logo-card {
+  border-color:rgba(96,165,250,.34)!important;
+  background:rgba(30,64,175,.08)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-department-logo-preview {
+  border-color:#36516f!important;
+  background:#0d1b2e!important;
+  color:#93c5fd!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-assignment-summary {
+  border:1px solid rgba(96,165,250,.28)!important;
+  background:#101f33!important;
+  color:#edf5ff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-assignment-summary>strong { color:#93c5fd!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-assignment-summary span { color:#9fb0c5!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-assignment-summary b { color:#edf5ff!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-department-form-footer {
+  border-top-color:#29415e!important;
+  background:rgba(12,23,40,.97)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-department-form-footer>button:first-child {
+  border-color:#334a66!important;
+  background:#172337!important;
+  color:#e2e8f0!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-modal .people-save-department {
+  background:linear-gradient(135deg,#2563eb,#3b82f6,#60a5fa)!important;
+  color:#fff!important;
+  box-shadow:0 9px 20px rgba(37,99,235,.22)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-form-scroll {
+  scrollbar-color:#52677f #101b2c;
+  scrollbar-width:thin;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-form-scroll::-webkit-scrollbar { width:10px; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-form-scroll::-webkit-scrollbar-track { background:#101b2c; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-form-scroll::-webkit-scrollbar-thumb { border:2px solid #101b2c;border-radius:99px;background:#52677f; }
+
+/* Final dark sidebar navigation palette — loaded after legacy green rules. */
+.admin-body.dark-mode .admin-sidebar,
+.admin-dashboard-body.dark-mode .admin-sidebar {
+  --sidebar-bg:#050c14!important;
+  --sidebar-bg-soft:#0d1928!important;
+  --sidebar-border:#29405a!important;
+  --sidebar-text:#a9bfd9!important;
+  --sidebar-text-strong:#edf6ff!important;
+  --sidebar-active:#60a5fa!important;
+  --sidebar-active-strong:#dbeafe!important;
+  --sidebar-active-bg:rgba(59,130,246,.12)!important;
+  --sidebar-hover-bg:rgba(96,165,250,.08)!important;
+  border-color:#29405a!important;
+  background:#050c14!important;
+}
+.admin-body.dark-mode .sidebar-menu a.active,
+.admin-dashboard-body.dark-mode .sidebar-menu a.active {
+  border-color:rgba(96,165,250,.34)!important;
+  background:#0d1a2a!important;
+  background-image:none!important;
+  color:#e2efff!important;
+  box-shadow:inset 0 0 0 1px rgba(96,165,250,.04)!important;
+}
+.admin-body.dark-mode .sidebar-menu a.active::before,
+.admin-dashboard-body.dark-mode .sidebar-menu a.active::before {
+  background:#60a5fa!important;
+  box-shadow:0 0 10px rgba(96,165,250,.38)!important;
+}
+.admin-body.dark-mode .sidebar-menu a.active .menu-icon,
+.admin-dashboard-body.dark-mode .sidebar-menu a.active .menu-icon,
+.admin-body.dark-mode .sidebar-menu a[data-nav-key].active .menu-icon,
+.admin-dashboard-body.dark-mode .sidebar-menu a[data-nav-key].active .menu-icon {
+  border-color:#3d638b!important;
+  background:#142b43!important;
+  background-image:none!important;
+  color:#8cc4ff!important;
+  box-shadow:none!important;
+}
+.admin-body.dark-mode .sidebar-menu a.active .menu-icon svg,
+.admin-dashboard-body.dark-mode .sidebar-menu a.active .menu-icon svg {
+  color:#8cc4ff!important;
+  stroke:#8cc4ff!important;
+}
+@media(min-width:1121px){
+  .admin-body.dark-mode.sidebar-collapsed .sidebar-menu a.active,
+  .admin-dashboard-body.dark-mode.sidebar-collapsed .sidebar-menu a.active {
+    border-color:transparent!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+}
+
+/* Dark-mode account dropdown: navy surfaces with blue decorative accents. */
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown {
+  border-color:#2e4762!important;
+  background:#0b1727!important;
+  color:#edf5ff!important;
+  box-shadow:0 22px 48px rgba(0,0,0,.42)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown-head {
+  border-bottom-color:#29415b!important;
+  background:linear-gradient(135deg,#101f33,#0d192a)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown-head strong { color:#f1f7ff!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown-head small { color:#9fb4cc!important; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown-avatar {
+  border-color:rgba(96,165,250,.4)!important;
+  background:linear-gradient(145deg,#1d4f83,#173a62)!important;
+  color:#dbeafe!important;
+  box-shadow:0 7px 16px rgba(20,73,128,.25)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown>button {
+  border-color:transparent!important;
+  background:#0e1c2e!important;
+  color:#e5eef9!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown>button>svg {
+  border-color:#365372!important;
+  background:#13263c!important;
+  color:#7fbdff!important;
+  stroke:#7fbdff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown>button:hover {
+  border-color:rgba(96,165,250,.28)!important;
+  background:rgba(59,130,246,.13)!important;
+  color:#bfdbfe!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown>button:hover>svg {
+  border-color:rgba(96,165,250,.5)!important;
+  background:rgba(59,130,246,.18)!important;
+  color:#93c5fd!important;
+  stroke:#93c5fd!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-theme-badge {
+  border-color:rgba(96,165,250,.3)!important;
+  background:rgba(59,130,246,.15)!important;
+  color:#93c5fd!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown>button.danger {
+  border-color:rgba(248,113,113,.16)!important;
+  background:rgba(127,29,29,.12)!important;
+  color:#fca5a5!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .account-dropdown>button.danger>svg {
+  border-color:rgba(248,113,113,.28)!important;
+  background:rgba(127,29,29,.2)!important;
+  color:#fca5a5!important;
+  stroke:#fca5a5!important;
+}
+
+/* Compact Edit User Account presentation. */
+.people-account-modal:has(.people-edit-profile-header){width:min(920px,calc(100vw - 32px));max-height:90vh}.people-edit-profile-header{display:grid;grid-template-columns:88px minmax(0,1fr) auto;align-items:center;gap:16px;padding:16px 18px;border:1px solid var(--theme-border,#dbe5df);border-radius:16px;background:linear-gradient(135deg,var(--theme-primary-soft,#effaf5),var(--theme-surface,#fff))}.people-edit-avatar{width:88px;height:88px;display:grid;place-items:center;overflow:hidden;border:2px solid var(--theme-surface,#fff);border-radius:50%;background:var(--theme-primary-soft,#effaf5);color:var(--theme-primary-strong,#08734d);font-size:1.35rem;font-weight:900;box-shadow:0 8px 20px rgba(15,23,42,.12)}.people-edit-avatar img{width:100%;height:100%;object-fit:cover}.people-edit-profile-copy{min-width:0}.people-edit-profile-copy h3,.people-edit-profile-copy p{margin:0}.people-edit-profile-copy h3{color:var(--theme-text,#17231f);font-size:1.25rem}.people-edit-profile-copy p{margin:3px 0 8px;color:var(--theme-muted,#64748b);font-size:.82rem}.people-edit-profile-copy>div{display:flex;flex-wrap:wrap;gap:7px}.people-role-badge{min-height:25px;padding:0 8px;display:inline-flex;align-items:center;gap:4px;border:1px solid color-mix(in srgb,var(--theme-primary,#16845b) 25%,var(--theme-border,#dbe5df));border-radius:99px;background:var(--theme-primary-soft,#effaf5);color:var(--theme-primary-strong,#08734d);font-size:.68rem;font-weight:800}.people-edit-photo-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.people-edit-photo-actions label,.people-edit-photo-actions button{min-height:38px;padding:0 11px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--theme-border,#dbe5df);border-radius:10px;background:var(--theme-surface,#fff);color:var(--theme-text,#17231f);font-size:.76rem;font-weight:750;cursor:pointer}.people-edit-photo-actions label{background:var(--theme-primary,#168358);color:#fff}.people-edit-photo-actions input{position:absolute;width:1px;height:1px;opacity:0}.people-edit-photo-actions button:disabled{opacity:.45;cursor:not-allowed}.people-security-head{display:flex;align-items:center;justify-content:space-between;gap:14px}.people-security-head>div{display:grid;gap:3px}.people-security-head small{color:var(--theme-muted,#64748b);font-size:.75rem}.people-security-head button{min-height:38px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--theme-border,#dbe5df);border-radius:10px;background:var(--theme-surface,#fff);color:var(--theme-primary-strong,#08734d);font-weight:750}.people-security-fields{margin-top:14px;padding-top:14px;border-top:1px solid var(--theme-border,#dbe5df);animation:people-field-in .2s ease both}.people-user-footer-primary{display:flex;align-items:center;gap:9px}.people-user-form-footer .people-reset-account{border:0;background:transparent;color:var(--theme-muted,#64748b);box-shadow:none}.people-user-form-footer .people-reset-account:hover{background:var(--theme-primary-soft,#effaf5);color:var(--theme-primary-strong,#08734d)}.people-account-modal .people-user-form-scroll{scrollbar-width:thin;scrollbar-color:rgba(22,131,88,.35) transparent}.people-account-modal .people-user-form-scroll::-webkit-scrollbar{width:7px}.people-account-modal .people-user-form-scroll::-webkit-scrollbar-track{background:transparent}.people-account-modal .people-user-form-scroll::-webkit-scrollbar-thumb{border-radius:99px;background:rgba(22,131,88,.35)}.people-account-modal .people-user-form-scroll::-webkit-scrollbar-thumb:hover{background:rgba(22,131,88,.6)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-edit-profile-header{border-color:rgba(96,165,250,.2);background:linear-gradient(135deg,rgba(59,130,246,.11),rgba(15,23,42,.35))}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-edit-avatar{border-color:#284460;background:#142a42;color:#93c5fd;box-shadow:0 8px 20px rgba(0,0,0,.24)}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-role-badge{border-color:rgba(96,165,250,.3);background:rgba(59,130,246,.13);color:#93c5fd}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-edit-photo-actions label{border-color:rgba(96,165,250,.4);background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-edit-photo-actions button{border-color:#344b66;background:#172337;color:#cbd5e1}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-security-head button{border-color:rgba(96,165,250,.34);background:rgba(59,130,246,.12);color:#bfdbfe}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-user-form-footer .people-reset-account{color:#94a3b8}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-user-form-footer .people-reset-account:hover{background:rgba(59,130,246,.1);color:#bfdbfe}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-user-form-scroll{scrollbar-color:rgba(96,165,250,.4) transparent}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-user-form-scroll::-webkit-scrollbar-thumb{background:rgba(96,165,250,.35)}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-user-form-scroll::-webkit-scrollbar-thumb:hover{background:rgba(96,165,250,.6)}
+@media(max-width:700px){.people-edit-profile-header{grid-template-columns:68px minmax(0,1fr)}.people-edit-avatar{width:68px;height:68px}.people-edit-photo-actions{grid-column:1/-1;justify-content:flex-start}.people-security-head{align-items:flex-start;display:grid}.people-security-head button{width:100%;justify-content:center}.people-user-form-footer:has(.people-reset-account){align-items:stretch;display:grid;grid-template-columns:1fr}.people-user-footer-primary{display:grid;grid-template-columns:1fr 1fr}.people-user-form-footer .people-reset-account{width:100%}}
+@media(max-width:430px){.people-edit-profile-header{grid-template-columns:54px minmax(0,1fr);gap:10px;padding:12px}.people-edit-avatar{width:54px;height:54px}.people-edit-profile-copy h3{font-size:1rem}.people-edit-photo-actions>*{flex:1;justify-content:center}.people-user-footer-primary{grid-template-columns:1fr}.people-user-footer-primary button{width:100%}}
+
+/* Structural edit-mode shell: identity header is fixed; only sections scroll. */
+.people-account-modal:has(.people-edit-profile-header-fixed)>.people-modal-header{display:none!important}.people-account-modal .people-user-form-scroll>.people-edit-profile-header{display:none!important}.people-edit-profile-header-fixed{flex:0 0 auto;position:relative;grid-template-columns:96px minmax(0,1fr) auto 42px;margin:0;padding:18px 22px;border:0;border-bottom:1px solid var(--theme-border,#dbe5df);border-radius:0;background:linear-gradient(135deg,var(--theme-primary-soft,#effaf5),var(--theme-surface,#fff));z-index:3}.people-edit-profile-header-fixed .people-edit-avatar{width:96px;height:96px}.people-department-badge{min-height:25px;padding:0 8px;display:inline-flex;align-items:center;gap:4px;border:1px solid var(--theme-border,#dbe5df);border-radius:99px;background:var(--theme-surface,#fff);color:var(--theme-muted,#64748b);font-size:.68rem;font-weight:750}.people-edit-close{align-self:start;width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--theme-border,#dbe5df);border-radius:12px;background:var(--theme-surface,#fff);color:var(--theme-muted,#64748b)}.people-account-modal:has(.people-edit-profile-header-fixed) .people-user-form-scroll{padding-block:18px;gap:14px}.people-account-modal:has(.people-edit-profile-header-fixed) .people-form-section{padding:17px 18px}.people-account-modal:has(.people-edit-profile-header-fixed) .people-assignment-summary{display:none}.people-account-modal .people-password-strength>span{height:7px;border-radius:3px;background:repeating-linear-gradient(90deg,#d9e2ec 0 calc(25% - 4px),transparent calc(25% - 4px) 25%)}.people-account-modal .people-password-strength i{border-radius:3px;background:repeating-linear-gradient(90deg,currentColor 0 calc(25% - 4px),transparent calc(25% - 4px) 25%);color:#60a5fa}.people-account-modal .people-password-strength.weak i{color:#94a3b8}.people-account-modal .people-password-strength.fair i{color:#60a5fa}.people-account-modal .people-password-strength.strong i{color:#2563eb}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-edit-profile-header-fixed{border-bottom-color:rgba(96,165,250,.18);background:linear-gradient(135deg,#102039,#0d192b)}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-department-badge{border-color:rgba(96,165,250,.22);background:rgba(59,130,246,.08);color:#9fb9d5}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-edit-close{border-color:rgba(96,165,250,.3);background:#15243a;color:#bfdbfe}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-edit-close:hover{background:rgba(59,130,246,.16);color:#fff}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-password-strength>span{background:repeating-linear-gradient(90deg,#27364a 0 calc(25% - 4px),transparent calc(25% - 4px) 25%)}
+@media(max-width:760px){.people-edit-profile-header-fixed{grid-template-columns:72px minmax(0,1fr) 40px;padding:14px}.people-edit-profile-header-fixed .people-edit-avatar{width:72px;height:72px}.people-edit-profile-header-fixed .people-edit-photo-actions{grid-column:1/-1}.people-edit-close{grid-column:3;grid-row:1}.people-account-modal:has(.people-edit-profile-header-fixed) .people-user-form-scroll{padding:14px}}
+@media(max-width:430px){.people-edit-profile-header-fixed{grid-template-columns:54px minmax(0,1fr) 36px;padding:12px}.people-edit-profile-header-fixed .people-edit-avatar{width:54px;height:54px}.people-edit-close{width:36px;height:36px}.people-edit-profile-header-fixed .people-edit-photo-actions{display:grid;grid-template-columns:1fr 1fr}.people-edit-profile-header-fixed .people-edit-photo-actions>*{min-width:0}}
+
+/* Keep the edit-account close glyph clearly visible inside its button. */
+.people-account-modal .people-edit-close svg {
+  width: 21px !important;
+  height: 21px !important;
+  min-width: 21px;
+  stroke: currentColor !important;
+  stroke-width: 2.6 !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+@media(max-width:430px) {
+  .people-account-modal .people-edit-close svg {
+    width: 19px !important;
+    height: 19px !important;
+    min-width: 19px;
+  }
+}
+
+.people-account-modal .people-edit-close-glyph {
+  display: block;
+  color: currentColor;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 28px !important;
+  font-weight: 400;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+@media(max-width:430px) {
+  .people-account-modal .people-edit-close-glyph {
+    font-size: 25px !important;
+  }
+}
+
+/* Reserve space for the floating assistant so it cannot cover Save actions. */
+body:has(.people-account-modal) .people-account-modal .people-user-form-footer {
+  padding-right:138px!important;
+}
+@media(max-width:700px){
+  body:has(.people-account-modal) .people-account-modal .people-user-form-footer {
+    padding-right:112px!important;
+  }
+}
+@media(max-width:430px){
+  body:has(.people-account-modal) .people-account-modal .people-user-form-footer {
+    padding-right:82px!important;
+  }
+}
+
+/* Remaining Add/Edit User dark-mode accents. */
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-inline-add {
+  width:fit-content!important;
+  min-height:38px!important;
+  padding:0 13px!important;
+  border:1px solid rgba(96,165,250,.38)!important;
+  border-radius:10px!important;
+  background:linear-gradient(135deg,#245fa7,#3179c8)!important;
+  color:#fff!important;
+  box-shadow:0 7px 16px rgba(30,64,175,.20)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-inline-add svg {
+  color:#bfdbfe!important;
+  stroke:#bfdbfe!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-inline-add:hover:not(:disabled) {
+  border-color:rgba(147,197,253,.62)!important;
+  background:linear-gradient(135deg,#2563eb,#3b82f6)!important;
+  box-shadow:0 9px 20px rgba(37,99,235,.27)!important;
+  transform:translateY(-1px)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-inline-add:disabled {
+  border-color:#33465c!important;
+  background:#172337!important;
+  color:#718198!important;
+  box-shadow:none!important;
+  opacity:.68;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-assignment-summary {
+  border:1px solid rgba(96,165,250,.28)!important;
+  background:linear-gradient(135deg,#101f33,#12253a)!important;
+  color:#edf5ff!important;
+  box-shadow:inset 0 1px 0 rgba(147,197,253,.04)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-assignment-summary>strong {
+  color:#93c5fd!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-assignment-summary span {
+  color:#8fa5bd!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-assignment-summary b {
+  color:#f1f7ff!important;
+}
