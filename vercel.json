@@ -4,7 +4,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/vercel.php": {
-      "runtime": "vercel-php@0.7.4",
+      "runtime": "vercel-php@0.9.0",
       "includeFiles": "{api,includes,reports,vendor}/**"
     }
   },
