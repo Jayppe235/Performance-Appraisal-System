@@ -1,4 +1,7 @@
 {
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-PhpServer.ps1",
