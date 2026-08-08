@@ -1,6 +1,8 @@
 {
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-PhpServer.ps1",
+    "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Development.ps1",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
@@ -17,7 +19,6 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.1",
-    "agentic-flow": "^2.0.11",
     "chart.js": "^4.5.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.14.0",

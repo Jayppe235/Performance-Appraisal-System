@@ -122,3 +122,12 @@ If the provider cannot keep `includes` outside the public document root, deny di
 Local development remains `npm run dev` plus Apache/MySQL in XAMPP. The Vite proxy continues to map `/api` to `/PMAS/api` locally.
 
 Use `.env.local.example` as the local reference with `PMAS_ENV=local`. Local defaults target XAMPP; do not replace them with production credentials.
+# Local development without Apache
+
+Apache is not required for local development. With PHP 8.2+, MySQL, and Node.js available, run:
+
+```powershell
+npm run dev:all
+```
+
+Open `http://localhost:5173`. The command starts PHP's built-in server on port 8080 and Vite on port 5173. MySQL must still be running and can be configured with the `PMAS_DB_*` environment variables.

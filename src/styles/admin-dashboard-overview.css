@@ -1,0 +1,33 @@
+/* Keep large dashboard detail lists inside their metric card. */
+.admin-content.admin-module .dashboard-detail-list.is-expanded {
+  max-height: 18rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.admin-content.admin-module .dashboard-detail-list.is-expanded .dashboard-detail-toggle {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: 0.2rem;
+  box-shadow: 0 -8px 14px color-mix(in srgb, var(--theme-surface, #fff) 88%, transparent),
+    0 5px 13px rgba(8, 116, 67, 0.18);
+}
+
+.admin-content.admin-module .dashboard-detail-list.is-expanded::-webkit-scrollbar {
+  width: 7px;
+}
+
+.admin-content.admin-module .dashboard-detail-list.is-expanded::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--metric, #168a50) 45%, transparent);
+}
+
+@media (max-width: 640px) {
+  .admin-content.admin-module .dashboard-detail-list.is-expanded {
+    max-height: 14rem;
+  }
+}

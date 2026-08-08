@@ -34,7 +34,8 @@ function dashboard_payload(string $role, array $query = []): array
     $selectedPeriod = dipascaf_selected_period_from_request($query, true);
 
     $db = db();
-    dipascaf_sync_evaluation_consistency((string) ($selectedPeriod['period_name'] ?? ''));
+    // Keep this read endpoint read-only. Consistency synchronization performs
+    // multiple writes and made every dashboard refresh wait for maintenance.
 
     switch ($role) {
         case 'admin':

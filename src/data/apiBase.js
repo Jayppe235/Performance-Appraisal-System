@@ -1,7 +1,7 @@
 export function apiUrl(path) {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
-  // Vite dev server — proxy handles /api/ → /PMAS/api/ rewriting
+  // Vite dev server proxies API requests to the standalone PHP server.
   // env vars (VITE_API_URL) are ignored in dev mode so requests go through the proxy,
   // preventing CORS issues with direct Apache requests.
   if (import.meta.env.DEV) {
@@ -29,8 +29,7 @@ export function assetUrl(path) {
   if (cleanPath.startsWith('/PMAS/')) return cleanPath;
 
   if (import.meta.env.DEV) {
-    const basePath = `/${(import.meta.env.VITE_DEV_PHP_BASE_PATH || 'PMAS').replace(/^\/+|\/+$/g, '')}`;
-    return `${basePath}${cleanPath}`;
+    return cleanPath;
   }
 
   const configuredBase = (import.meta.env.VITE_API_URL || '').trim();

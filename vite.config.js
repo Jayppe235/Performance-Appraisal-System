@@ -40,10 +40,27 @@ function developmentIndex() {
   };
 }
 
+function legacyDevelopmentBasePath() {
+  return {
+    name: 'legacy-development-base-path',
+    apply: 'serve',
+    enforce: 'pre',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        if (request.url === '/PMAS' || request.url?.startsWith('/PMAS/')) {
+          request.url = request.url.slice('/PMAS'.length) || '/';
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
-  const phpOrigin = env.VITE_DEV_PHP_ORIGIN || 'http://localhost';
-  const phpBasePath = `/${(env.VITE_DEV_PHP_BASE_PATH || 'PMAS').replace(/^\/+|\/+$/g, '')}`;
+  const phpOrigin = env.VITE_DEV_PHP_ORIGIN || 'http://127.0.0.1:8080';
+  const configuredPhpBasePath = (env.VITE_DEV_PHP_BASE_PATH || '').replace(/^\/+|\/+$/g, '');
+  const phpBasePath = configuredPhpBasePath ? `/${configuredPhpBasePath}` : '';
   const useHttps = env.VITE_DEV_HTTPS === 'true';
   const https = useHttps
     ? {
@@ -54,7 +71,7 @@ export default defineConfig(({ mode }) => {
 
   return ({
   base: mode === 'production' ? '/PMAS/' : '/',
-  plugins: [developmentIndex(), react(), cssDiagnosticCompatibility()],
+  plugins: [legacyDevelopmentBasePath(), developmentIndex(), react(), cssDiagnosticCompatibility()],
   server: {
     https,
     proxy: {
@@ -62,10 +79,6 @@ export default defineConfig(({ mode }) => {
         target: phpOrigin,
         changeOrigin: true,
         rewrite: (path) => `${phpBasePath}${path}`,
-      },
-      [phpBasePath]: {
-        target: phpOrigin,
-        changeOrigin: true,
       },
     },
   },

@@ -11,12 +11,12 @@ import { LIVE_DATA_CHANGED_EVENT, LIVE_DATA_STORAGE_KEY } from './useLiveRefresh
  * @param {number} intervalMs - Polling interval in milliseconds (default 5000)
  * @returns {{ metrics: Array, actionCenter: Array|null, loading: boolean, error: string|null, timestamp: number|null, refresh: Function }}
  */
-export default function useRealtimeMetrics(role = 'admin', options = {}, intervalMs = 5000) {
+export default function useRealtimeMetrics(role = 'admin', options = {}, intervalMs = 30000) {
   const [data, setData] = useState({ metrics: [], actionCenter: null, overview: null, programs: [], timestamp: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
-  const eventSourceRef = useRef(null);
+  const pendingRef = useRef(false);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const isQuickTunnel = typeof window !== 'undefined'
@@ -28,13 +28,12 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
     if (options.program) params.set('program', options.program);
     if (options.userId) params.set('user_id', options.userId);
     if (options.periodId) params.set('period_id', options.periodId);
-    if (options.trendDays) params.set('trend_days', options.trendDays);
+    if (options.comparisonPeriodId) params.set('comparison_period_id', options.comparisonPeriodId);
     return params;
-  }, [role, options.department, options.program, options.userId, options.periodId, options.trendDays]);
+  }, [role, options.department, options.program, options.userId, options.periodId, options.comparisonPeriodId]);
 
   const buildUrl = useCallback(() => {
     const params = buildQuery();
-    params.set('_', String(Date.now()));
     return `/api/dashboard.php?${params.toString()}`;
   }, [buildQuery]);
 
@@ -58,6 +57,8 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
   }, []);
 
   const fetchMetrics = useCallback(async () => {
+    if (pendingRef.current || document.hidden) return;
+    pendingRef.current = true;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
@@ -97,6 +98,8 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
         setError(err.message);
         setLoading(false);
       }
+    } finally {
+      pendingRef.current = false;
     }
   }, [applyPayload, buildUrl]);
 
@@ -124,33 +127,9 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
       }
     };
 
-    if ('EventSource' in window && !isQuickTunnel) {
-      const source = new EventSource(buildStreamUrl(), { withCredentials: true });
-      eventSourceRef.current = source;
-
-      source.addEventListener('metrics', (event) => {
-        try {
-          if (!mountedRef.current) return;
-          applyPayload(JSON.parse(event.data));
-          startPolling();
-        } catch (err) {
-          if (mountedRef.current) {
-            setError(err.message || 'Dashboard stream returned invalid data.');
-            startPolling();
-          }
-        }
-      });
-
-      source.addEventListener('error', () => {
-        if (mountedRef.current) {
-          // Streaming is optional. Keep the last successful dashboard payload
-          // visible and silently fall back to polling when SSE is unavailable.
-          startPolling();
-        }
-      });
-    } else {
-      startPolling();
-    }
+    // Dashboard aggregation is database-intensive. Controlled polling avoids
+    // the SSE endpoint recalculating the full payload every two seconds.
+    startPolling();
 
     const refreshWhenVisible = () => {
       if (!document.hidden) {
@@ -168,16 +147,12 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
     return () => {
       mountedRef.current = false;
       stopPolling();
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
       window.removeEventListener('focus', fetchMetrics);
       window.removeEventListener(LIVE_DATA_CHANGED_EVENT, fetchMetrics);
       window.removeEventListener('storage', refreshOnStorage);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [applyPayload, buildStreamUrl, fetchMetrics, intervalMs, isQuickTunnel]);
+  }, [fetchMetrics, intervalMs, isQuickTunnel]);
 
   return {
     metrics: data.metrics,

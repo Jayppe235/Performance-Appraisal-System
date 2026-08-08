@@ -21,6 +21,7 @@ import './styles/evaluation-period-filter.css';
 import './styles/self-questionnaire-builder.css';
 import './styles/evaluation-card-pagination.css';
 import './styles/evaluation-assignment-theme.css';
+import './styles/admin-dashboard-overview.css';
 
 const routerBase = String(import.meta.env.BASE_URL || '/')
   .replace(/\/+$/, '') || '/';

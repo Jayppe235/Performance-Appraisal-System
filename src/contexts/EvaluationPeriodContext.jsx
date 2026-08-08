@@ -91,7 +91,7 @@ export function EvaluationPeriodProvider({ children }) {
 
   useEffect(() => {
     const refreshPeriodStatus = () => fetchPeriods({ silent: true });
-    const intervalId = window.setInterval(refreshPeriodStatus, 15000);
+    const intervalId = window.setInterval(refreshPeriodStatus, 60000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') refreshPeriodStatus();
     };

@@ -31,9 +31,8 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
     $scopeViolation = ($scopeEnforced && $scopeDepartmentAliases === [] && $scopePrograms === [])
         || ($scopeDepartmentAliases !== [] && $department !== '' && $departmentAliases === [])
         || ($scopePrograms !== [] && $program !== '' && $effectivePrograms === []);
-    $allowedTrendDays = [1, 3, 7, 14, 30, 60, 90];
-    $requestedTrendDays = (int) ($query['trend_days'] ?? 1);
-    $trendDays = in_array($requestedTrendDays, $allowedTrendDays, true) ? $requestedTrendDays : 1;
+    $comparisonPeriodId = (int) ($query['comparison_period_id'] ?? 0);
+    $comparisonMode = !empty($query['_comparison_mode']);
 
     $where = ["COALESCE(pa.is_archived,0)=0", "pa.status <> 'not_required'", "COALESCE(f.is_archived,0)=0"];
     $where[] = "(pa.assignment_type<>'peer' OR EXISTS (
@@ -110,6 +109,15 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
     sort($pendingDates); sort($overdueDates);
 
     $deptOptions = admin_all("SELECT department_code value, department_name label FROM departments WHERE is_active=1 ORDER BY department_name");
+    $periodOptions = admin_all(
+        "SELECT id value, period_name label, status
+         FROM appraisal_periods
+         WHERE id <> ?
+           AND period_name NOT LIKE 'Smoke Self Eval Period%'
+           AND period_name NOT LIKE '%SMK%'
+         ORDER BY date_start DESC, id DESC",
+        [$periodId]
+    );
     if ($scopeEnforced && $scopeDepartmentAliases === []) $deptOptions = [];
     if ($scopeDepartmentAliases !== []) {
         $deptOptions = array_values(array_filter($deptOptions, static fn(array $option): bool => count(array_intersect(
@@ -328,14 +336,25 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
     $snapshotProgram = $program !== '' ? $program : ($scopePrograms !== [] ? '@scope:' . substr(sha1(implode('|',$scopePrograms)),0,16) : '');
     $snap = $db->prepare("INSERT INTO admin_dashboard_snapshots(snapshot_date,period_id,department,program,metrics_json) VALUES(CURDATE(),?,?,?,?) ON DUPLICATE KEY UPDATE metrics_json=VALUES(metrics_json),updated_at=CURRENT_TIMESTAMP");
     $snap->execute([$periodId,$snapshotDepartment,$snapshotProgram,json_encode($current)]);
-    $pastStmt=$db->prepare("SELECT metrics_json FROM admin_dashboard_snapshots WHERE snapshot_date<=DATE_SUB(CURDATE(),INTERVAL ? DAY) AND period_id=? AND department=? AND program=? ORDER BY snapshot_date DESC LIMIT 1");
-    $pastStmt->execute([$trendDays,$periodId,$snapshotDepartment,$snapshotProgram]); $past=json_decode((string)($pastStmt->fetchColumn() ?: ''),true);
-    $trends=[]; foreach($current as $key=>$value) $trends[$key]=['delta'=>is_array($past)?$value-(int)($past[$key]??0):null,'available'=>is_array($past)];
+    $comparison = null;
+    $comparisonCounts = null;
+    if (!$comparisonMode && $comparisonPeriodId > 0 && $comparisonPeriodId !== $periodId) {
+        $comparisonPeriod = admin_one('SELECT * FROM appraisal_periods WHERE id=? LIMIT 1', [$comparisonPeriodId]);
+        if ($comparisonPeriod !== null) {
+            $comparisonQuery = $query;
+            $comparisonQuery['_comparison_mode'] = true;
+            unset($comparisonQuery['comparison_period_id']);
+            $comparisonOverview = dashboard_admin_overview($db, $comparisonPeriod, $comparisonQuery);
+            $comparisonCounts = $comparisonOverview['counts'] ?? null;
+            $comparison = ['id'=>(int)$comparisonPeriod['id'],'label'=>(string)$comparisonPeriod['period_name']];
+        }
+    }
+    $trends=[]; foreach($current as $key=>$value) $trends[$key]=['delta'=>is_array($comparisonCounts)?$value-(int)($comparisonCounts[$key]??0):null,'available'=>is_array($comparisonCounts)];
 
     return [
-        'filters'=>['departments'=>$deptOptions,'programs'=>$programOptions,'selected'=>['period_id'=>$periodId,'department'=>$department,'program'=>$program]],
+        'filters'=>['departments'=>$deptOptions,'programs'=>$programOptions,'periods'=>$periodOptions,'selected'=>['period_id'=>$periodId,'department'=>$department,'program'=>$program]],
         'progress'=>['total'=>$effectiveTotal,'completed'=>$completed,'pending'=>$pending-$overdue,'overdue'=>$overdue,'percentage'=>$effectiveTotal?round($completed/$effectiveTotal*100,1):0],
-        'counts'=>$current,'trends'=>$trends,'trend_days'=>$trendDays,
+        'counts'=>$current,'trends'=>$trends,'comparison'=>$comparison,
         'deadlines'=>['pending'=>$pendingDates[0]??null,'overdue'=>$overdueDates[0]??null],
         'details'=>[
             'overdue'=>array_slice($overdueItems,0,50),

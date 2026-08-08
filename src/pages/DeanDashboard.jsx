@@ -317,7 +317,6 @@ export function SummaryAndPlans({
       if (!background) setLoading(true);
       const params = new URLSearchParams();
       if (selectedPeriodId) params.set('period_id', selectedPeriodId);
-      params.set('_', String(Date.now()));
       const queryString = params.toString();
       const payload = await apiFetch(`${endpoint}${queryString ? `?${queryString}` : ''}`);
       let nextData = payload.data || null;
@@ -326,7 +325,6 @@ export function SummaryAndPlans({
         const statsParams = new URLSearchParams();
         if (selectedPeriodId) statsParams.set('period_id', selectedPeriodId);
         statsParams.set('role', statsRole);
-        statsParams.set('_', String(Date.now()));
         const statsPayload = await apiFetch(`/api/evaluation-stats.php?${statsParams.toString()}`);
         if (statsPayload.data && nextData) {
           nextData = { ...nextData, _stats: statsPayload.data };

@@ -3,12 +3,15 @@ import { ServerOff, WifiOff } from 'lucide-react';
 import { apiUrl } from '../../data/apiBase.js';
 
 const RETRY_DELAY_MS = 5000;
-const ONLINE_CHECK_INTERVAL_MS = 15000;
-const REQUEST_TIMEOUT_MS = 5000;
+const ONLINE_CHECK_INTERVAL_MS = 60000;
+const REQUEST_TIMEOUT_MS = 15000;
+const FAILURES_BEFORE_BLOCKING = 2;
 
 export default function ConnectivityGate({ children }) {
-  const [status, setStatus] = useState('checking');
+  const [status, setStatus] = useState(import.meta.env.DEV ? 'online' : 'checking');
   const timerRef = useRef(null);
+  const consecutiveFailuresRef = useRef(0);
+  const hasConnectedRef = useRef(false);
 
   const checkConnection = useCallback(async () => {
     clearTimeout(timerRef.current);
@@ -24,14 +27,22 @@ export default function ConnectivityGate({ children }) {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.ok !== true) {
-        setStatus('server-unavailable');
+        consecutiveFailuresRef.current += 1;
+        if (!hasConnectedRef.current || consecutiveFailuresRef.current >= FAILURES_BEFORE_BLOCKING) {
+          setStatus('server-unavailable');
+        }
         timerRef.current = setTimeout(checkConnection, RETRY_DELAY_MS);
         return;
       }
+      consecutiveFailuresRef.current = 0;
+      hasConnectedRef.current = true;
       setStatus('online');
       timerRef.current = setTimeout(checkConnection, ONLINE_CHECK_INTERVAL_MS);
     } catch {
-      setStatus(navigator.onLine ? 'server-unavailable' : 'offline');
+      consecutiveFailuresRef.current += 1;
+      if (!hasConnectedRef.current || consecutiveFailuresRef.current >= FAILURES_BEFORE_BLOCKING) {
+        setStatus(navigator.onLine ? 'server-unavailable' : 'offline');
+      }
       timerRef.current = setTimeout(checkConnection, RETRY_DELAY_MS);
     } finally {
       clearTimeout(timeout);
@@ -39,6 +50,11 @@ export default function ConnectivityGate({ children }) {
   }, []);
 
   useEffect(() => {
+    // PHP's built-in development server handles one request at a time. A
+    // global polling gate can queue behind an ordinary API call and falsely
+    // block the entire UI, so development surfaces errors per request instead.
+    if (import.meta.env.DEV) return undefined;
+
     checkConnection();
     window.addEventListener('online', checkConnection);
     window.addEventListener('offline', checkConnection);

@@ -83,7 +83,7 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   const [users, setUsers] = useState([]);
   const [archivedDepartments, setArchivedDepartments] = useState([]);
   const [archivedUsers, setArchivedUsers] = useState([]);
-  const { selectedPeriodId } = useEvaluationPeriod();
+  const { selectedPeriodId, periods } = useEvaluationPeriod();
   const [adminSettings, setAdminSettings] = useState(readAdminSettings);
   const [profileForm, setProfileForm] = useState({
     fullName: role.user.name || '',
@@ -95,7 +95,7 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState(null);
-  const [dashboardFilters, setDashboardFilters] = useState({ department: '', program: '', trendDays: 1 });
+  const [dashboardFilters, setDashboardFilters] = useState({ department: '', program: '', comparisonPeriodId: '' });
 
   // ── Archived questionnaire categories state ─────────────────────
   const [archivedFormACategories, setArchivedFormACategories] = useState([]);
@@ -406,7 +406,7 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   // Real-time metrics from backend API - auto-refreshes using the saved dashboard setting
   const { overview, loading, error, timestamp } = useRealtimeMetrics(
     'admin',
-    { periodId: selectedPeriodId, department: dashboardFilters.department, program: dashboardFilters.program, trendDays: dashboardFilters.trendDays },
+    { periodId: selectedPeriodId, department: dashboardFilters.department, program: dashboardFilters.program, comparisonPeriodId: dashboardFilters.comparisonPeriodId },
     dashboardRefreshMs
   );
 
@@ -481,7 +481,7 @@ export default function AdminDashboard({ role, onUserUpdate }) {
                 <p>{error ? `Live refresh paused: ${error}` : `Review evaluation progress and urgent staffing assignments${timestamp ? `, updated ${new Date(timestamp * 1000).toLocaleTimeString()}` : ''}.`}</p>
               </div>
             </div>
-            <AdminDashboardOverview overview={overview} loading={loading} error={error} filters={dashboardFilters} onFiltersChange={setDashboardFilters} />
+            <AdminDashboardOverview overview={overview} loading={loading} error={error} filters={dashboardFilters} onFiltersChange={setDashboardFilters} periods={periods} selectedPeriodId={selectedPeriodId} />
           </section>
         </>
       )}

@@ -20,6 +20,7 @@ import { apiUrl } from './apiBase.js';
 import { notifyLiveDataChanged } from '../hooks/useLiveRefresh.js';
 
 let _redirectingToLogin = false;
+const inflightGetRequests = new Map();
 
 function isHtmlResponse(response) {
   const contentType = response.headers.get('content-type') || '';
@@ -51,8 +52,7 @@ function redirectToLogin() {
   window.location.href = '/login';
 }
 
-export default async function apiFetch(url, options = {}) {
-  const method = String(options.method || 'GET').toUpperCase();
+async function performRequest(url, options, method) {
   const response = await fetch(apiUrl(url), {
     credentials: 'include',
     cache: options.cache || 'no-store',
@@ -115,4 +115,22 @@ export default async function apiFetch(url, options = {}) {
   }
 
   return payload;
+}
+
+export default function apiFetch(url, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') {
+    return performRequest(url, options, method);
+  }
+
+  // Multiple dashboard widgets often request the same resource on mount.
+  // Share the in-flight response so the remote database only does the work once.
+  const key = `${method}:${apiUrl(url)}`;
+  const pending = inflightGetRequests.get(key);
+  if (pending) return pending;
+
+  const request = performRequest(url, options, method)
+    .finally(() => inflightGetRequests.delete(key));
+  inflightGetRequests.set(key, request);
+  return request;
 }

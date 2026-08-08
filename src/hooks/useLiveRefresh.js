@@ -30,6 +30,7 @@ export default function useLiveRefresh(refreshFn, deps = [], options = {}) {
   const refreshRef = useRef(refreshFn);
   const mountedRef = useRef(false);
   const requestIdRef = useRef(0);
+  const pendingRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
@@ -39,6 +40,8 @@ export default function useLiveRefresh(refreshFn, deps = [], options = {}) {
 
   const refresh = useCallback(async (background = true) => {
     if (!enabled || typeof refreshRef.current !== 'function') return;
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     if (background) setRefreshing(true);
@@ -48,6 +51,7 @@ export default function useLiveRefresh(refreshFn, deps = [], options = {}) {
         setLastUpdated(Date.now());
       }
     } finally {
+      pendingRef.current = false;
       if (mountedRef.current && requestId === requestIdRef.current) {
         setRefreshing(false);
       }

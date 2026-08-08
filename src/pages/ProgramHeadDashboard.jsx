@@ -130,7 +130,6 @@ function SummaryAndTraining() {
       if (!background) setLoading(true);
       const params = new URLSearchParams();
       if (selectedPeriodId) params.set('period_id', selectedPeriodId);
-      params.set('_', String(Date.now()));
       const payload = await apiFetch(`/api/program-head-summary.php?${params.toString()}`, {
         cache: 'no-store',
       });
@@ -309,7 +308,6 @@ function FacultyInsights() {
     try {
       const params = new URLSearchParams();
       if (selectedPeriodId) params.set('period_id', selectedPeriodId);
-      params.set('_', String(Date.now()));
       const payload = await apiFetch(`/api/program-head-summary.php?${params.toString()}`);
       setInsightData(payload.data || null);
     } catch (err) {

@@ -41,17 +41,17 @@ function DetailList({ rows, kind }) {
   const [open,setOpen]=useState(false);
   if (!rows?.length) return null;
   const visible=open?rows:rows.slice(0,3);
-  return <div className="dashboard-detail-list">
+  return <div className={`dashboard-detail-list${open ? ' is-expanded' : ''}`}>
     {visible.map((row,index)=><div key={row.id || row.code || index}>
       <span>{row.faculty || row.name || row.full_name}</span>
       {kind==='overdue' && <small>{row.days_overdue} day{row.days_overdue===1?'':'s'} overdue · {row.evaluator}</small>}
       {kind==='pending' && <small>{row.requirement_type==='self_evaluation'?'Self-Evaluation not submitted':row.requirement_type==='peer_evaluation'?'Official peer evaluation missing':'No evaluation assignment'} · {String(row.period_role || 'participant').replace('_',' ')}{row.program ? ` · ${row.program}` : ''}</small>}
     </div>)}
-    {rows.length>3 && <button type="button" onClick={()=>setOpen(v=>!v)} aria-expanded={open}>{open?<ChevronUp size={14}/>:<ChevronDown size={14}/>} {open?'Show less':`Show all ${rows.length}`}</button>}
+    {rows.length>3 && <button className="dashboard-detail-toggle" type="button" onClick={()=>setOpen(v=>!v)} aria-expanded={open}>{open?<ChevronUp size={14}/>:<ChevronDown size={14}/>} {open?'Show less':`Show all ${rows.length}`}</button>}
   </div>;
 }
 
-function MetricCard({ definition, overview, trendDays }) {
+function MetricCard({ definition, overview }) {
   const [key,label,tone,Icon,cta,href]=definition;
   const trend=overview.trends?.[key];
   const delta=trend?.delta;
@@ -63,7 +63,7 @@ function MetricCard({ definition, overview, trendDays }) {
     <div className="admin-overview-metric-head"><span className="metric-symbol"><Icon size={18}/></span><span>{label}</span></div>
     <strong>{overview.counts?.[key] ?? '—'}</strong>
     <div className={`metric-trend ${delta==null?'muted':improved?'good':'bad'}`}>
-      {delta==null ? `Trend available after ${trendDays === 1 ? '1 day' : `${trendDays} days`}` : <>{delta>=0?<TrendingUp size={14}/>:<TrendingDown size={14}/>} {delta>0?'+':''}{delta} vs {trendDays===1?'yesterday':`${trendDays} days ago`}</>}
+      {delta==null ? 'Select a comparison period' : <>{delta>=0?<TrendingUp size={14}/>:<TrendingDown size={14}/>} {delta>0?'+':''}{delta} vs {overview.comparison?.label || 'selected period'}</>}
     </div>
     {deadline!==null && <p className="metric-deadline">{key==='overdue'?'Earliest overdue':'Next cutoff'}: <b>{dateLabel(deadline)}</b></p>}
     <DetailList rows={details} kind={key}/>
@@ -71,7 +71,7 @@ function MetricCard({ definition, overview, trendDays }) {
   </article>;
 }
 
-export default function AdminDashboardOverview({ overview, loading, error, filters, onFiltersChange, basePath='/admin', scopeName='institution' }) {
+export default function AdminDashboardOverview({ overview, loading, error, filters, onFiltersChange, periods=[], selectedPeriodId='', basePath='/admin', scopeName='institution' }) {
   const darkMode = typeof document !== 'undefined'
     && Boolean(document.querySelector('.admin-body.dark-mode, .admin-dashboard-body.dark-mode'));
   const progress=overview?.progress || {total:0,completed:0,pending:0,overdue:0,percentage:0};
@@ -90,6 +90,9 @@ export default function AdminDashboardOverview({ overview, loading, error, filte
     overdue:totals.overdue+Number(row.overdue||0),
   }),{completed:0,pending:0,overdue:0}),[breakdown]);
   const bands=overview?.performance_distribution || {};
+  const comparisonPeriods=(overview?.filters?.periods?.length
+    ? overview.filters.periods.map(period=>({id:period.value,label:period.label,status:period.status}))
+    : periods.filter(period=>String(period.id)!==String(selectedPeriodId)).map(period=>({id:period.id,label:period.period_name || period.school_year,status:period.status})));
   const bandData=useMemo(()=>({labels:['Below 50%','50–75%','Above 75%'],datasets:[{label:'Faculty',data:[bands.below_50||0,bands.between_50_75||0,bands.above_75||0],backgroundColor:['#d9363e','#e8a317','#169c5b'],borderRadius:8}]}),[bands]);
   const chartOptions={
     responsive:true,
@@ -109,7 +112,7 @@ export default function AdminDashboardOverview({ overview, loading, error, filte
     <div className="admin-overview-filters" aria-label="Dashboard filters">
       <label>College / Department<select value={filters.department} onChange={e=>onFiltersChange({...filters,department:e.target.value,program:''})}><option value="">All departments</option>{overview?.filters?.departments?.map(d=><option key={d.value} value={d.value}>{d.label}</option>)}</select></label>
       <label>Program<select value={filters.program} onChange={e=>onFiltersChange({...filters,program:e.target.value})}><option value="">All programs</option>{overview?.filters?.programs?.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
-      <label>Trend comparison<select value={filters.trendDays} onChange={e=>onFiltersChange({...filters,trendDays:Number(e.target.value)})}><option value="1">Since yesterday</option><option value="3">Last 3 days</option><option value="7">Last 7 days</option><option value="14">Last 14 days</option><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90">Last 90 days</option></select></label>
+      <label>Compare with period<select value={filters.comparisonPeriodId} onChange={e=>onFiltersChange({...filters,comparisonPeriodId:e.target.value})}><option value="">Select a period</option>{comparisonPeriods.map(period=><option key={period.id} value={period.id}>{period.label}{period.status ? ` (${period.status})` : ''}</option>)}</select></label>
       {(filters.department||filters.program) && <button type="button" onClick={()=>onFiltersChange({...filters,department:'',program:''})}>Clear filters</button>}
     </div>
     {error && <p className="dashboard-live-warning">Live refresh paused: {error}</p>}
@@ -117,7 +120,7 @@ export default function AdminDashboardOverview({ overview, loading, error, filte
       <article className="attention-total"><span>Items need attention</span><strong>{(overview?.counts?.overdue||0)+(overview?.counts?.below_50||0)+(overview?.counts?.pending||0)}</strong><small>{loading?'Refreshing live data':'Prioritized evaluation checks'}</small></article>
       <article className="completion-panel"><div className="completion-chart"><Doughnut data={donut} options={{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{display:false},tooltip:{enabled:true}}}}/><div><strong>{progress.percentage}%</strong><span>complete</span></div></div><div><h3>Overall evaluation progress</h3><strong>{progress.completed}/{progress.total} completed</strong><p>{progress.pending} pending · {progress.overdue} overdue</p></div></article>
     </div>
-    <section className="admin-overview-metrics">{metricDefinitions(basePath, filters.department).map(def=><MetricCard key={def[0]} definition={def} overview={overview||{}} trendDays={filters.trendDays}/>)}</section>
+    <section className="admin-overview-metrics">{metricDefinitions(basePath, filters.department).map(def=><MetricCard key={def[0]} definition={def} overview={overview||{}} />)}</section>
     <section className="admin-overview-panels">
       <article className="department-completion-panel"><header><div><span>Evaluation status</span><h3>Completion by department</h3><p>Assignment progress within the authorized {scopeName} scope.</p></div><div className="department-chart-totals" aria-label="Filtered assignment totals"><b className="completed">{breakdownTotals.completed}<small>Completed</small></b><b className="pending">{breakdownTotals.pending}<small>Pending</small></b><b className="overdue">{breakdownTotals.overdue}<small>Overdue</small></b></div></header><div className="dashboard-chart department-chart" style={{'--department-chart-height':`${Math.min(390,Math.max(230,breakdown.length*54+120))}px`}}>{breakdown.length?<Bar data={deptData} options={chartOptions}/>:<p className="dashboard-empty">No assignments match these filters.</p>}</div></article>
       <article><header><div><span>Faculty outcomes</span><h3>Performance distribution</h3></div></header><div className="dashboard-chart"><Bar data={bandData} options={{...chartOptions,indexAxis:'x',scales:{x:{stacked:false,border:{display:false},grid:{display:false},ticks:{color:darkMode?'#a9bad0':'#52695f'}},y:{beginAtZero:true,border:{display:false},grid:{color:darkMode?'rgba(148,163,184,.12)':'rgba(83,116,101,.10)'},ticks:{color:darkMode?'#91a5bd':'#52695f',precision:0}}}}}/></div><p className="chart-note">{bands.without_results||0} faculty excluded without completed results.</p></article>
