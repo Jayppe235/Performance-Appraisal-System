@@ -3,18 +3,18 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/vercel.php": {
+    "api/index.php": {
       "runtime": "vercel-php@0.9.0"
     }
   },
   "rewrites": [
     {
       "source": "/api/:endpoint",
-      "destination": "/api/vercel.php?_scope=api&_endpoint=:endpoint"
+      "destination": "/api/index.php?_scope=api&_endpoint=:endpoint"
     },
     {
       "source": "/reports/:endpoint",
-      "destination": "/api/vercel.php?_scope=reports&_endpoint=:endpoint"
+      "destination": "/api/index.php?_scope=reports&_endpoint=:endpoint"
     },
     {
       "source": "/((?!api/|reports/|assets/).*)",
