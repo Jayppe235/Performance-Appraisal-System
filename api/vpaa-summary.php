@@ -111,14 +111,23 @@ try {
     $selectedPeriodName = $selectedPeriod !== null ? (string) ($selectedPeriod['period_name'] ?? '') : '';
 
     $facultyRows = admin_all(
-        "SELECT f.id, f.full_name, f.department, f.position_title,
-                COALESCE(NULLIF(f.program_code, ''), 'Unassigned Program') AS program_code,
-                COALESCE(NULLIF(u.role, ''), '') AS user_role
+        "SELECT f.id, f.full_name,
+                COALESCE(NULLIF(epp.department_snapshot, ''), f.department) AS department,
+                f.position_title,
+                COALESCE(NULLIF(epp.program_snapshot, ''), NULLIF(f.program_code, ''), 'Unassigned Program') AS program_code,
+                COALESCE(NULLIF(epp.role_snapshot, ''), NULLIF(u.role, ''), '') AS user_role
          FROM faculty f
-         LEFT JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         JOIN evaluation_period_participation epp
+           ON epp.evaluation_period_id = ? AND epp.user_id = u.id
          WHERE f.is_active = 1
            AND f.is_archived = 0
-         ORDER BY f.department, program_code, f.full_name"
+           AND u.is_active = 1
+           AND epp.participation_status = 'included'
+           AND epp.work_status = 'active'
+           AND epp.employment_status IN ('active','newly_added')
+         ORDER BY f.department, program_code, f.full_name",
+        [(int)($selectedPeriod['id'] ?? 0)]
     );
 
     $facultyById = [];

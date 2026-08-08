@@ -29,6 +29,17 @@ function cssDiagnosticCompatibility() {
   };
 }
 
+function developmentIndex() {
+  return {
+    name: 'development-index',
+    apply: 'serve',
+    enforce: 'pre',
+    transformIndexHtml() {
+      return readFileSync('index.dev.html', 'utf8');
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const phpOrigin = env.VITE_DEV_PHP_ORIGIN || 'http://localhost';
@@ -42,7 +53,8 @@ export default defineConfig(({ mode }) => {
     : undefined;
 
   return ({
-  plugins: [react(), cssDiagnosticCompatibility()],
+  base: mode === 'production' ? '/PMAS/' : '/',
+  plugins: [developmentIndex(), react(), cssDiagnosticCompatibility()],
   server: {
     https,
     proxy: {

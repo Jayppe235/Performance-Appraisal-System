@@ -11,10 +11,13 @@ require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/admin_data.php';
 require_once __DIR__ . '/../includes/vpaa_data.php';
+require_once __DIR__ . '/../includes/dean_data.php';
+require_once __DIR__ . '/../includes/program_head_data.php';
 require_once __DIR__ . '/../includes/evaluation_period.php';
 require_once __DIR__ . '/../includes/evaluation_participation.php';
 require_once __DIR__ . '/../includes/evaluation_consistency_sync.php';
 require_once __DIR__ . '/../includes/http.php';
+require_once __DIR__ . '/../includes/admin_dashboard_overview.php';
 
 header('Content-Type: application/json');
 allow_local_dev_cors(['GET', 'OPTIONS']);
@@ -35,15 +38,57 @@ function dashboard_payload(string $role, array $query = []): array
 
     switch ($role) {
         case 'admin':
-            return getAdminStats($db, $selectedPeriod);
+            return getAdminStats($db, $selectedPeriod, $query);
         case 'dean':
-            return getDeanStats($db, $department, $selectedPeriod);
+            $data = getDeanStats($db, $department, $selectedPeriod);
+            $sessionUser = current_user();
+            $scopedQuery = $query;
+            $scopedQuery['_scope_enforced'] = true;
+            $scopedQuery['_scope_departments'] = dean_departments((int) ($sessionUser['id'] ?? 0));
+            $data['overview'] = dashboard_admin_overview($db, $selectedPeriod, $scopedQuery);
+            return $data;
         case 'program_head':
-            return getProgramHeadStats($db, $program, $department, $selectedPeriod);
+            $data = getProgramHeadStats($db, $program, $department, $selectedPeriod);
+            $sessionUser = current_user();
+            $programHeadPrograms = program_head_programs(
+                (int) ($sessionUser['id'] ?? 0),
+                (int) ($selectedPeriod['id'] ?? 0)
+            );
+            $scopedQuery = $query;
+            $scopedQuery['_scope_enforced'] = true;
+            $scopedQuery['_scope_departments'] = program_head_departments(
+                (int) ($sessionUser['id'] ?? 0),
+                (int) ($selectedPeriod['id'] ?? 0)
+            );
+            $scopedQuery['_scope_programs'] = array_values(array_filter(array_column($programHeadPrograms, 'program_code')));
+            $data['overview'] = dashboard_admin_overview($db, $selectedPeriod, $scopedQuery);
+            $data['programs'] = array_map(static fn(array $item): array => [
+                'id'=>(int)($item['program_id'] ?? $item['id'] ?? 0),
+                'code'=>(string)($item['program_code'] ?? ''),
+                'name'=>(string)($item['program_name'] ?? ''),
+                'is_primary'=>(int)($item['is_primary'] ?? 0),
+                'is_lead_evaluator'=>(int)($item['is_lead_evaluator'] ?? 1),
+                'co_head_authorized'=>(int)($item['co_head_authorized'] ?? 0),
+            ], $programHeadPrograms);
+            return $data;
         case 'vpaa':
-            return getVpaaStats($db, $selectedPeriod);
+            $data = getVpaaStats($db, $selectedPeriod);
+            $sessionUser = current_user();
+            $scopedQuery = $query;
+            $scopedQuery['_scope_enforced'] = true;
+            $scopedQuery['_scope_departments'] = vpaa_departments((int) ($sessionUser['id'] ?? 0));
+            $data['overview'] = dashboard_admin_overview($db, $selectedPeriod, $scopedQuery);
+            return $data;
         case 'faculty':
-            return getFacultyStats($db, $userId, $selectedPeriod);
+            // Faculty metrics must always belong to the authenticated account.
+            // A stale browser session cache can otherwise send an old/missing
+            // user_id and make valid period assignments appear as zero.
+            $sessionUser = current_user();
+            $facultyUserId = (int)($sessionUser['id'] ?? 0);
+            if ($facultyUserId <= 0) {
+                $facultyUserId = (int)$userId;
+            }
+            return getFacultyStats($db, $facultyUserId, $selectedPeriod);
         default:
             return getAdminStats($db, $selectedPeriod);
     }
@@ -60,7 +105,7 @@ try {
 }
 }
 
-function getAdminStats(PDO $db, ?array $period = null): array {
+function getAdminStats(PDO $db, ?array $period = null, array $query = []): array {
     $periodName = trim((string) ($period['period_name'] ?? ''));
     $periodId = (int)($period['id'] ?? 0);
     dipascaf_ensure_period_participation_schema();
@@ -171,6 +216,14 @@ function getAdminStats(PDO $db, ?array $period = null): array {
         ? dashboard_count($db, "SELECT COUNT(*) FROM faculty WHERE {$activeFacultyCondition}COALESCE(progress_percent, 0) < 50")
         : 0;
 
+    $overview = dashboard_admin_overview($db, $period, $query);
+    $evalPending = (int) $overview['counts']['pending'];
+    $evalCompleted = (int) $overview['counts']['completed'];
+    $peerOverdueCount = (int) $overview['counts']['overdue'];
+    $evaluationOverdueCount = 0;
+    $noDeanCount = (int) $overview['counts']['departments_need_dean'];
+    $noHeadCount = (int) $overview['counts']['programs_need_head'];
+    $lowProgressFaculty = (int) $overview['counts']['below_50'];
     return [
         'metrics' => [
             ['label' => 'Total Users', 'value' => $totalUsers],
@@ -190,6 +243,7 @@ function getAdminStats(PDO $db, ?array $period = null): array {
             ['label' => 'Archived records', 'count' => $inactiveUsers + $archivedFaculty, 'detail' => 'Inactive users and archived faculty', 'href' => '/admin/settings', 'cta' => 'View', 'tone' => 'info', 'initial' => 'A'],
         ],
         'updatedAt' => date('Y-m-d H:i:s'),
+        'overview' => $overview,
     ];
 }
 
@@ -364,11 +418,9 @@ function getProgramHeadStats(PDO $db, string $program, string $department, ?arra
     $sessionProgramCodes = [];
 
     if (($sessionUser['role'] ?? '') === 'program_head') {
-        $programRows = admin_all(
-            'SELECT program_code
-             FROM programs
-             WHERE program_head_user_id = :program_head_user_id AND is_active = 1',
-            ['program_head_user_id' => (int) ($sessionUser['id'] ?? 0)]
+        $programRows = program_head_programs(
+            (int) ($sessionUser['id'] ?? 0),
+            (int) ($period['id'] ?? 0)
         );
         foreach ($programRows as $row) {
             $code = strtoupper(trim((string) ($row['program_code'] ?? '')));

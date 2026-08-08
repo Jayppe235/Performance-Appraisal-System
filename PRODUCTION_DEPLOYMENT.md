@@ -2,6 +2,14 @@
 
 PMAS is deployed as one HTTPS site: the Vite build is served at the subdomain root, PHP is served from the same document root, and only PHP connects to private MySQL. Never expose MySQL port 3306 to the public internet and never put database credentials in a `VITE_*` variable.
 
+For school-managed GitHub deployment, use
+`docs/school-hosting-request.md` to obtain the infrastructure and
+`docs/online-deployment-runbook.md` for the complete setup. The
+`.github/workflows/production.yml` workflow builds a production-only artifact,
+activates releases atomically, preserves uploads, checks application health,
+and rolls back a failed release. The manual ZIP procedure below remains
+available as a fallback.
+
 Git deploys application code only. Database records and `assets/uploads` are persistent production data and are backed up and deployed independently. Local development never writes to the production database.
 
 ## Hosting requirements

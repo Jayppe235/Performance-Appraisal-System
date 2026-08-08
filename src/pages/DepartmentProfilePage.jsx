@@ -1,12 +1,14 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, BarChart3, Mail, Phone, Plus, Edit, Archive, Search, X, Check, AlertCircle, BookOpen, Users, Filter, ArrowUpDown, Building2, Loader2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowLeft, BarChart3, Phone, Plus, Edit, Archive, Search, X, Check, AlertCircle, BookOpen, Users, UserPlus, Filter, ArrowUpDown, Building2, Loader2 } from 'lucide-react';
 import apiFetch from '../data/api.js';
 import { assetUrl } from '../data/apiBase.js';
 import PeerAssignmentsPanel from '../components/evaluations/PeerAssignmentsPanel.jsx';
 import { useDashboardContext } from '../layouts/DashboardLayout.jsx';
 import { confirmDeleteData, confirmSaveChanges } from '../components/common/ConfirmationModal.jsx';
 import AnimatedCounter from '../components/common/AnimatedCounter.jsx';
+import { useEvaluationPeriod } from '../contexts/EvaluationPeriodContext.jsx';
 
 function programCountForDepartment(department, allPrograms) {
   if (!department) return 0;
@@ -84,14 +86,17 @@ function mapApiUserToDepartmentUser(apiUser) {
 
   return {
     id: Number(apiUser.id),
+    userCode: String(apiUser.user_code || ''),
+    facultyId: Number(apiUser.faculty_id || 0),
     fullName: apiUser.full_name || '',
     role: role === 'dean' ? 'Dean' : role === 'program_head' ? 'Program Head' : role === 'vpaa' ? 'VPAA' : role === 'admin_hr' ? 'Admin/HR' : 'Faculty',
     department: normalizeDepartmentName(apiUser.department || ''),
     program: apiUser.program || '',
-    email: apiUser.email || '',
+    email: String(apiUser.email || '').toLowerCase().endsWith('@pmas.local') ? '' : (apiUser.email || ''),
     phone: apiUser.phone || '',
     status: apiUser.is_active == 1 ? 'Active' : 'Inactive',
     avatar: assetUrl(apiUser.profile_image || ''),
+    subjectAssignments: apiUser.subject_assignments || [],
   };
 }
 
@@ -106,6 +111,7 @@ export default function DepartmentProfilePage() {
   const { departmentId } = useParams();
   const navigate = useNavigate();
   const { role } = useDashboardContext();
+  const { selectedPeriodId } = useEvaluationPeriod();
   const isAdmin = role?.key === 'admin';
   const [departments, setDepartments] = useState([]);
   const [allPrograms, setAllPrograms] = useState([]);
@@ -134,7 +140,62 @@ export default function DepartmentProfilePage() {
   const [activePeopleCategory, setActivePeopleCategory] = useState('dean');
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [ratingsLoadingId, setRatingsLoadingId] = useState(null);
+  const [subjects, setSubjects] = useState([]);
+  const [subjectForm, setSubjectForm] = useState({ code: '', name: '' });
+  const [subjectSaving, setSubjectSaving] = useState(false);
+  const [showSubjectForm, setShowSubjectForm] = useState(false);
+  const [academicManagementView, setAcademicManagementView] = useState('programs');
+  const subjectCodeRef = useRef(null);
   const peopleTabRefs = useRef({});
+
+  const loadSubjects = async () => {
+    if (!departmentId) return;
+    const payload = await apiFetch(`/api/subject-areas.php?department_id=${departmentId}&include_inactive=1`);
+    setSubjects(Array.isArray(payload.subjects) ? payload.subjects : []);
+  };
+
+  useEffect(() => {
+    loadSubjects().catch((error) => setUsersError(error.message || 'Unable to load subject areas.'));
+  }, [departmentId]);
+
+  async function createSubject(event) {
+    event.preventDefault();
+    if (!subjectForm.code.trim() || !subjectForm.name.trim() || subjectSaving) return;
+    setSubjectSaving(true);
+    try {
+      await apiFetch('/api/subject-areas.php', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ department_id: Number(departmentId), subject_code: subjectForm.code.trim().toUpperCase(), subject_name: subjectForm.name.trim(), is_active: true }),
+      });
+      setSubjectForm({ code: '', name: '' });
+      setShowSubjectForm(false);
+      await loadSubjects();
+    } catch (error) { setUsersError(error.message); } finally { setSubjectSaving(false); }
+  }
+
+  async function updateSubject(subject, changes) {
+    setSubjectSaving(true);
+    try {
+      await apiFetch('/api/subject-areas.php', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: subject.id,
+          department_id: subject.department_id,
+          subject_code: changes.subject_code ?? subject.subject_code,
+          subject_name: changes.subject_name ?? subject.subject_name,
+          coordinator_faculty_id: Object.prototype.hasOwnProperty.call(changes, 'coordinator_faculty_id') ? changes.coordinator_faculty_id : subject.coordinator_faculty_id,
+          is_active: changes.is_active ?? Boolean(Number(subject.is_active)),
+        }),
+      });
+      await loadSubjects();
+    } catch (error) { setUsersError(error.message); } finally { setSubjectSaving(false); }
+  }
+
+  function editDepartmentAccount(user) {
+    if (!user?.id) return;
+    const returnTo = `/admin/department/${departmentId}`;
+    navigate(`/admin/people?view=users&action=edit-account&user_id=${user.id}&return_to=${encodeURIComponent(returnTo)}`);
+  }
 
   // ── Load departments & programs on mount ─────────────────────────────
   useEffect(() => {
@@ -487,6 +548,21 @@ export default function DepartmentProfilePage() {
     });
   }
 
+  function addDepartmentAccount() {
+    const role = activePeopleCategory === 'dean'
+      ? 'Dean'
+      : activePeopleCategory === 'programHeads'
+        ? 'Program Head'
+        : 'Faculty';
+    const params = new URLSearchParams({
+      view: 'users',
+      action: 'add-account',
+      department_id: String(department.id),
+      role,
+    });
+    navigate(`/admin/people?${params.toString()}#account-management`);
+  }
+
   if (!department) {
     return (
       <section className="admin-content page-enter">
@@ -561,8 +637,10 @@ export default function DepartmentProfilePage() {
 
       <div className="module-wide dept-profile-page-section peer-monitor-section" style={{ '--section-index': 2 }}>
         <PeerAssignmentsPanel
+          key={`department-peer-${department.id}-${selectedPeriodId || 'loading'}`}
           compact
           departmentId={department.id}
+          periodId={selectedPeriodId}
           excludeDeans
           strictDepartmentScope
           title={`${department.code} Peer-to-Peer Monitoring`}
@@ -574,16 +652,27 @@ export default function DepartmentProfilePage() {
         <section className="admin-box module-wide manage-programs-section dept-profile-page-section" style={{ '--section-index': 3 }}>
           <div className="box-title">
             <div>
-              <h2>Manage Programs</h2>
-              <span>{deptPrograms.length} program(s) under {department.code}</span>
+              <h2>{academicManagementView === 'programs' ? 'Manage Programs' : 'Manage Subject Areas'}</h2>
+              <span>{academicManagementView === 'programs' ? `${deptPrograms.length} program(s)` : `${subjects.length} subject area(s)`} under {department.code}</span>
             </div>
             <div className="programs-toolbar-actions">
-              <button type="button" className="primary-button" onClick={openAddModal}>
-                <Plus className="h-4 w-4" /> Add Program
+              <div className="academic-management-tabs" role="tablist" aria-label="Academic assignment management views">
+                <button type="button" role="tab" aria-selected={academicManagementView === 'programs'} className={academicManagementView === 'programs' ? 'active' : ''} onClick={() => setAcademicManagementView('programs')}>Programs</button>
+                <button type="button" role="tab" aria-selected={academicManagementView === 'subjects'} className={academicManagementView === 'subjects' ? 'active' : ''} onClick={() => setAcademicManagementView('subjects')}>Subject Areas</button>
+              </div>
+              <button type="button" className="primary-button" onClick={() => {
+                if (academicManagementView === 'programs') openAddModal();
+                else {
+                  setShowSubjectForm(true);
+                  window.setTimeout(() => subjectCodeRef.current?.focus(), 50);
+                }
+              }}>
+                <Plus className="h-4 w-4" /> {academicManagementView === 'programs' ? 'Add Program' : 'Add Subject Area'}
               </button>
             </div>
           </div>
 
+          <div hidden={academicManagementView !== 'programs'}>
           <div className="programs-insight-strip" aria-label="Program summary">
             <article>
               <span>Total Programs</span>
@@ -650,19 +739,19 @@ export default function DepartmentProfilePage() {
             <div className="programs-table-container">
               {/* Table Header */}
               <div className="programs-table-row programs-table-header">
-                <button className="programs-th" onClick={() => toggleSort('code')}>
+                <button type="button" className={`programs-th ${programSort === 'code' ? 'is-sorted' : ''}`} aria-pressed={programSort === 'code'} aria-label={`Sort by code${programSort === 'code' ? `, currently ${programSortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`} onClick={() => toggleSort('code')}>
                   Code {programSort === 'code' && <ArrowUpDown className="h-3 w-3" />}
                 </button>
-                <button className="programs-th" onClick={() => toggleSort('name')}>
+                <button type="button" className={`programs-th ${programSort === 'name' ? 'is-sorted' : ''}`} aria-pressed={programSort === 'name'} aria-label={`Sort by program name${programSort === 'name' ? `, currently ${programSortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`} onClick={() => toggleSort('name')}>
                   Program Name {programSort === 'name' && <ArrowUpDown className="h-3 w-3" />}
                 </button>
-                <button className="programs-th" onClick={() => toggleSort('head')}>
+                <button type="button" className={`programs-th ${programSort === 'head' ? 'is-sorted' : ''}`} aria-pressed={programSort === 'head'} aria-label={`Sort by program head${programSort === 'head' ? `, currently ${programSortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`} onClick={() => toggleSort('head')}>
                   Program Head {programSort === 'head' && <ArrowUpDown className="h-3 w-3" />}
                 </button>
-                <button className="programs-th" onClick={() => toggleSort('faculty')}>
+                <button type="button" className={`programs-th ${programSort === 'faculty' ? 'is-sorted' : ''}`} aria-pressed={programSort === 'faculty'} aria-label={`Sort by faculty count${programSort === 'faculty' ? `, currently ${programSortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`} onClick={() => toggleSort('faculty')}>
                   Faculty {programSort === 'faculty' && <ArrowUpDown className="h-3 w-3" />}
                 </button>
-                <button className="programs-th" onClick={() => toggleSort('status')}>
+                <button type="button" className={`programs-th ${programSort === 'status' ? 'is-sorted' : ''}`} aria-pressed={programSort === 'status'} aria-label={`Sort by status${programSort === 'status' ? `, currently ${programSortDir === 'asc' ? 'ascending' : 'descending'}` : ''}`} onClick={() => toggleSort('status')}>
                   Status {programSort === 'status' && <ArrowUpDown className="h-3 w-3" />}
                 </button>
                 <span className="programs-th programs-th-actions">Actions</span>
@@ -717,6 +806,72 @@ export default function DepartmentProfilePage() {
                 </div>
               ))}
             </div>
+          )}
+          </div>
+
+          <div hidden={academicManagementView !== 'subjects'} className="subject-management-view">
+            <div className="programs-insight-strip" aria-label="Subject area summary">
+              <article><span>Total Subjects</span><strong>{subjects.length}</strong></article>
+              <article><span>Active</span><strong>{subjects.filter((subject) => Number(subject.is_active) === 1).length}</strong></article>
+              <article><span>With Coordinator</span><strong>{subjects.filter((subject) => subject.coordinator_faculty_id).length}</strong></article>
+              <article><span>Assigned Faculty</span><strong>{subjects.reduce((total, subject) => total + Number(subject.faculty_count || 0), 0)}</strong></article>
+            </div>
+            <div className="programs-table-container">
+              <div className="programs-table-row programs-table-header"><span>Code</span><span>Subject Area</span><span>Coordinator</span><span>Faculty</span><span>Status</span><span>Actions</span></div>
+              {subjects.map((subject) => {
+                const eligibleCoordinators = faculty.filter((member) => member.subjectAssignments.some((assignment) => Number(assignment.id) === Number(subject.id)));
+                return <div className={`programs-table-row ${Number(subject.is_active) ? '' : 'archived-row'}`} key={subject.id}>
+                  <span className="programs-cell-code" data-label="Code">{subject.subject_code}</span>
+                  <span className="programs-cell-name" data-label="Subject Area"><strong>{subject.subject_name}</strong></span>
+                  <span className="programs-cell-head" data-label="Coordinator"><select value={subject.coordinator_faculty_id || ''} disabled={subjectSaving} onChange={(event) => updateSubject(subject, { coordinator_faculty_id: Number(event.target.value) || null })}><option value="">Unassigned</option>{eligibleCoordinators.map((member) => <option key={member.facultyId} value={member.facultyId}>{member.fullName}</option>)}</select></span>
+                  <span className="programs-cell-faculty" data-label="Faculty"><Users className="h-3.5 w-3.5" /> {subject.faculty_count}</span>
+                  <span className="programs-cell-status" data-label="Status"><span className={`status-badge ${Number(subject.is_active) ? 'active' : 'inactive'}`}>{Number(subject.is_active) ? 'Active' : 'Inactive'}</span></span>
+                  <span className="programs-cell-actions" data-label="Actions"><button type="button" className="program-action-btn edit" title="Edit subject area" onClick={() => { const name = window.prompt('Subject area name', subject.subject_name); if (name?.trim()) updateSubject(subject, { subject_name: name.trim() }); }}><Edit className="h-4 w-4" /></button><button type="button" className="program-action-btn archive" title={Number(subject.is_active) ? 'Deactivate subject area' : 'Activate subject area'} onClick={() => updateSubject(subject, { is_active: !Number(subject.is_active) })}><Archive className="h-4 w-4" /></button></span>
+                </div>;
+              })}
+              {subjects.length === 0 && <div className="module-empty"><BookOpen className="h-10 w-10" /><p>No subject areas are configured for this department.</p><button type="button" className="ghost-button" onClick={() => setShowSubjectForm(true)}><Plus className="h-4 w-4" /> Add the first subject area</button></div>}
+            </div>
+          </div>
+
+          {showSubjectForm && createPortal(
+            <div className="people-modal-backdrop is-centered" onClick={(event) => {
+              if (event.target !== event.currentTarget || subjectSaving) return;
+              setShowSubjectForm(false);
+              setSubjectForm({ code: '', name: '' });
+            }}>
+              <div className="people-modal-panel program-modal-panel subject-area-modal-panel" onClick={(event) => event.stopPropagation()}>
+                <div className="box-title">
+                  <div>
+                    <h2>Add New Subject Area</h2>
+                    <span>Create a subject assignment under {department.name}</span>
+                  </div>
+                  <button type="button" className="modal-icon-close" aria-label="Close Add Subject Area" disabled={subjectSaving} onClick={() => { setShowSubjectForm(false); setSubjectForm({ code: '', name: '' }); }}>
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <form className="program-form" onSubmit={createSubject}>
+                  <div className="program-form-grid">
+                    <label>
+                      Subject Code *
+                      <input type="text" ref={subjectCodeRef} value={subjectForm.code} maxLength={30} onChange={(event) => setSubjectForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} placeholder="e.g., MATH" required />
+                    </label>
+                    <label>
+                      Subject Name *
+                      <input type="text" value={subjectForm.name} onChange={(event) => setSubjectForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g., Mathematics" required />
+                    </label>
+                    <label className="program-form-full">
+                      Department
+                      <input type="text" value={`${department.name} (${department.code})`} disabled />
+                    </label>
+                  </div>
+                  <div className="program-form-actions">
+                    <button type="button" className="ghost-button" disabled={subjectSaving} onClick={() => { setShowSubjectForm(false); setSubjectForm({ code: '', name: '' }); }}>Cancel</button>
+                    <button type="submit" className="primary-button" disabled={subjectSaving}>{subjectSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</> : <><Check className="h-4 w-4" /> Save Subject Area</>}</button>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body,
           )}
 
           {/* Add/Edit Program Modal */}
@@ -784,7 +939,7 @@ export default function DepartmentProfilePage() {
                         <option value="">-- Select Program Head --</option>
                         {departmentScopedHeads.map(head => (
                           <option key={head.id} value={head.id}>
-                            {head.full_name} ({head.email}){head.program ? ` - ${head.program}` : ''}
+                            {head.full_name}{String(head.email || '').toLowerCase().endsWith('@pmas.local') ? '' : ` (${head.email})`}{head.program ? ` - ${head.program}` : ''}
                           </option>
                         ))}
                       </select>
@@ -835,6 +990,10 @@ export default function DepartmentProfilePage() {
               {activePeopleCategory === 'faculty' && `${visibleFaculty.length} of ${faculty.length} faculty member(s)`}
             </span>
           </div>
+          <button type="button" className="department-people-add-account" onClick={addDepartmentAccount}>
+            <UserPlus size={17} />
+            Add {activePeopleCategory === 'dean' ? 'Dean' : activePeopleCategory === 'programHeads' ? 'Program Head' : 'Faculty'} Account
+          </button>
         </div>
 
         <div className="department-people-tabs" role="tablist" aria-label="Department people categories">
@@ -926,13 +1085,13 @@ export default function DepartmentProfilePage() {
                     </span>
                     <div className="dept-dean-copy">
                       <strong title={dean.fullName}>{dean.fullName}</strong>
-                      <small>{dean.email || 'No email listed'}</small>
+                      <small>Username Code: {dean.userCode || 'Not assigned'}</small>
                     </div>
                     <span className={`status-badge ${deanStatus.toLowerCase()}`} aria-label={`Account status: ${deanStatus}`}>{deanStatus}</span>
-                    <button className="rating-view-button" type="button" onClick={() => viewOverallRatings(dean)} disabled={ratingsLoadingId === dean.id}>
-                      {ratingsLoadingId === dean.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
-                      {ratingsLoadingId === dean.id ? 'Opening...' : 'Overall Ratings'}
-                    </button>
+                    <div className="department-person-actions">
+                      <button className="department-edit-account-button" type="button" onClick={() => editDepartmentAccount(dean)}><Edit className="h-4 w-4" /> Edit Account</button>
+                      <button className="rating-view-button" type="button" onClick={() => viewOverallRatings(dean)} disabled={ratingsLoadingId === dean.id}>{ratingsLoadingId === dean.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}{ratingsLoadingId === dean.id ? 'Opening...' : 'Overall Ratings'}</button>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -955,12 +1114,10 @@ export default function DepartmentProfilePage() {
                       <h3 title={user.fullName}>{user.fullName}</h3>
                       <p className="role-badge program-head">{user.program || 'Program'}</p>
                       <div className="person-details">
-                        {user.email && (
-                          <div className="detail-item">
-                            <Mail className="h-4 w-4" />
-                            <span>{user.email}</span>
-                          </div>
-                        )}
+                        <div className="detail-item">
+                          <span aria-hidden="true">#</span>
+                          <span>Username Code: {user.userCode || 'Not assigned'}</span>
+                        </div>
                         {user.phone && (
                           <div className="detail-item">
                             <Phone className="h-4 w-4" />
@@ -969,12 +1126,10 @@ export default function DepartmentProfilePage() {
                         )}
                       </div>
                     </div>
-                    <div className="person-status">
-                      <span className={`status-badge ${user.status.toLowerCase()}`} aria-label={`Account status: ${user.status}`}>{user.status}</span>
-                      <button className="rating-view-button compact" type="button" onClick={() => viewOverallRatings(user)} disabled={ratingsLoadingId === user.id}>
-                        {ratingsLoadingId === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
-                        {ratingsLoadingId === user.id ? 'Opening...' : 'Overall Ratings'}
-                      </button>
+                    <span className={`status-badge department-card-status ${user.status.toLowerCase()}`} aria-label={`Account status: ${user.status}`}>{user.status}</span>
+                    <div className="department-person-actions">
+                      <button className="department-edit-account-button" type="button" onClick={() => editDepartmentAccount(user)}><Edit className="h-4 w-4" /> Edit Account</button>
+                      <button className="rating-view-button compact" type="button" onClick={() => viewOverallRatings(user)} disabled={ratingsLoadingId === user.id}>{ratingsLoadingId === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}{ratingsLoadingId === user.id ? 'Opening...' : 'Overall Ratings'}</button>
                     </div>
                   </article>
                 ))}
@@ -999,12 +1154,10 @@ export default function DepartmentProfilePage() {
                       <h3 title={user.fullName}>{user.fullName}</h3>
                       <p className="role-badge program-head">{user.program || 'Unassigned Program'}</p>
                       <div className="person-details">
-                        {user.email && (
-                          <div className="detail-item">
-                            <Mail className="h-4 w-4" />
-                            <span>{user.email}</span>
-                          </div>
-                        )}
+                        <div className="detail-item">
+                          <span aria-hidden="true">#</span>
+                          <span>Username Code: {user.userCode || 'Not assigned'}</span>
+                        </div>
                         {user.phone && (
                           <div className="detail-item">
                             <Phone className="h-4 w-4" />
@@ -1013,12 +1166,10 @@ export default function DepartmentProfilePage() {
                         )}
                       </div>
                     </div>
-                    <div className="person-status">
-                      <span className={`status-badge ${user.status.toLowerCase()}`} aria-label={`Account status: ${user.status}`}>{user.status}</span>
-                      <button className="rating-view-button compact" type="button" onClick={() => viewOverallRatings(user)} disabled={ratingsLoadingId === user.id}>
-                        {ratingsLoadingId === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
-                        {ratingsLoadingId === user.id ? 'Opening...' : 'Overall Ratings'}
-                      </button>
+                    <span className={`status-badge department-card-status ${user.status.toLowerCase()}`} aria-label={`Account status: ${user.status}`}>{user.status}</span>
+                    <div className="department-person-actions">
+                      <button className="department-edit-account-button" type="button" onClick={() => editDepartmentAccount(user)}><Edit className="h-4 w-4" /> Edit Account</button>
+                      <button className="rating-view-button compact" type="button" onClick={() => viewOverallRatings(user)} disabled={ratingsLoadingId === user.id}>{ratingsLoadingId === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}{ratingsLoadingId === user.id ? 'Opening...' : 'Overall Ratings'}</button>
                     </div>
                   </article>
                 ))}

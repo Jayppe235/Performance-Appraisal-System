@@ -195,6 +195,12 @@ function self_eval_default_definition(string $role, array $legacy = []): array
         'schemaVersion' => 2,
         'description' => 'Complete the self-evaluation honestly and provide supporting details where requested.',
         'instructions' => 'Required questions are marked with an asterisk.',
+        'approvalRequirements' => [
+            'reviewers' => $role === 'faculty' ? ['employee', 'program_head', 'dean'] : ['employee', 'dean', 'vpaa'],
+            'requireEmployeeSignature' => true,
+            'requireReviewerComments' => false,
+            'allowReturn' => true,
+        ],
         'scales' => [[
             'id' => $scaleId, 'name' => 'Standard Performance Scale',
             'options' => [
@@ -206,11 +212,11 @@ function self_eval_default_definition(string $role, array $legacy = []): array
             ],
         ]],
         'sections' => [
-            ['id' => self_eval_uid('sec_', $role . ':questions'), 'type' => 'questions', 'title' => 'Self-Evaluation Questions', 'instructions' => '', 'category' => 'Self Evaluation', 'visible' => true, 'required' => true, 'protected' => false, 'weight' => 100, 'questions' => $items],
-            ['id' => 'system_performance_outputs', 'type' => 'outputs', 'title' => 'Performance Outputs', 'instructions' => '', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
-            ['id' => 'system_summary', 'type' => 'summary', 'title' => 'Summary and Rating', 'instructions' => '', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
+            ['id' => 'system_part_i', 'type' => 'partI', 'title' => 'Part I - Self-Evaluation', 'instructions' => '', 'category' => 'Self Evaluation', 'visible' => true, 'required' => true, 'protected' => true, 'weight' => 0, 'questions' => []],
+            ['id' => 'system_performance_outputs', 'type' => 'outputs', 'title' => 'Part II - Performance Outputs Appraisal', 'instructions' => '', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
+            ['id' => 'system_summary', 'type' => 'summary', 'title' => 'Part IV - Summary and Overall Rating', 'instructions' => '', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
             ['id' => 'system_confirmation', 'type' => 'confirmation', 'title' => 'Comments and Confirmation', 'instructions' => '', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
-            ['id' => 'system_career', 'type' => 'career', 'title' => 'Career Development', 'instructions' => '', 'visible' => $role !== 'faculty', 'required' => false, 'protected' => true, 'questions' => []],
+            ['id' => 'system_career', 'type' => 'career', 'title' => 'Part V - Employee Career Development Assessment', 'instructions' => '', 'visible' => true, 'required' => false, 'protected' => true, 'questions' => []],
         ],
     ];
 }
@@ -221,6 +227,54 @@ function self_eval_normalize_definition(string $role, mixed $value): array
     if (($legacy['schemaVersion'] ?? 0) !== 2 || !is_array($legacy['sections'] ?? null)) {
         return self_eval_default_definition($role, $legacy);
     }
+    if (!is_array($legacy['approvalRequirements'] ?? null)) {
+        $legacy['approvalRequirements'] = self_eval_default_definition($role)['approvalRequirements'];
+    }
+    // Restore the original PMAS paper form for legacy default questionnaires.
+    // Custom questionnaire sections without the five legacy question keys remain unchanged.
+    foreach ($legacy['sections'] as &$section) {
+        if (($section['type'] ?? '') !== 'questions') continue;
+        $legacyKeys = array_values(array_filter(array_map(
+            static fn ($question) => (string)($question['legacyKey'] ?? ''),
+            is_array($section['questions'] ?? null) ? $section['questions'] : []
+        )));
+        if (count(array_intersect(['question1', 'question2', 'question3', 'question4', 'question5'], $legacyKeys)) < 5) continue;
+        $section = [
+            'id' => 'system_part_i', 'type' => 'partI', 'title' => 'Part I - Self-Evaluation',
+            'instructions' => '', 'category' => 'Self Evaluation', 'visible' => true,
+            'required' => true, 'protected' => true, 'weight' => 0, 'questions' => [],
+        ];
+    }
+    unset($section);
+
+    // Older published questionnaires may predate one or more pages of the
+    // official PMAS paper. Restore only the protected structural sections;
+    // custom questions and all existing answers remain untouched.
+    $officialSections = self_eval_default_definition($role)['sections'];
+    $existingTypes = array_map(
+        static fn ($section) => (string)($section['type'] ?? ''),
+        $legacy['sections']
+    );
+    foreach ($officialSections as $officialSection) {
+        $type = (string)($officialSection['type'] ?? '');
+        if (!in_array($type, $existingTypes, true)) {
+            $legacy['sections'][] = $officialSection;
+            $existingTypes[] = $type;
+        }
+    }
+
+    $officialOrder = ['partI'=>10, 'questions'=>20, 'category'=>30, 'outputs'=>40, 'summary'=>50, 'confirmation'=>60, 'career'=>70];
+    usort($legacy['sections'], static function (array $left, array $right) use ($officialOrder): int {
+        return ($officialOrder[(string)($left['type'] ?? '')] ?? 35)
+            <=> ($officialOrder[(string)($right['type'] ?? '')] ?? 35);
+    });
+    foreach ($legacy['sections'] as &$section) {
+        if (in_array((string)($section['type'] ?? ''), ['partI','outputs','summary','confirmation','career'], true)) {
+            $section['visible'] = true;
+            $section['protected'] = true;
+        }
+    }
+    unset($section);
     return $legacy;
 }
 
@@ -246,6 +300,7 @@ function self_eval_validate_definition(array $definition): array
     foreach (($definition['sections'] ?? []) as $section) {
         if (empty($section['visible'])) continue;
         if (trim((string) ($section['title'] ?? '')) === '') $errors[] = 'Every visible section needs a title.';
+        if (($section['type'] ?? '') === 'partI') $usable += 5;
         if (($section['type'] ?? '') === 'questions') {
             $hasRating = false;
             foreach (($section['questions'] ?? []) as $question) {
@@ -501,12 +556,30 @@ function self_eval_managed_record(array $manager, int $recordId = 0, int $assign
     $config = self_eval_reviewer_config($role);
     $params = [];
     $scopeSql = '1 = 0';
+    $scopePeriodId = 0;
+    if ($role === 'program_head' && ($recordId > 0 || $assignmentId > 0)) {
+        $periodRow = $recordId > 0
+            ? admin_one(
+                'SELECT ap.id FROM pmas_self_evaluations se
+                 JOIN peer_assignments pa ON pa.id=se.assignment_id
+                 JOIN appraisal_periods ap ON ap.period_name=pa.cycle_name
+                 WHERE se.id=:target_id LIMIT 1',
+                ['target_id'=>$recordId]
+            )
+            : admin_one(
+                'SELECT ap.id FROM peer_assignments pa
+                 JOIN appraisal_periods ap ON ap.period_name=pa.cycle_name
+                 WHERE pa.id=:target_id LIMIT 1',
+                ['target_id'=>$assignmentId]
+            );
+        $scopePeriodId = (int)($periodRow['id'] ?? 0);
+    }
 
     if ($role === 'dean') {
         $departments = self_eval_dean_department_aliases($manager);
         [$scopeSql, $params] = self_eval_department_filter_sql($departments, 'f', 'dean_department_');
     } elseif ($role === 'program_head') {
-        $programs = program_head_programs((int) ($manager['id'] ?? 0));
+        $programs = program_head_programs((int) ($manager['id'] ?? 0), $scopePeriodId);
         if ($programs === []) return null;
         [$scopeSql, $params] = program_head_program_filter_sql($programs, [], 'f');
     } elseif ($role === 'vpaa') {
@@ -561,7 +634,7 @@ function self_eval_managed_records(array $manager, int $periodId = 0): array
     if ($role === 'dean') {
         [$scopeSql, $scopeParams] = self_eval_department_filter_sql(self_eval_dean_department_aliases($manager), 'f', 'review_department_');
     } elseif ($role === 'program_head') {
-        $programs = program_head_programs((int) ($manager['id'] ?? 0));
+        $programs = program_head_programs((int) ($manager['id'] ?? 0), $periodId);
         if ($programs === []) return [];
         [$scopeSql, $scopeParams] = program_head_program_filter_sql($programs, [], 'f');
     } else {
@@ -581,7 +654,7 @@ function self_eval_managed_records(array $manager, int $periodId = 0): array
     $prefix = $config['prefix'];
     $managedRoleSql = self_eval_managed_role_sql($role);
     return admin_all(
-        "SELECT se.id, se.user_id, u.full_name, se.role, se.department, se.evaluation_period, se.form_type,
+        "SELECT se.id, se.user_id, u.full_name, se.role, se.department, pa.cycle_name AS evaluation_period, se.form_type,
                 se.performance_outputs_score, se.performance_factors_score, se.overall_rating, se.performance_level,
                 se.status, se.submitted_at, se.reopened_at, se.reopened_by, se.updated_at,
                 se.{$prefix}_review_status AS review_status, se.{$prefix}_reviewed_by AS reviewed_by,
@@ -992,8 +1065,23 @@ try {
                 $records = self_eval_managed_records($user, (int) ($_GET['period_id'] ?? 0));
             } else {
                 $params = [];
+                $selectedPeriodSql = '';
+                $selectedPeriodId = (int) ($_GET['period_id'] ?? 0);
+                if ($selectedPeriodId > 0) {
+                    $selectedPeriod = admin_one(
+                        'SELECT id, period_name FROM appraisal_periods WHERE id = :period_id LIMIT 1',
+                        ['period_id' => $selectedPeriodId]
+                    );
+                    if ($selectedPeriod === null) {
+                        http_response_code(422);
+                        echo json_encode(['ok' => false, 'message' => 'The selected evaluation period was not found.']);
+                        exit;
+                    }
+                    $params['selected_period_name'] = (string) ($selectedPeriod['period_name'] ?? '');
+                    $selectedPeriodSql = ' AND pa.cycle_name = :selected_period_name';
+                }
                 $records = admin_all(
-                "SELECT se.id, se.user_id, u.full_name, se.role, se.department, se.evaluation_period, se.form_type,
+                "SELECT se.id, se.user_id, u.full_name, se.role, se.department, pa.cycle_name AS evaluation_period, se.form_type,
                         se.performance_outputs_score, se.performance_factors_score, se.overall_rating, se.performance_level,
                         se.status, se.submitted_at, se.reopened_at, se.reopened_by, se.updated_at,
                         se.dean_review_status, se.dean_reviewed_by, se.dean_reviewed_at, se.dean_review_notes,
@@ -1003,7 +1091,8 @@ try {
                  JOIN peer_assignments pa ON pa.id = se.assignment_id
                  JOIN faculty f ON f.id = pa.evaluatee_faculty_id
                  JOIN users u ON u.id = se.user_id
-                 WHERE 1 = 1
+                 WHERE COALESCE(pa.is_archived, 0) = 0
+                   {$selectedPeriodSql}
                  ORDER BY se.updated_at DESC
                  LIMIT 200",
                 $params
@@ -1274,16 +1363,13 @@ try {
             echo json_encode(['ok' => false, 'message' => $validationErrors[0], 'errors' => $validationErrors]);
             exit;
         }
-        $requiredReviewerSignatureKey = match ($role) {
-            'vpaa' => 'vpaaReviewerSignature',
-            'dean' => 'deanReviewerSignature',
-            default => 'appraiserSignature',
+        $reviewerNameKey = match ($role) {
+            'vpaa' => 'vpaaReviewer',
+            'dean' => 'deanReviewer',
+            default => 'appraiser',
         };
-        if (in_array($role, ['program_head', 'dean', 'vpaa'], true) && trim((string) ($answers['confirmations'][$requiredReviewerSignatureKey] ?? '')) === '') {
-            http_response_code(422);
-            echo json_encode(['ok' => false, 'message' => 'Upload the ' . $config['label'] . ' reviewer signature before approving this self evaluation.']);
-            exit;
-        }
+        $answers['confirmations'] = is_array($answers['confirmations'] ?? null) ? $answers['confirmations'] : [];
+        $answers['confirmations'][$reviewerNameKey] = trim((string) ($user['full_name'] ?? '')) ?: $config['label'];
 
         $notes = trim((string) ($input['review_notes'] ?? $input['dean_review_notes'] ?? $managedRecord['review_notes'] ?? ''));
         $oldStatus = (string) ($managedRecord['review_status'] ?? 'pending');
@@ -1293,6 +1379,11 @@ try {
             : '';
         db()->beginTransaction();
         try {
+            db()->prepare('UPDATE pmas_self_evaluations SET answers_json = :answers_json WHERE id = :record_id')
+                ->execute([
+                    'answers_json' => json_encode($answers, JSON_THROW_ON_ERROR),
+                    'record_id' => $recordId,
+                ]);
             db()->prepare(
                 "UPDATE pmas_self_evaluations
                  SET {$prefix}_review_status = 'approved',
@@ -1505,6 +1596,25 @@ try {
         exit;
     }
 
+    if ($action === 'submit') {
+        try {
+            $goalApproval = admin_one(
+                "SELECT status, goals_json FROM pmas_goals_records WHERE user_id = :user_id AND period_id = :period_id LIMIT 1",
+                ['user_id' => (int) $user['id'], 'period_id' => (int) $openPeriod['id']]
+            );
+        } catch (Throwable) {
+            $goalApproval = null;
+        }
+        if ((string) ($goalApproval['status'] ?? '') !== 'approved') {
+            http_response_code(423);
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Goals Record Sheet Required. You must complete, submit, and obtain approval for your Goals Record Sheet before proceeding with your Self-Evaluation.',
+            ]);
+            exit;
+        }
+    }
+
     $existing = admin_one('SELECT status, dean_review_status FROM pmas_self_evaluations WHERE assignment_id = :assignment_id', ['assignment_id' => (int) $assignment['id']]);
     if ($existing !== null && (string) $existing['status'] === 'submitted') {
         http_response_code(423);
@@ -1513,6 +1623,24 @@ try {
     }
 
     $answers = is_array($input['answers'] ?? null) ? $input['answers'] : [];
+    if ($action === 'submit' && !empty($goalApproval['goals_json'])) {
+        $approvedGoals = json_decode((string)$goalApproval['goals_json'], true);
+        if (is_array($approvedGoals) && $approvedGoals !== []) {
+            $submittedOutputs = is_array($answers['performanceOutputs'] ?? null) ? $answers['performanceOutputs'] : [];
+            $answers['performanceOutputs'] = array_map(static function ($goal, $index) use ($submittedOutputs) {
+                $existing = is_array($submittedOutputs[$index] ?? null) ? $submittedOutputs[$index] : [];
+                $keyArea = trim((string)($goal['keyResultArea'] ?? ''));
+                $statement = trim((string)($goal['goalStatement'] ?? ''));
+                return [
+                    'goals' => $keyArea . ($statement !== '' ? ' — ' . $statement : ''),
+                    'weight' => (float)($goal['weight'] ?? 0),
+                    'accomplishment' => trim((string)($existing['accomplishment'] ?? '')),
+                    'rating' => trim((string)($existing['rating'] ?? '')),
+                    'approvedGoal' => true,
+                ];
+            }, $approvedGoals, array_keys($approvedGoals));
+        }
+    }
     $employeeInfo = is_array($input['employee'] ?? null) ? $input['employee'] : [];
     try {
         $formPayloadJson = self_eval_payload_json(self_eval_form_payload_from_input($input), 'form_payload');

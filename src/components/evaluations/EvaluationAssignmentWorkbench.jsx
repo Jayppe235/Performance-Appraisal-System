@@ -26,7 +26,6 @@ import {
     Trash2,
     UnlockKeyhole,
     UserCheck,
-    Users,
     X,
     Eye,
     MessageSquare,
@@ -35,16 +34,18 @@ import {
 } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
+import ModernDatePicker from '../common/ModernDatePicker.jsx';
 import { addToast } from '../common/Toast.jsx';
 import { confirmDeleteData, confirmProceed, confirmSaveChanges } from '../common/ConfirmationModal.jsx';
 import PeerAssignmentsPanel from './PeerAssignmentsPanel.jsx';
 import PeriodParticipantsPanel from './PeriodParticipantsPanel.jsx';
 import SelfEvaluationModule from './SelfEvaluationModule.jsx';
+import { GoalsRecordTemplateManager } from './GoalsRecordSheet.jsx';
+import EvaluationModal from './EvaluationModal.jsx';
 import useLiveRefresh from '../../hooks/useLiveRefresh.js';
 
 const tabs = [
     { key: 'assignment', label: 'Evaluation Assignment', icon: ClipboardList },
-    { key: 'participants', label: 'Period Participants', icon: Users },
     { key: 'peer', label: 'Peer Assignments', icon: ShieldCheck },
     { key: 'questionnaires', label: 'Questionnaires', icon: FileText },
     { key: 'monitor', label: 'Category Monitor', icon: BarChart3 },
@@ -70,7 +71,6 @@ function defaultScheduleForm() {
 
     return {
         school_year: `${currentYear}-${currentYear + 1}`,
-        semester: '1st Semester',
         period_name: `${currentYear} Midyear Appraisal`,
         date_start: toDateInputValue(today),
         due_date: toDateInputValue(dueDate),
@@ -515,7 +515,7 @@ function MonitorRowsTable({ rows }) {
     );
 }
 
-function EvaluationPeriodControl({ onChanged }) {
+function EvaluationPeriodControl({ onChanged, refreshKey = 0, preferredPeriodId = '', onPreferredPeriodApplied }) {
     const currentYear = new Date().getFullYear();
     const {
         selectedPeriodId: globalSelectedPeriodId,
@@ -528,7 +528,6 @@ function EvaluationPeriodControl({ onChanged }) {
     const [form, setForm] = useState({
         period_name: `${currentYear} Midyear Appraisal`,
         school_year: `${currentYear}-${currentYear + 1}`,
-        semester: '1st Semester',
         date_start: new Date().toISOString().slice(0, 10),
         date_end: '',
     });
@@ -539,18 +538,24 @@ function EvaluationPeriodControl({ onChanged }) {
         try {
             const payload = await apiFetch('/api/evaluation-period.php?action=periods');
             const list = Array.isArray(payload.data) ? payload.data : [];
-            const syncedPeriod = globalSelectedPeriodId
-                ? list.find((item) => String(item.id) === String(globalSelectedPeriodId))
+            const requestedPeriodId = preferredPeriodId || globalSelectedPeriodId;
+            const syncedPeriod = requestedPeriodId
+                ? list.find((item) => String(item.id) === String(requestedPeriodId))
                 : null;
             const nextPeriod = syncedPeriod || payload.current || list[0] || null;
             setPeriodOptions(list);
             setPeriod(nextPeriod);
             if (nextPeriod?.id) {
                 setSelectedPeriodId(String(nextPeriod.id));
+                if (preferredPeriodId && String(globalSelectedPeriodId) !== String(nextPeriod.id)) {
+                    setGlobalSelectedPeriodId(String(nextPeriod.id));
+                }
+                if (preferredPeriodId) {
+                    onPreferredPeriodApplied?.();
+                }
                 setForm((current) => ({
                     period_name: nextPeriod.period_name || current.period_name,
                     school_year: nextPeriod.school_year || current.school_year,
-                    semester: nextPeriod.semester || current.semester,
                     date_start: nextPeriod.date_start || current.date_start,
                     date_end: nextPeriod.date_end || current.date_end,
                 }));
@@ -565,7 +570,7 @@ function EvaluationPeriodControl({ onChanged }) {
     useEffect(() => {
         loadPeriod();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [globalSelectedPeriodId]);
+    }, [globalSelectedPeriodId, preferredPeriodId, refreshKey]);
 
     const updateField = (field, value) => {
         setForm((current) => ({ ...current, [field]: value }));
@@ -581,7 +586,6 @@ function EvaluationPeriodControl({ onChanged }) {
         setForm((current) => ({
             period_name: selected.period_name || current.period_name,
             school_year: selected.school_year || current.school_year,
-            semester: selected.semester || current.semester,
             date_start: selected.date_start || current.date_start,
             date_end: selected.date_end || current.date_end,
         }));
@@ -624,7 +628,16 @@ function EvaluationPeriodControl({ onChanged }) {
     };
 
     const isOpen = !!period?.is_open;
-    const statusLabel = loading ? 'Loading' : isOpen ? 'Open' : 'Locked';
+    const periodStatus = String(period?.status || (isOpen ? 'open' : 'draft')).toLowerCase();
+    const statusLabel = loading
+        ? 'Loading'
+        : periodStatus === 'open'
+            ? 'Open'
+            : periodStatus === 'locked'
+                ? 'Locked'
+                : periodStatus === 'closed'
+                    ? 'Closed'
+                    : 'Draft';
 
     return (
         <section className="evaluation-period-card overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-sm dark:border-emerald-900/60 dark:bg-gray-800">
@@ -649,7 +662,7 @@ function EvaluationPeriodControl({ onChanged }) {
                         {period?.period_name || 'No evaluation period selected'}
                     </div>
                     <p className="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-                        {period?.school_year || form.school_year} • {period?.semester || form.semester} • {period?.date_start || form.date_start || 'Start date'} to {period?.date_end || form.date_end || 'Due date'}
+                        Academic Year {period?.school_year || form.school_year} • {period?.date_start || form.date_start || 'Start date'} to {period?.date_end || form.date_end || 'Due date'}
                     </p>
                 </div>
             </div>
@@ -668,24 +681,17 @@ function EvaluationPeriodControl({ onChanged }) {
                         ) : (
                             periodOptions.map((item) => (
                                 <option key={item.id} value={item.id}>
-                                    {item.period_name} {item.school_year ? `(${item.school_year})` : ''} {item.semester ? `- ${item.semester}` : ''} [{item.is_open ? 'Open' : 'Locked'}]
+                                    {item.period_name} {item.school_year ? `(AY ${item.school_year})` : ''} [{item.is_open ? 'Open' : 'Locked'}]
                                 </option>
                             ))
                         )}
                     </select>
                 </label>
 
-                <div className="evaluation-period-fields grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <div className="evaluation-period-fields grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <label className="grid gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300">
                         School Year
                         <input className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:ring-emerald-900/40" value={form.school_year} onChange={(event) => updateField('school_year', event.target.value)} />
-                    </label>
-                    <label className="grid gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        Semester
-                        <select className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:ring-emerald-900/40" value={form.semester} onChange={(event) => updateField('semester', event.target.value)}>
-                            <option value="1st Semester">1st Semester</option>
-                            <option value="2nd Semester">2nd Semester</option>
-                        </select>
                     </label>
                     <label className="grid gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300">
                         Period Name
@@ -701,11 +707,11 @@ function EvaluationPeriodControl({ onChanged }) {
                     </label>
                     <label className="grid gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300">
                         Start Date
-                        <input type="date" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:ring-emerald-900/40" value={form.date_start} onChange={(event) => updateField('date_start', event.target.value)} />
+                        <ModernDatePicker value={form.date_start} onChange={(value) => updateField('date_start', value)} label="Start date" minYear={2000} maxYear={currentYear + 15} disableFuture={false} required className="schedule-modern-date" />
                     </label>
                     <label className="grid gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300">
                         Due Date
-                        <input type="date" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:ring-emerald-900/40" value={form.date_end} onChange={(event) => updateField('date_end', event.target.value)} />
+                        <ModernDatePicker value={form.date_end} onChange={(value) => updateField('date_end', value)} label="Due date" minYear={2000} maxYear={currentYear + 15} minDate={form.date_start} disableFuture={false} required className="schedule-modern-date" />
                     </label>
                 </div>
 
@@ -765,44 +771,36 @@ function CategoryEditor({ category, index, onChange, onRemove, onMoveUp, onMoveD
     };
 
     return (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden">
+        <div className={`questionnaire-category-card ${category.isOpen ? 'is-open' : ''}`}>
             {/* Category Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-gray-50 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-600">
-                <div className="flex min-w-[280px] flex-1 flex-wrap items-center gap-3">
+            <div className="questionnaire-category-card-header">
+                <div className="questionnaire-category-card-main">
+                    <span className="questionnaire-category-number">{String(index + 1).padStart(2, '0')}</span>
                     <button
                         type="button"
                         onClick={() => handleUpdate('isOpen', !category.isOpen)}
-                        className="grid h-10 min-h-10 w-10 place-items-center rounded-xl bg-emerald-700 p-0 text-emerald-50 shadow-none transition-colors hover:bg-emerald-600 hover:text-white dark:bg-emerald-700 dark:text-emerald-50 dark:hover:bg-emerald-600"
+                        className="questionnaire-category-toggle"
+                        aria-label={`${category.isOpen ? 'Collapse' : 'Expand'} ${category.title || 'category'}`}
                     >
                         {category.isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     </button>
                     <input
-                        className="min-w-[220px] flex-1 text-sm font-semibold bg-transparent border-0 outline-none focus:ring-0 text-gray-900 dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-400"
+                        className="questionnaire-category-title-input"
                         value={category.title}
                         onChange={(e) => handleUpdate('title', e.target.value)}
                         placeholder="Category title"
                     />
-                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-300">Weight</span>
-                    <input
-                        type="number"
-                        className="w-20 text-sm font-semibold text-center border border-gray-200 dark:border-slate-500 rounded-lg bg-white dark:bg-slate-950 px-2 py-1 text-gray-900 dark:text-slate-50"
-                        value={category.weight}
-                        onChange={(e) => handleUpdate('weight', parseFloat(e.target.value) || 0)}
-                        min="0"
-                        max="100"
-                        step="0.5"
-                    />
-                    <span className="text-xs font-semibold text-gray-500 dark:text-slate-300">%</span>
+                    <label className="questionnaire-category-weight"><span>Weight</span><input type="number" value={category.weight} onChange={(e) => handleUpdate('weight', parseFloat(e.target.value) || 0)} min="0" max="100" step="0.5" /><b>%</b></label>
                 </div>
                 {!readonly && (
-                    <div className="flex items-center gap-1">
+                    <div className="questionnaire-category-actions">
                         <button
                             type="button"
                             onClick={onMoveUp}
                             disabled={!canMoveUp}
                             aria-label={`Move ${category.title || 'category'} up`}
                             title="Move category up"
-                            className="grid h-10 min-h-10 w-10 place-items-center rounded-lg bg-emerald-700 p-0 text-emerald-50 shadow-none transition-colors hover:bg-emerald-600 hover:text-white dark:bg-emerald-700 dark:text-emerald-50 dark:hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-60"
+                            className="questionnaire-category-action"
                         >
                             <ArrowUp size={14} />
                         </button>
@@ -812,14 +810,16 @@ function CategoryEditor({ category, index, onChange, onRemove, onMoveUp, onMoveD
                             disabled={!canMoveDown}
                             aria-label={`Move ${category.title || 'category'} down`}
                             title="Move category down"
-                            className="grid h-10 min-h-10 w-10 place-items-center rounded-lg bg-emerald-700 p-0 text-emerald-50 shadow-none transition-colors hover:bg-emerald-600 hover:text-white dark:bg-emerald-700 dark:text-emerald-50 dark:hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-60"
+                            className="questionnaire-category-action"
                         >
                             <ArrowDown size={14} />
                         </button>
                         <button
                             type="button"
                             onClick={onRemove}
-                            className="grid h-10 min-h-10 w-10 place-items-center rounded-lg bg-emerald-700 p-0 text-emerald-50 shadow-none transition-colors hover:bg-red-600 hover:text-white dark:bg-emerald-700 dark:text-emerald-50 dark:hover:bg-red-600"
+                            aria-label={`Delete ${category.title || 'category'}`}
+                            title="Delete category"
+                            className="questionnaire-category-action is-delete"
                         >
                             <Trash2 size={14} />
                         </button>
@@ -981,14 +981,18 @@ const facultySelfEvaluationOptions = [
 // --------------- Main Component ---------------
 
 export default function EvaluationAssignmentWorkbench({ initialTab }) {
+    const scheduleMaxYear = new Date().getFullYear() + 15;
     const location = useLocation();
     const assignmentParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-    const normalizedInitialTab = initialTab === 'preview' || questionnaireTypeOptions.some((option) => option.key === initialTab)
-        ? 'questionnaires'
-        : (tabs.some((tab) => tab.key === initialTab) ? initialTab : 'assignment');
+    const normalizedInitialTab = initialTab === 'participants'
+        ? 'peer'
+        : initialTab === 'preview' || questionnaireTypeOptions.some((option) => option.key === initialTab)
+            ? 'questionnaires'
+            : (tabs.some((tab) => tab.key === initialTab) ? initialTab : 'assignment');
 
     // Tab state
     const [activeTab, setActiveTab] = useState(normalizedInitialTab);
+    const [peerPanel, setPeerPanel] = useState(initialTab === 'participants' ? 'participants' : 'assignments');
     // Schedule state
     const [schedules, setSchedules] = useState([]);
     const [periods, setPeriods] = useState([]);
@@ -1001,6 +1005,8 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
     const schoolYearInputRef = useRef(null);
     const [deleteLoading, setDeleteLoading] = useState(null);
     const [scheduleFilter, setScheduleFilter] = useState('');
+    const [periodControlRefreshKey, setPeriodControlRefreshKey] = useState(0);
+    const [periodControlSelectionId, setPeriodControlSelectionId] = useState('');
 
     // Questionnaire state
     const [questionnaires, setQuestionnaires] = useState({
@@ -1110,7 +1116,6 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
             setNewSchedule((current) => ({
                 ...current,
                 school_year: current.school_year || data.current?.school_year || '',
-                semester: current.semester || data.current?.semester || '',
                 period_name: current.period_name || data.current?.period_name || '',
                 date_start: current.date_start || data.current?.date_start || '',
                 due_date: current.due_date || data.current?.date_end || '',
@@ -1254,6 +1259,7 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
     const { refreshing: setupRefreshing } = useLiveRefresh(refreshSetupData, [], {
         intervalMs: 10000,
     });
+    const [selfQuestionnaireDrafts, setSelfQuestionnaireDrafts] = useState({ self_admin: null, self_faculty: null });
 
     const { refreshing: monitorRefreshing } = useLiveRefresh(loadMonitor, [activeTab, monitorPeriodId], {
         enabled: false,
@@ -1363,10 +1369,9 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
 
     const handleCreateSchedule = async () => {
         const schoolYear = (newSchedule.school_year || '').trim();
-        const semester = (newSchedule.semester || '').trim();
         const periodName = (newSchedule.period_name || '').trim();
-        if (!schoolYear || !semester || !periodName || !newSchedule.date_start || !newSchedule.due_date) {
-            addToast({ type: 'error', text: 'Please complete School Year, Semester, Period Name, Start Date, and Due Date.' });
+        if (!schoolYear || !periodName || !newSchedule.date_start || !newSchedule.due_date) {
+            addToast({ type: 'error', text: 'Please complete Academic Year, Period Name, Start Date, and Due Date.' });
             return;
         }
 
@@ -1391,6 +1396,8 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
             if (data.ok) {
                 addToast({ type: 'success', text: data.message || 'Evaluation assignment schedule created successfully.' });
                 setNewSchedule((current) => ({ ...current, period_name: '', due_date: '' }));
+                setPeriodControlSelectionId(String(data.data?.evaluation_period_id || ''));
+                setPeriodControlRefreshKey((current) => current + 1);
                 await fetchSchedules();
                 await fetchPeriods();
             } else {
@@ -1407,7 +1414,6 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
         setEditingScheduleId(schedule.id);
         const editableSchedule = {
             school_year: schedule.school_year || '',
-            semester: schedule.semester || '1st Semester',
             period_name: schedule.evaluation_period_name || '',
             date_start: toScheduleDateInput(schedule.period_start),
             due_date: toScheduleDateInput(schedule.due_date || schedule.period_end),
@@ -1428,10 +1434,9 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
 
     const handleUpdateSchedule = async () => {
         const schoolYear = (newSchedule.school_year || '').trim();
-        const semester = (newSchedule.semester || '').trim();
         const periodName = (newSchedule.period_name || '').trim();
-        if (!editingScheduleId || !schoolYear || !semester || !periodName || !newSchedule.date_start || !newSchedule.due_date) {
-            addToast({ type: 'error', text: 'Please complete School Year, Semester, Period Name, Start Date, and Due Date.' });
+        if (!editingScheduleId || !schoolYear || !periodName || !newSchedule.date_start || !newSchedule.due_date) {
+            addToast({ type: 'error', text: 'Please complete Academic Year, Period Name, Start Date, and Due Date.' });
             return;
         }
 
@@ -1461,6 +1466,7 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                 setEditingScheduleId(null);
                 setEditingScheduleOriginal(null);
                 setNewSchedule(defaultScheduleForm());
+                setPeriodControlRefreshKey((current) => current + 1);
                 await fetchSchedules();
                 await fetchPeriods();
             } else {
@@ -1973,12 +1979,12 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
                             {editingScheduleId
                                 ? 'Update the selected schedule period details. Existing assignments and submitted results will remain intact.'
-                                : 'Enter the school year, semester, period name, start date, and due date. The system will create the period and generate assignments based on existing roles, departments, and evaluation rules.'}
+                                : 'Enter the academic year, period name, start date, and due date. The system will create the period and generate assignments based on existing roles, departments, and evaluation rules.'}
                         </p>
 
-                        <div className="assignment-schedule-form grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
+                        <div className="assignment-schedule-form grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">School Year</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Academic Year</label>
                                 <input
                                     type="text"
                                     className="assignment-schedule-input w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 outline-none"
@@ -1986,18 +1992,6 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                                     onChange={(e) => setNewSchedule((prev) => ({ ...prev, school_year: e.target.value }))}
                                     placeholder="e.g., 2025-2026"
                                 />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Semester</label>
-                                <select
-                                    className="assignment-schedule-input w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 outline-none"
-                                    value={newSchedule.semester}
-                                    onChange={(e) => setNewSchedule((prev) => ({ ...prev, semester: e.target.value }))}
-                                >
-                                    <option value="1st Semester">1st Semester</option>
-                                    <option value="2nd Semester">2nd Semester</option>
-                                </select>
                             </div>
 
                             <div>
@@ -2018,29 +2012,19 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Start Date</label>
-                                <input
-                                    type="date"
-                                    className="assignment-schedule-input w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 outline-none"
-                                    value={newSchedule.date_start}
-                                    onChange={(e) => setNewSchedule((prev) => ({ ...prev, date_start: e.target.value }))}
-                                />
+                                <ModernDatePicker value={newSchedule.date_start} onChange={(value) => setNewSchedule((prev) => ({ ...prev, date_start: value }))} label="Start date" minYear={2000} maxYear={scheduleMaxYear} disableFuture={false} required className="schedule-modern-date" />
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Due Date</label>
-                                <input
-                                    type="date"
-                                    className="assignment-schedule-input w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 outline-none"
-                                    value={newSchedule.due_date}
-                                    onChange={(e) => setNewSchedule((prev) => ({ ...prev, due_date: e.target.value }))}
-                                />
+                                <ModernDatePicker value={newSchedule.due_date} onChange={(value) => setNewSchedule((prev) => ({ ...prev, due_date: value }))} label="Due date" minYear={2000} maxYear={scheduleMaxYear} minDate={newSchedule.date_start} disableFuture={false} required className="schedule-modern-date" />
                             </div>
                         </div>
 
                         <div className="mt-5 flex items-center gap-3">
                             <button
                                 onClick={editingScheduleId ? handleUpdateSchedule : handleCreateSchedule}
-                                disabled={creating || !newSchedule.school_year.trim() || !newSchedule.semester.trim() || !newSchedule.period_name.trim() || !newSchedule.date_start || !newSchedule.due_date}
+                                disabled={creating || !newSchedule.school_year.trim() || !newSchedule.period_name.trim() || !newSchedule.date_start || !newSchedule.due_date}
                                 className="assignment-create-button inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-blue-300 text-white text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed"
                             >
                                 {creating ? (
@@ -2103,8 +2087,7 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                                     <thead>
                                         <tr className="bg-gray-50 dark:bg-gray-800/50 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                             <th className="px-6 py-3">Evaluation Period</th>
-                                            <th className="px-6 py-3">School Year</th>
-                                            <th className="px-6 py-3">Semester</th>
+                                            <th className="px-6 py-3">Academic Year</th>
                                             <th className="px-6 py-3">Start Date</th>
                                             <th className="px-6 py-3">Due Date</th>
                                             <th className="px-6 py-3">Status</th>
@@ -2122,9 +2105,6 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                                                 </td>
                                                 <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
                                                     {schedule.school_year || '—'}
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
-                                                    {schedule.semester || '—'}
                                                 </td>
                                                 <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
                                                     {formatDateLabel(schedule.period_start)}
@@ -2187,19 +2167,61 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                         )}
                     </div>
 
-                    <EvaluationPeriodControl onChanged={() => { refreshSetupData(false); }} />
+                    <EvaluationPeriodControl
+                        refreshKey={periodControlRefreshKey}
+                        preferredPeriodId={periodControlSelectionId}
+                        onPreferredPeriodApplied={() => setPeriodControlSelectionId('')}
+                        onChanged={() => { refreshSetupData(false); }}
+                    />
                     {setupRefreshing && <span className="live-refresh-indicator compact">Syncing setup...</span>}
                 </div>
             )}
 
             {/* ========== PEER-TO-PEER ASSIGNMENT TAB ========== */}
-            {activeTab === 'participants' && <PeriodParticipantsPanel />}
-
             {activeTab === 'peer' && (
-                <PeerAssignmentsPanel
-                    admin
-                    title="Automated Department Peer-to-Peer Assignments"
-                />
+                <section className="peer-assignment-module">
+                    <header className="peer-assignment-module-head">
+                        <div>
+                            <p>Peer Assignment Module</p>
+                            <h2>{peerPanel === 'participants' ? 'Evaluation Period Participants' : 'Peer Assignment Management'}</h2>
+                            <span>
+                                {peerPanel === 'participants'
+                                    ? 'Select who is included in the current evaluation period before generating or reviewing peer assignments.'
+                                    : 'Create, review, and monitor evaluator-to-faculty peer assignments for the selected period.'}
+                            </span>
+                        </div>
+                        <div className="peer-assignment-module-actions" role="group" aria-label="Peer assignment management views">
+                            <button
+                                type="button"
+                                className={peerPanel === 'assignments' ? 'active' : ''}
+                                aria-pressed={peerPanel === 'assignments'}
+                                onClick={() => setPeerPanel('assignments')}
+                            >
+                                <ShieldCheck size={17} />
+                                Peer Assignments
+                            </button>
+                            <button
+                                type="button"
+                                className={`manage-participants ${peerPanel === 'participants' ? 'active' : ''}`}
+                                aria-pressed={peerPanel === 'participants'}
+                                onClick={() => setPeerPanel('participants')}
+                            >
+                                <UserCheck size={17} />
+                                Manage Period Participants
+                            </button>
+                        </div>
+                    </header>
+                    <div key={peerPanel} className="peer-assignment-module-panel" aria-live="polite">
+                        {peerPanel === 'participants' ? (
+                            <PeriodParticipantsPanel />
+                        ) : (
+                            <PeerAssignmentsPanel
+                                admin
+                                title="Automated Department Peer-to-Peer Assignments"
+                            />
+                        )}
+                    </div>
+                </section>
             )}
 
             {/* ========== CATEGORY MONITOR TAB ========== */}
@@ -2323,7 +2345,6 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                             {[
                                 ['breakdown', 'Evaluator Breakdown'],
                                 ['comparison', 'Comparison Matrix'],
-                                ['status', 'Status Tracker'],
                             ].map(([key, label]) => (
                                 <button
                                     key={key}
@@ -2385,7 +2406,7 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                                 onSort={updateEvaluatorMonitorSort}
                                 onDetail={openEvaluatorDetail}
                             />
-                        ) : evaluatorMonitorView === 'comparison' ? (
+                        ) : (
                             <div className="evaluator-comparison-wrap">
                                 <table className="evaluator-comparison-table">
                                     <thead>
@@ -2418,29 +2439,6 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                                         ))}
                                     </tbody>
                                 </table>
-                            </div>
-                        ) : (
-                            <div className="evaluator-status-list">
-                                {sortedEvaluatorMonitorRows.map((row) => (
-                                    <article key={row.assignmentId} className={`evaluator-status-card status-${row.submissionStatus}`}>
-                                        <div>
-                                            <strong>{row.evaluatorName}</strong>
-                                            <span>{row.roleLabel}</span>
-                                        </div>
-                                        <EvaluatorStatusBadge status={row.submissionStatus} />
-                                        <p>
-                                            {row.submissionStatus === 'submitted'
-                                                ? `Submitted ${formatDateLabel(row.submittedAt) || ''}`
-                                                : row.deadline
-                                                ? `Deadline ${formatDateLabel(row.deadline)}`
-                                                : 'No deadline set'}
-                                        </p>
-                                        <button type="button" disabled title="Reminder email integration pending">
-                                            <MessageSquare size={14} />
-                                            <span>Reminder</span>
-                                        </button>
-                                    </article>
-                                ))}
                             </div>
                         )}
 
@@ -2729,6 +2727,18 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                         >
                             <Eye size={15} /> Evaluation Preview
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setQuestionnairePanel('goals')}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all inline-flex items-center gap-2 ${
+                                questionnairePanel === 'goals'
+                                    ? 'bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                            title="Preview the PMAS Form 1 Goals Record Sheet questionnaire"
+                        >
+                            <ListChecks size={15} /> Goals Record Sheet
+                        </button>
                     </div>
                     {questionnairePanel === 'editor' && <>
                     <div className="questionnaire-purpose-note">
@@ -2766,33 +2776,36 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                             role={{ key: 'admin', user: { name: '', email: '', department: '' } }}
                             initialTargetRole={activeEditTab === 'self_admin' ? 'dean' : 'faculty'}
                             targetRoleOptions={activeEditTab === 'self_admin' ? leadershipSelfEvaluationOptions : facultySelfEvaluationOptions}
+                            onTemplateChange={(template) => setSelfQuestionnaireDrafts((current) => ({ ...current, [activeEditTab]: template }))}
                         />
                     ) : (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-                        <div className="flex items-center justify-between mb-5">
-                            <div className="flex-1">
+                    <div className="questionnaire-editor-surface">
+                        <div className="questionnaire-editor-top">
+                            <div className="questionnaire-editor-heading">
+                                <span>Questionnaire configuration</span>
                                 <input
-                                    className="text-lg font-semibold bg-transparent border-0 outline-none focus:ring-0 text-gray-900 dark:text-gray-100 w-full"
+                                    className="questionnaire-editor-title"
                                     value={activeQuestionnaire.title}
                                     onChange={(e) => handleUpdateQuestionnaire(activeQuestionnaireType, { title: e.target.value })}
                                 />
                                 <textarea
-                                    className="w-full text-sm text-gray-500 dark:text-gray-400 bg-transparent border-0 resize-none focus:ring-0 mt-1"
+                                    className="questionnaire-editor-description"
                                     rows={1}
                                     value={activeQuestionnaire.description}
                                     onChange={(e) => handleUpdateQuestionnaire(activeQuestionnaireType, { description: e.target.value })}
                                 />
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="questionnaire-editor-actions">
+                                <span className={`questionnaire-total-weight ${isValidWeight ? 'is-valid' : 'is-warning'}`}><b>{totalWeight}%</b><small>Total weight</small></span>
                                 <button
                                     onClick={() => handleAddCategory(activeQuestionnaireType)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:bg-blue-900/20 rounded-lg transition-colors"
+                                    className="questionnaire-add-category"
                                 >
                                     <Plus size={14} /> Add Category
                                 </button>
                                 <button
                                     onClick={() => handleSaveQuestionnaire(activeQuestionnaireType)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-800 rounded-lg transition-colors"
+                                    className="questionnaire-save"
                                 >
                                     <Save size={14} /> Save
                                 </button>
@@ -2808,7 +2821,7 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                         )}
 
                         {/* Categories */}
-                        <div className="space-y-3">
+                        <div className="questionnaire-category-stack">
                             {activeQuestionnaire.categories.length === 0 ? (
                                 <div className="text-center py-10 text-gray-400 dark:text-gray-500">
                                     <p className="text-sm">No categories yet. Click "Add Category" to start building your questionnaire.</p>
@@ -2835,16 +2848,30 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                 </div>
             )}
 
+            {activeTab === 'questionnaires' && questionnairePanel === 'goals' && (
+                <div className="goals-questionnaire-preview-shell">
+                    <GoalsRecordTemplateManager />
+                </div>
+            )}
+
             {/* ========== PREVIEW TAB ========== */}
             {activeTab === 'questionnaires' && questionnairePanel === 'preview' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className={`evaluation-preview-layout grid grid-cols-1 lg:grid-cols-3 gap-6 ${isSelfEvaluationPreview ? 'is-self-preview' : 'is-live-preview'}`}>
                     {/* Main preview area */}
-                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Evaluation Preview</h2>
-                            <div className="flex items-center gap-3">
+                    <div className="evaluation-preview-panel lg:col-span-2">
+                        <div className="evaluation-preview-toolbar">
+                            <div className="evaluation-preview-heading">
+                                <span className="evaluation-preview-heading-icon"><Eye size={20} /></span>
+                                <div>
+                                    <span className="evaluation-preview-eyebrow">Questionnaire simulator</span>
+                                    <h2>Evaluation Preview</h2>
+                                    <p>Test the form and see how each rating affects the computed result.</p>
+                                </div>
+                            </div>
+                            <div className="evaluation-preview-picker">
+                                <label htmlFor="evaluation-preview-form">Preview form</label>
                                 <select
-                                    className="text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                    id="evaluation-preview-form"
                                     value={previewQuestionnaireType}
                                     onChange={(e) => {
                                         setPreviewQuestionnaireType(e.target.value);
@@ -2870,72 +2897,26 @@ export default function EvaluationAssignmentWorkbench({ initialTab }) {
                                 key={`preview-${previewQuestionnaireType}`}
                                 role={{ key: 'admin', user: { name: '', email: '', department: '' } }}
                                 initialTargetRole={previewQuestionnaireType === 'self_admin' ? 'dean' : 'faculty'}
-                                targetRoleOptions={previewQuestionnaireType === 'self_admin' ? leadershipSelfEvaluationOptions : facultySelfEvaluationOptions}
-                                displayMode="preview"
-                            />
+                            targetRoleOptions={previewQuestionnaireType === 'self_admin' ? leadershipSelfEvaluationOptions : facultySelfEvaluationOptions}
+                            displayMode="preview"
+                            templateOverride={selfQuestionnaireDrafts[previewQuestionnaireType]}
+                        />
                         ) : previewQuestionnaire && previewQuestionnaire.categories.length > 0 ? (
-                            <div className="space-y-6">
-                                <div>
-                                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{previewQuestionnaire.title}</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{previewQuestionnaire.description}</p>
-                                </div>
-
-                                {previewQuestionnaire.categories.map((category) => (
-                                    <div key={category.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-5">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <h4 className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{category.title}</h4>
-                                            <span className="text-xs text-gray-400 dark:text-gray-500">Weight: {category.weight}%</span>
-                                        </div>
-                                        {category.description && (
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{category.description}</p>
-                                        )}
-                                        <div className="space-y-3">
-                                            {category.questions.map((q, qi) => (
-                                                <div key={q.id} className="flex items-start gap-4">
-                                                    <span className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 min-w-[1.5rem]">{qi + 1}.</span>
-                                                    <div className="flex-1">
-                                                        <p className="text-sm text-gray-700 dark:text-gray-300">{q.text}</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
-                                                        {[1, 2, 3, 4, 5].map((val) => (
-                                                            <button
-                                                                key={val}
-                                                                onClick={() => handlePreviewResponse(q.id, val)}
-                                                                className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
-                                                                    previewResponses[q.id] === val
-                                                                        ? 'bg-blue-600 dark:bg-blue-700 text-white shadow-sm dark:shadow-gray-900/30'
-                                                                        : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400'
-                                                                }`}
-                                                            >
-                                                                {val}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {/* Behavioral Evidence & Comments */}
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Behavioral Evidence</label>
-                                        <textarea
-                                            className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none"
-                                            rows={2}
-                                            placeholder="Provide specific behavioral evidence supporting your ratings..."
-                                        />
-                                    </div>
-                                    <div>
-                                        <textarea
-                                            className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 outline-none"
-                                            rows={2}
-                                            placeholder="Any additional comments or recommendations..."
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                            <EvaluationModal
+                                embeddedPreview
+                                categoriesOverride={previewQuestionnaire.categories}
+                                evaluation={{
+                                    questionnaireType: previewQuestionnaireType,
+                                    role: previewQuestionnaireType === 'admin' ? 'dean' : 'faculty',
+                                    fullName: 'Questionnaire Preview',
+                                    evaluateeName: 'Questionnaire Preview',
+                                    position: previewQuestionnaireType === 'admin' ? 'Administrative Personnel' : 'Faculty Member',
+                                    department: 'Preview Department',
+                                    status: 'pending',
+                                }}
+                                evaluatorRole="dean"
+                                period={{ period_name: 'Current Appraisal Period', is_open: true }}
+                            />
                         ) : (
                             <div className="text-center py-16 text-gray-400 dark:text-gray-500">
                                 <FileText size={32} className="mx-auto mb-3 opacity-50" />

@@ -206,75 +206,6 @@ try {
     }, $assignmentRows);
 
     $latestPeriod = (string) ($data[0]['period'] ?? $completedPeriods[0] ?? '');
-    $categoryEvaluatorRows = $latestPeriod !== '' ? admin_all(
-        "SELECT form_label, assignment_id, category_title, total_rate, question_count,
-                average_rating, factor_weight, weighted_score, behavioral_evidence,
-                reason_for_rating, recommendation, submitted_at, assignment_type,
-                evaluator_role, evaluator_user_id, evaluator_name
-         FROM (
-             SELECT 'Form A' AS form_label, r.assignment_id, c.title AS category_title,
-                    r.total_rate, r.question_count, r.average_rating, r.factor_weight,
-                    r.weighted_score, r.behavioral_evidence, r.reason_for_rating,
-                    r.recommendation, r.submitted_at, pa.assignment_type,
-                    pa.evaluator_role, pa.evaluator_user_id,
-                    COALESCE(u.full_name, 'Evaluator') AS evaluator_name, pa.cycle_name
-             FROM pmas_form_a_category_results r
-             JOIN pmas_form_a_categories c ON c.id = r.category_id
-             JOIN peer_assignments pa ON pa.id = r.assignment_id
-             LEFT JOIN users u ON u.id = pa.evaluator_user_id
-             WHERE r.evaluatee_faculty_id = :fac_a
-               AND r.status = 'completed'
-               AND COALESCE(r.is_archived, 0) = 0
-               AND COALESCE(pa.is_archived, 0) = 0
-               AND pa.status = 'submitted'
-             UNION ALL
-             SELECT 'Form B' AS form_label, r.assignment_id, c.title AS category_title,
-                    r.total_rate, r.question_count, r.average_rating, r.factor_weight,
-                    r.weighted_score, r.behavioral_evidence, r.reason_for_rating,
-                    r.recommendation, r.submitted_at, pa.assignment_type,
-                    pa.evaluator_role, pa.evaluator_user_id,
-                    COALESCE(u.full_name, 'Evaluator') AS evaluator_name, pa.cycle_name
-             FROM pmas_form_b_category_results r
-             JOIN pmas_form_b_categories c ON c.id = r.category_id
-             JOIN peer_assignments pa ON pa.id = r.assignment_id
-             LEFT JOIN users u ON u.id = pa.evaluator_user_id
-             WHERE r.evaluatee_faculty_id = :fac_b
-               AND r.status = 'completed'
-               AND COALESCE(r.is_archived, 0) = 0
-               AND COALESCE(pa.is_archived, 0) = 0
-               AND pa.status = 'submitted'
-         ) category_evaluator_data
-         WHERE cycle_name = :latest_period
-         ORDER BY FIELD(assignment_type, 'self', 'peer', 'program_head', 'dean'), evaluator_name, category_title",
-        ['fac_a' => $facultyId, 'fac_b' => $facultyId, 'latest_period' => $latestPeriod]
-    ) : [];
-
-    $categoryEvaluatorResults = array_map(static function (array $row): array {
-        $assignmentType = (string) ($row['assignment_type'] ?? '');
-        $evaluatorRole = (string) ($row['evaluator_role'] ?? '');
-        $typeLabel = faculty_results_evaluation_type_label($assignmentType, $evaluatorRole);
-
-        return [
-            'form' => (string) ($row['form_label'] ?? ''),
-            'assignmentId' => (int) ($row['assignment_id'] ?? 0),
-            'evaluatorId' => (int) ($row['evaluator_user_id'] ?? 0),
-            'evaluatorName' => (string) ($row['evaluator_name'] ?? 'Evaluator'),
-            'evaluatorRole' => $evaluatorRole,
-            'assignmentType' => $assignmentType,
-            'evaluationType' => $typeLabel,
-            'category' => (string) ($row['category_title'] ?? ''),
-            'totalRating' => (float) ($row['total_rate'] ?? 0),
-            'questionCount' => (int) ($row['question_count'] ?? 0),
-            'averageRating' => (float) ($row['average_rating'] ?? 0),
-            'factorWeight' => (float) ($row['factor_weight'] ?? 0),
-            'weightedScore' => (float) ($row['weighted_score'] ?? 0),
-            'behavioralEvidence' => secure_decrypt_value($row['behavioral_evidence'] ?? ''),
-            'reasonForRating' => secure_decrypt_value($row['reason_for_rating'] ?? ''),
-            'recommendation' => secure_decrypt_value($row['recommendation'] ?? ''),
-            'submittedAt' => (string) ($row['submitted_at'] ?? ''),
-        ];
-    }, $categoryEvaluatorRows);
-
     $categoryRows = $latestPeriod !== '' ? admin_all(
         "SELECT form_label, category_title, average_rating, recommendation
          FROM (
@@ -349,7 +280,6 @@ try {
             'weaknesses' => $weaknesses,
             'recommendations' => $recommendations,
         ],
-        'categoryEvaluatorResults' => $categoryEvaluatorResults,
         'summary' => [
             'total' => count($data),
             'latestScore' => $data[0]['overallScore'] ?? null,

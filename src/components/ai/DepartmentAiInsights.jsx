@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Award, Brain, Building2, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, GraduationCap, Loader2, RefreshCw, TrendingDown, TrendingUp, Users, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Activity, AlertTriangle, Award, Brain, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock3, Eye, GraduationCap, Loader2, RefreshCw, Sparkles, TrendingDown, TrendingUp, Users, X } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import useLiveRefresh from '../../hooks/useLiveRefresh.js';
 
@@ -306,12 +307,12 @@ function FacultyAnalysisDirectory({ faculty = [], onViewDetails }) {
 
                 <div className="program-ai-faculty-stats">
                   <div className="program-ai-score-block">
-                    <span>Average Score</span>
+                    <span><Activity size={14} /> Average Score</span>
                     <strong>{average}<small>/5</small></strong>
                     <div className="program-ai-mini-bar"><i style={{ width: `${scorePercent}%` }} /></div>
                   </div>
                   <div className="program-ai-score-block">
-                    <span>Completion</span>
+                    <span><CheckCircle2 size={14} /> Completion</span>
                     <strong>{completion}%<small>{assignmentCompleted}/{assignmentTotal || 0}</small></strong>
                     <div className="program-ai-mini-bar completion"><i style={{ width: `${completion}%` }} /></div>
                   </div>
@@ -370,7 +371,7 @@ function FacultyAnalysisDirectory({ faculty = [], onViewDetails }) {
   );
 }
 
-function FacultyDetailsPanel({ faculty, onClose }) {
+function FacultyDetailsPanel({ faculty, onClose, onOpenAssignment }) {
   const panelRef = useRef(null);
   const onCloseRef = useRef(onClose);
 
@@ -419,6 +420,15 @@ function FacultyDetailsPanel({ faculty, onClose }) {
     : 0;
   const recommendation = faculty.recommendation || (faculty.weakArea ? recommendedSessionForField(faculty.weakArea) : 'Awaiting submitted evaluator Form A and Form B results.');
   const formLabel = faculty.formType || (faculty.role === 'dean' || faculty.role === 'program_head' ? 'Form A' : 'Form B');
+  const evaluationAssignments = Array.isArray(faculty.evaluationAssignments) ? faculty.evaluationAssignments : [];
+  const assignmentTypeLabel = (assignment) => {
+    if (assignment.assignmentType === 'self') return 'Self-Evaluation';
+    if (assignment.assignmentType === 'dean') return 'Dean Evaluation';
+    if (assignment.assignmentType === 'program_head') return 'Program Head Evaluation';
+    if (assignment.assignmentType === 'peer') return 'Peer Evaluation';
+    return 'Evaluation';
+  };
+  const evaluatorRoleLabel = (role) => role === 'program_head' ? 'Program Head' : role === 'teacher' ? 'Faculty Peer' : role === 'dean' ? 'Dean' : role;
 
   return createPortal(
     <div className="program-ai-faculty-modal" role="dialog" aria-modal="true" aria-label={`${faculty.name || 'Faculty'} AI analysis details`}>
@@ -507,6 +517,75 @@ function FacultyDetailsPanel({ faculty, onClose }) {
             </div>
           )}
         </section>
+
+        <section className="program-ai-modal-assignments">
+          <div className="program-ai-modal-section-heading">
+            <span><ClipboardList size={18} /></span>
+            <div>
+              <h4>Evaluation Assignments</h4>
+              <small>Completed, pending, and missing evaluations for this faculty member</small>
+            </div>
+          </div>
+          {evaluationAssignments.length === 0 ? (
+            <div className="eval-monitor-empty">No evaluation assignments are required for this faculty member in the selected period.</div>
+          ) : (
+            <div className="dean-assignment-table-wrap">
+              <table className="dean-assignment-table">
+                <thead>
+                  <tr>
+                    <th>Evaluator</th>
+                    <th>Role</th>
+                    <th>Evaluation Form</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    <th>Deadline</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evaluationAssignments.map((assignment, index) => {
+                    const submittedLabel = assignment.submittedAt
+                      ? new Date(String(assignment.submittedAt).replace(' ', 'T')).toLocaleDateString()
+                      : '—';
+                    const deadlineLabel = assignment.deadline
+                      ? new Date(`${assignment.deadline}T00:00:00`).toLocaleDateString()
+                      : '—';
+                    const statusNote = assignment.status === 'completed'
+                      ? `Submitted by ${assignment.evaluatorName || 'the assigned evaluator'}.`
+                      : assignment.status === 'missing'
+                        ? 'A required evaluator has not yet been assigned.'
+                        : `Waiting for ${assignment.evaluatorName || 'the assigned evaluator'} to submit this evaluation.`;
+                    return (
+                      <tr className={`${assignment.requiredForCurrentDean ? 'is-current-dean ' : ''}status-${assignment.status}`} key={assignment.id || `missing-${assignment.assignmentType}-${index}`}>
+                        <td data-label="Evaluator"><strong>{assignment.evaluatorName || 'To be assigned'}</strong></td>
+                        <td data-label="Role"><span className="dean-assignment-role">{evaluatorRoleLabel(assignment.evaluatorRole) || 'Evaluator'}</span></td>
+                        <td data-label="Evaluation Form"><strong>{assignmentTypeLabel(assignment)}</strong>{assignment.requiredForCurrentDean && <small className="dean-assignment-required">Your required evaluation</small>}</td>
+                        <td data-label="Status">
+                          <span className={`program-ai-assignment-pill is-${assignment.status}`}>
+                            {assignment.status === 'completed'
+                              ? <CheckCircle2 size={13} />
+                              : assignment.status === 'missing'
+                                ? <AlertTriangle size={13} />
+                                : <Clock3 size={13} />}
+                            {assignment.status}
+                          </span>
+                          <small className="dean-assignment-note">{statusNote}</small>
+                        </td>
+                        <td data-label="Submitted">{submittedLabel}</td>
+                        <td data-label="Deadline">{deadlineLabel}</td>
+                        <td data-label="Action">
+                          {assignment.requiredForCurrentDean && assignment.id
+                            ? <button type="button" className="dean-assignment-action" onClick={() => onOpenAssignment?.(assignment)}>{assignment.status === 'completed' ? <Eye size={15} /> : <ClipboardList size={15} />} {assignment.status === 'completed' ? 'View Form' : 'Evaluate Now'}</button>
+                            : <span className="dean-assignment-no-action">—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </div>,
     document.body
@@ -514,6 +593,7 @@ function FacultyDetailsPanel({ faculty, onClose }) {
 }
 
 export default function DepartmentAiInsights({ scope = 'all' }) {
+  const navigate = useNavigate();
   const [programFilter, setProgramFilter] = useState('');
   const [programData, setProgramData] = useState([]);
   const [analysisSummary, setAnalysisSummary] = useState(null);
@@ -640,11 +720,15 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
   // Compute visible insights: department filter + program filter
   const insights = useMemo(() => {
     let filtered = isScoped ? programData : filteredProgramOptions;
+    if (isScoped && scopeRole === 'admin_hr') {
+      const scopeKey = normalizedOptionLabel(scope);
+      filtered = filtered.filter((item) => [item.department_name, item.department_code].some((value) => normalizedOptionLabel(value) === scopeKey));
+    }
     if (programFilter) {
       filtered = filtered.filter((item) => item.program === programFilter);
     }
     return filtered;
-  }, [filteredProgramOptions, programData, programFilter, isScoped]);
+  }, [filteredProgramOptions, programData, programFilter, isScoped, scope, scopeRole]);
 
   const scopedFacultyRows = useMemo(() => (
     insights.flatMap((program) => (
@@ -787,7 +871,7 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
   function renderProgramAnalysis(program) {
     if (!program?.fields || program.fields.length === 0) {
       return (
-        <div className="eval-monitor-empty">No submitted Form A or Form B category results are available for this program yet.</div>
+        <div className="eval-monitor-empty">No submitted Form A or Form B category results are available for this {program?.group_type === 'subject' ? 'subject area' : 'program'} yet.</div>
       );
     }
 
@@ -800,9 +884,10 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
       <article className="department-ai-card">
         <div className="department-ai-card-head department-ai-executive-head">
           <div>
-            <span>Program performance overview</span>
+            <span>{program.group_type === 'subject' ? 'Subject performance overview' : 'Program performance overview'}</span>
             <h3>{program.program}</h3>
             <small className="department-ai-subtitle">{program.department_name}</small>
+            {program.group_type === 'subject' && <small className="department-ai-subtitle">Subject Coordinator: {program.coordinator_name || 'Unassigned'}</small>}
           </div>
           <div className="department-ai-head-status"><Brain size={18} /><span>AI-assisted analysis</span></div>
         </div>
@@ -839,7 +924,7 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
             <div>
               <span>Recommended PMAS Action</span>
               <strong>{weakest.seminar}</strong>
-              <p><b>Focus:</b> strengthen {weakest.name.toLowerCase()} first based on submitted evaluations. <b>Opportunity:</b> use {strongest.name.toLowerCase()} as this program's current advantage.</p>
+              <p><b>Focus:</b> strengthen {weakest.name.toLowerCase()} first based on submitted evaluations. <b>Opportunity:</b> use {strongest.name.toLowerCase()} as this {program.group_type === 'subject' ? 'subject area' : 'program'}'s current advantage.</p>
             </div>
           </div>
         </InsightAccordion>
@@ -933,7 +1018,7 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
 
     return {
       completed: Number(scopeItem.evaluatedCount ?? scopeItem.completeCount ?? 0),
-      total: Number(scopeItem.facultyCount || 0),
+      total: Number(scopeItem.analysisFacultyCount ?? scopeItem.facultyCount ?? 0),
     };
   }
 
@@ -944,7 +1029,7 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
     }
     return {
       completed: Number(scopeItem.evaluatedCount ?? scopeItem.completeCount ?? 0),
-      total: Number(scopeItem.facultyCount || 0),
+      total: Number(scopeItem.analysisFacultyCount ?? scopeItem.facultyCount ?? 0),
     };
   }
 
@@ -999,7 +1084,10 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
         <RecommendationStatusBanner status={status} compact />
         {weakest ? (
           <>
-            <strong>{recommendedSessionForField(weakest.name)}</strong>
+            <div className="department-ai-primary-recommendation">
+              <span><Sparkles size={15} /> Recommended Action</span>
+              <strong>{recommendedSessionForField(weakest.name)}</strong>
+            </div>
             <p>
               {caveat} Focus: {focusAreas || weakest.name}.
             </p>
@@ -1082,6 +1170,19 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
                     </div>
                   </div>
                   <MiniProgress completed={completionCounts.completed} total={completionCounts.total} />
+                  {layoutClass === 'is-single' && (
+                    <div className="department-ai-card-explore" aria-hidden="true">
+                      <div className="department-ai-card-explore-head">
+                        <span><Sparkles size={16} /> Explore Department Insights</span>
+                        <strong>Open full analysis <ChevronRight size={16} /></strong>
+                      </div>
+                      <div className="department-ai-card-explore-grid">
+                        <span><TrendingUp size={16} /><b>Program Performance</b><small>Compare completion and results</small></span>
+                        <span><AlertTriangle size={16} /><b>Priority Weak Areas</b><small>Identify areas needing support</small></span>
+                        <span><Brain size={16} /><b>Development Actions</b><small>Review targeted recommendations</small></span>
+                      </div>
+                    </div>
+                  )}
                   {renderCompactAiRecommendation(department, 'department')}
                 </div>
               </div>
@@ -1112,9 +1213,11 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
         </div>
         <div className="eval-monitor-table-container">
           <div className="eval-monitor-program-grid">
-            {selectedDepartment.programs.map((program) => {
+            {selectedDepartment.programs.map((program, index) => {
               const completionCounts = displayCompletionCounts(program);
               return (
+                <Fragment key={program.id}>
+                {(index === 0 || selectedDepartment.programs[index - 1]?.group_type !== program.group_type) && <div className="department-ai-summary-section-head"><div><span>{program.group_type === 'subject' ? 'Subject Performance' : 'Program Performance'}</span><h3>{program.group_type === 'subject' ? 'Subject-based Faculty Analysis' : 'Program-based Faculty Analysis'}</h3></div></div>}
                 <div
                   key={program.id}
                   className="eval-monitor-program-card"
@@ -1143,6 +1246,7 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
                     <div className="eval-monitor-program-meta">
                       <span><Users size={14} /> {program.facultyCount} Faculty</span>
                       <span>{program.evaluatedCount}/{program.facultyCount} evaluated</span>
+                      <span>{program.group_type === 'subject' ? `Subject Coordinator: ${program.coordinator_name || 'Unassigned'}` : 'Program Performance'}</span>
                     </div>
                     <div className="eval-monitor-program-stats">
                       <div className="eval-monitor-program-stat primary">
@@ -1158,6 +1262,7 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
                     {renderCompactAiRecommendation(program, 'program')}
                   </div>
                 </div>
+                </Fragment>
               );
             })}
           </div>
@@ -1301,12 +1406,13 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
           {isScoped ? (
             <div className="department-ai-filter-controls scoped open">
               <div className="department-ai-scope">
-                <span>{scopeTitle}</span>
-                <strong>{programScopeLabel}</strong>
+                <i><Building2 size={18} /></i>
+                <div><span>{scopeTitle}</span><strong title={programScopeLabel}>{programScopeLabel}</strong></div>
               </div>
-              <label>
-                Evaluation Period
-                <select value={selectedPeriodId} onChange={(event) => setSelectedPeriodId(event.target.value)}>
+              <label className="department-ai-period-control">
+                <i><CalendarDays size={18} /></i>
+                <span>Evaluation Period</span>
+                <select title={selectedPeriod?.period_name || 'Evaluation period'} value={selectedPeriodId} onChange={(event) => setSelectedPeriodId(event.target.value)}>
                   {periods.length === 0 && <option value="">Current period</option>}
                   {periods.map((period) => (
                     <option key={period.id} value={period.id}>
@@ -1320,8 +1426,9 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
               </button>
               {selectedPeriod && (
                 <div className="department-ai-active-period" role="status" aria-live="polite" aria-label={`Selected period ${selectedPeriod.period_name}`}>
-                  <span>Analyzing</span><strong>{selectedPeriod.period_name}</strong>
-                  {selectedPeriod.year ? <small>Year {selectedPeriod.year}</small> : null}
+                  <i><Activity size={18} /></i>
+                  <div><span>Active Analysis</span><strong title={selectedPeriod.period_name}>{selectedPeriod.period_name}</strong>
+                  {selectedPeriod.year ? <small>Academic Year {selectedPeriod.year}</small> : null}</div>
                 </div>
               )}
             </div>
@@ -1430,7 +1537,11 @@ export default function DepartmentAiInsights({ scope = 'all' }) {
         {!loading && !error && insights.length > 0 && monitorView === 'programs' && renderPrograms()}
         {!loading && !error && insights.length > 0 && monitorView === 'faculty' && renderFaculty()}
       </div>
-      <FacultyDetailsPanel faculty={selectedFaculty} onClose={() => setSelectedFaculty(null)} />
+      <FacultyDetailsPanel
+        faculty={selectedFaculty}
+        onClose={() => setSelectedFaculty(null)}
+        onOpenAssignment={(assignment) => navigate(`/dean/evaluate?assignment_id=${encodeURIComponent(assignment.id)}`)}
+      />
     </section>
   );
 }

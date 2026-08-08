@@ -44,15 +44,15 @@ export default function DashboardLayout({ session, onLogout, onUserUpdate }) {
     user: {
       ...baseRole.user,
       name: session.user?.name || baseRole.user.name,
-      email: session.user?.email || baseRole.user.email,
+      email: String(session.user?.email || '').toLowerCase().endsWith('@pmas.local')
+        ? ''
+        : (session.user?.email || baseRole.user.email),
       department: session.user?.department || baseRole.user.department,
       program: session.user?.program || baseRole.user.program || '',
       databaseRole: session.user?.databaseRole || '',
       roleKey: session.user?.roleKey || session.roleKey,
       profileImage: session.user?.profileImage || '',
       mustChangePassword: Boolean(session.user?.mustChangePassword),
-      emailVerified: Boolean(session.user?.emailVerified),
-      birthDate: session.user?.birthDate || '',
     },
   };
   const [sidebarOpen, setSidebarOpen] = useLocalStorage('dipascaf-sidebar-open', false);

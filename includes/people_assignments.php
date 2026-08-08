@@ -36,7 +36,7 @@ function people_validate_assignment(PDO $db, string $role, string $department, s
         throw new DomainException('Select a valid department before saving this account.');
     }
 
-    if (in_array($role, ['program_head', 'teacher'], true) && $program === '') {
+    if ($role === 'program_head' && $program === '') {
         throw new DomainException('Select a program/course for this account.');
     }
 
@@ -88,7 +88,40 @@ function people_validate_assignment(PDO $db, string $role, string $department, s
     ];
 }
 
-function people_sync_leadership_assignments(PDO $db, int $userId, string $role, ?int $departmentId, ?int $programId): void
+function people_validate_program_head_programs(PDO $db, int $departmentId, array $programCodes, int $excludeUserId = 0): array
+{
+    $programCodes = array_values(array_unique(array_filter(array_map(
+        static fn($code): string => strtoupper(trim((string)$code)),
+        $programCodes
+    ))));
+    if ($programCodes === []) throw new DomainException('Select at least one program/course for this Program Head.');
+    $ids = [];
+    foreach ($programCodes as $code) {
+        $stmt = $db->prepare(
+            'SELECT id,program_head_user_id FROM programs
+             WHERE department_id=? AND program_code=? AND is_active=1 LIMIT 1'
+                . ($db->inTransaction() ? ' FOR UPDATE' : '')
+        );
+        $stmt->execute([$departmentId,$code]);
+        $program = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$program) throw new DomainException('Every selected program must belong to the selected department.');
+        $headId = (int)($program['program_head_user_id'] ?? 0);
+        if ($headId > 0 && $headId !== $excludeUserId) {
+            throw new DomainException($code . ' already has another active Program Head.');
+        }
+        $legacy = $db->prepare(
+            "SELECT id FROM users WHERE role='program_head' AND is_active=1
+             AND department=(SELECT department_name FROM departments WHERE id=?)
+             AND program=? AND id<>? LIMIT 1"
+        );
+        $legacy->execute([$departmentId,$code,$excludeUserId]);
+        if ($legacy->fetchColumn()) throw new DomainException($code . ' already has another active Program Head.');
+        $ids[] = (int)$program['id'];
+    }
+    return $ids;
+}
+
+function people_sync_leadership_assignments(PDO $db, int $userId, string $role, ?int $departmentId, ?int $programId, array $programIds = []): void
 {
     $db->prepare('UPDATE departments SET dean_user_id = NULL WHERE dean_user_id = ?')->execute([$userId]);
     $db->prepare('UPDATE programs SET program_head_user_id = NULL WHERE program_head_user_id = ?')->execute([$userId]);
@@ -97,7 +130,10 @@ function people_sync_leadership_assignments(PDO $db, int $userId, string $role, 
         $db->prepare('UPDATE departments SET dean_user_id = ? WHERE id = ?')->execute([$userId, $departmentId]);
     }
 
-    if ($role === 'program_head' && $programId !== null) {
-        $db->prepare('UPDATE programs SET program_head_user_id = ? WHERE id = ?')->execute([$userId, $programId]);
+    if ($role === 'program_head') {
+        $programIds = array_values(array_unique(array_filter(array_map('intval', $programIds))));
+        if ($programIds === [] && $programId !== null) $programIds = [$programId];
+        $stmt = $db->prepare('UPDATE programs SET program_head_user_id = ? WHERE id = ?');
+        foreach ($programIds as $id) $stmt->execute([$userId,$id]);
     }
 }

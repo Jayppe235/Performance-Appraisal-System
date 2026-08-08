@@ -307,6 +307,53 @@
   gap: 0 !important;
 }
 
+/* Shared role menu toggle: keep the control and all three bars unmistakable
+   on phones/tablets for Admin, VPAA, Dean, Program Head, and Faculty. */
+@media (max-width: 1200px), (pointer: coarse) and (max-width: 1600px) {
+  .admin-body .admin-header > .menu-toggle {
+    display: grid !important;
+    place-content: center !important;
+    gap: 4px !important;
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+    border: 1px solid #0a513c !important;
+    border-radius: 13px !important;
+    background: #126b4d !important;
+    color: #ffffff !important;
+    box-shadow: 0 8px 20px rgba(10, 81, 60, 0.28) !important;
+    opacity: 1 !important;
+  }
+
+  .admin-body .admin-header > .menu-toggle span {
+    display: block !important;
+    width: 20px !important;
+    height: 2.5px !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+  }
+
+  .admin-body .admin-header > .menu-toggle:is(:hover, :active, :focus-visible) {
+    border-color: #073d2e !important;
+    background: #0a513c !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 4px rgba(18, 107, 77, 0.2), 0 8px 20px rgba(10, 81, 60, 0.3) !important;
+    outline: none !important;
+  }
+
+  .admin-body.dark-mode .admin-header > .menu-toggle {
+    border-color: #7dd3fc !important;
+    background: #153b63 !important;
+    color: #ffffff !important;
+  }
+}
+
 /* Final self-review toolbar lock: overrides legacy flex rules that separate the
    calendar, selector, and status into different rows on phone browsers. */
 @media (max-width: 1200px), (pointer: coarse) and (max-width: 1600px) {

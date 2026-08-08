@@ -25,10 +25,11 @@ export const roles = {
     user: { name: '', email: '', department: '' },
     note: 'Department-level faculty evaluation and development monitoring',
     nav: [
-      { key: 'overview', label: 'Overview', icon: 'dashboard' },
+      { key: 'overview', label: 'Dashboard', icon: 'dashboard' },
       { key: 'evaluate', label: 'Evaluations', icon: 'evaluations' },
       { key: 'self-evaluation-review', label: 'Self-Evaluation Reviews', icon: 'selfEvaluation' },
       { key: 'summary', label: 'AI Analytics', icon: 'insights' },
+      { key: 'results', label: 'My Results', icon: 'results' },
       { key: 'report', label: 'Reports', icon: 'reports' },
     ],
   },
@@ -41,7 +42,7 @@ export const roles = {
     user: { name: '', email: '', department: '' },
     note: 'Academic affairs oversight and department evaluation monitoring',
     nav: [
-      { key: 'overview', label: 'Overview', icon: 'dashboard' },
+      { key: 'overview', label: 'Dashboard', icon: 'dashboard' },
       { key: 'evaluate', label: 'Evaluations', icon: 'evaluations' },
       { key: 'self-evaluation-review', label: 'Dean Self-Evaluations', icon: 'selfEvaluation' },
       { key: 'analytics', label: 'Analytics', icon: 'insights' },
@@ -57,7 +58,7 @@ export const roles = {
     user: { name: '', email: '', department: '' },
     note: 'Program-level faculty evaluation and development monitoring',
     nav: [
-      { key: 'overview', label: 'Overview', icon: 'dashboard' },
+      { key: 'overview', label: 'Dashboard', icon: 'dashboard' },
       { key: 'evaluate', label: 'Evaluations', icon: 'evaluations' },
       { key: 'self-evaluation-review', label: 'Faculty Self-Evaluations', icon: 'selfEvaluation' },
       { key: 'summary', label: 'Program Analytics', icon: 'insights' },
@@ -74,7 +75,7 @@ export const roles = {
     user: { name: '', email: '', department: '' },
     note: 'Teacher peer evaluation and personal development center',
     nav: [
-      { key: 'overview', label: 'Overview', icon: 'dashboard' },
+      { key: 'overview', label: 'Dashboard', icon: 'dashboard' },
       { key: 'evaluate', label: 'Evaluations', icon: 'evaluations' },
       { key: 'results', label: 'Results', icon: 'results' },
     ],

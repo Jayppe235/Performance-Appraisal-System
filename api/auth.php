@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/admin_data.php';
 require_once __DIR__ . '/../includes/http.php';
 require_once __DIR__ . '/../includes/notifications.php';
 
@@ -28,18 +29,41 @@ function auth_user_payload(?array $user): ?array
         return null;
     }
 
+    $effectiveRole = (string)$user['role'];
+    $actingDean = null;
+    try {
+        $actingDean = admin_one(
+            "SELECT epd.evaluation_period_id,epd.department_id,d.department_name,d.department_code
+             FROM evaluation_period_deans epd
+             JOIN appraisal_periods ap ON ap.id=epd.evaluation_period_id
+             JOIN departments d ON d.id=epd.department_id
+             LEFT JOIN evaluation_period_participation epp
+               ON epp.evaluation_period_id=epd.evaluation_period_id AND epp.user_id=epd.user_id
+             WHERE epd.user_id=:user_id AND ap.status='open'
+               AND COALESCE(epp.participation_status,'included')='included'
+               AND COALESCE(epp.work_status,'active')='active'
+             ORDER BY ap.date_start DESC,ap.id DESC LIMIT 1",
+            ['user_id'=>(int)$user['id']]
+        );
+        if ($actingDean !== null) $effectiveRole = 'dean';
+    } catch (Throwable) {
+        $actingDean = null;
+    }
+
     return [
         'id' => (int) $user['id'],
         'userCode' => (string) ($user['user_code'] ?? ''),
         'name' => $user['full_name'],
         'email' => $user['email'],
-        'birthDate' => (string) ($user['birth_date'] ?? ''),
         'department' => $user['department'] ?? '',
         'program' => $user['program'] ?? '',
         'databaseRole' => $user['role'],
-        'roleKey' => react_role_key($user['role']),
+        'effectiveRole' => $effectiveRole,
+        'roleKey' => react_role_key($effectiveRole),
+        'actingDean' => $actingDean !== null,
+        'actingDeanPeriodId' => (int)($actingDean['evaluation_period_id'] ?? 0),
+        'actingDeanDepartment' => (string)($actingDean['department_name'] ?? ''),
         'profileImage' => $user['profile_image'] ?? null,
-        'emailVerified' => !empty($user['email_verified_at']),
         'mustChangePassword' => (bool) ($user['must_change_password'] ?? false),
     ];
 }
@@ -68,7 +92,7 @@ try {
             $freshUser = null;
             try {
                 $stmt = db()->prepare(
-                    'SELECT id, user_code, full_name, email, email_verified_at, birth_date, must_change_password, role, department, program, profile_image
+                    'SELECT id, user_code, full_name, email, email_verified_at, must_change_password, role, department, program, profile_image
                      FROM users
                      WHERE id = :id AND is_active = 1
                      LIMIT 1'
@@ -85,7 +109,6 @@ try {
                     'user_code' => (string) $freshUser['user_code'],
                     'full_name' => $freshUser['full_name'],
                     'email' => $freshUser['email'],
-                    'birth_date' => $freshUser['birth_date'] ?? null,
                     'role' => $freshUser['role'],
                     'department' => $freshUser['department'] ?? '',
                     'program' => $freshUser['program'] ?? '',
@@ -151,41 +174,6 @@ try {
         echo json_encode(['ok'=>true,'user'=>auth_user_payload(current_user())]); exit;
     }
 
-    if ($action === 'send-verification') {
-        $user = current_user();
-        if (!$user) { http_response_code(401); echo json_encode(['ok'=>false,'message'=>'Please sign in again.']); exit; }
-        $stmt = db()->prepare('SELECT id, full_name, email, email_verified_at FROM users WHERE id=?'); $stmt->execute([$user['id']]); $fresh=$stmt->fetch();
-        if (!$fresh['email_verified_at']) send_account_link(db(), $fresh, 'email_verification');
-        echo json_encode(['ok'=>true,'message'=>'If delivery is available, a verification link has been sent.']); exit;
-    }
-
-    if ($action === 'send-verification-code') {
-        $user = current_user();
-        if (!$user) { http_response_code(401); echo json_encode(['ok'=>false,'message'=>'Please sign in again.']); exit; }
-        $stmt = db()->prepare('SELECT id, full_name, email, email_verified_at FROM users WHERE id=? AND is_active=1');
-        $stmt->execute([$user['id']]);
-        $fresh = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$fresh) { http_response_code(404); echo json_encode(['ok'=>false,'message'=>'Account not found.']); exit; }
-        if (!empty($fresh['email_verified_at'])) { echo json_encode(['ok'=>true,'verified'=>true,'message'=>'Your email address is already verified.']); exit; }
-        $rate = db()->prepare("SELECT COUNT(*) FROM auth_tokens WHERE user_id=? AND token_type='email_verification' AND created_at>DATE_SUB(NOW(),INTERVAL 10 MINUTE)");
-        $rate->execute([$fresh['id']]);
-        if ((int) $rate->fetchColumn() >= 3) { http_response_code(429); echo json_encode(['ok'=>false,'message'=>'Too many verification requests. Please wait 10 minutes.']); exit; }
-        if (!send_email_verification_code(db(), $fresh)) { http_response_code(503); echo json_encode(['ok'=>false,'message'=>'Verification email could not be sent. Please contact the administrator or try again later.']); exit; }
-        echo json_encode(['ok'=>true,'message'=>'A six-digit verification code was sent to your email address.']); exit;
-    }
-
-    if ($action === 'verify-email-code') {
-        $user = current_user();
-        if (!$user) { http_response_code(401); echo json_encode(['ok'=>false,'message'=>'Please sign in again.']); exit; }
-        $code = trim((string) ($body['verification_code'] ?? ''));
-        if (!preg_match('/^\d{6}$/', $code)) { http_response_code(422); echo json_encode(['ok'=>false,'message'=>'Enter the six-digit verification code.']); exit; }
-        if (!consume_email_verification_code(db(), (int) $user['id'], $code)) { http_response_code(422); echo json_encode(['ok'=>false,'message'=>'The verification code is invalid or expired.']); exit; }
-        $_SESSION['user']['email_verified_at'] = date('Y-m-d H:i:s');
-        $stmt = db()->prepare('SELECT id, user_code, full_name, email, email_verified_at, birth_date, must_change_password, role, department, program, profile_image FROM users WHERE id=? LIMIT 1');
-        $stmt->execute([$user['id']]);
-        echo json_encode(['ok'=>true,'message'=>'Email verified successfully.','user'=>auth_user_payload($stmt->fetch(PDO::FETCH_ASSOC) ?: current_user())]); exit;
-    }
-
     if ($action === 'request-reset') {
         $code = trim((string)($body['user_code'] ?? ''));
         if (valid_user_code($code)) {
@@ -224,14 +212,6 @@ try {
             }
         }
         echo json_encode(['ok'=>true,'message'=>'If the username code belongs to an eligible account, the administrator has been notified. Please wait for the administrator to reset your password.']); exit;
-    }
-
-    if ($action === 'verify-email') {
-        $uid=consume_auth_token(db(),(string)($body['token']??''),'email_verification');
-        if (!$uid) { http_response_code(422); echo json_encode(['ok'=>false,'message'=>'This verification link is invalid or expired.']); exit; }
-        db()->prepare('UPDATE users SET email_verified_at=NOW() WHERE id=?')->execute([$uid]);
-        if ((int)(current_user()['id']??0)===$uid) $_SESSION['user']['email_verified_at']=date('Y-m-d H:i:s');
-        echo json_encode(['ok'=>true,'message'=>'Email verified successfully.']); exit;
     }
 
     if ($action === 'reset-password') {

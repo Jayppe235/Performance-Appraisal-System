@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowUp, Building2, CheckCircle2, ClipboardCheck, ClipboardList, Edit3, Eye, FileText, Loader2, RefreshCcw, RotateCcw, Save, Search, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, ArrowUp, Building2, CheckCircle2, ClipboardCheck, ClipboardList, Download, Edit3, Eye, FileText, Loader2, Printer, RefreshCcw, RotateCcw, Save, Search, ShieldCheck, X } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { addToast } from '../common/Toast.jsx';
 import { confirmProceed } from '../common/ConfirmationModal.jsx';
 import PeriodSelector from './PeriodSelector.jsx';
 import SelfEvaluationModule from './SelfEvaluationModule.jsx';
+import GoalsRecordSheet from './GoalsRecordSheet.jsx';
 import { assetUrl } from '../../data/apiBase.js';
 import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
 
@@ -126,11 +127,11 @@ export default function DeanSelfEvaluationReview({ role }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
-  const [savingSignature, setSavingSignature] = useState(false);
   const [acting, setActing] = useState('');
   const [reopenTarget, setReopenTarget] = useState(null);
   const [reopenReason, setReopenReason] = useState('');
   const [editTarget, setEditTarget] = useState(null);
+  const [reviewWorkspace, setReviewWorkspace] = useState('self');
   const reviewPanelRef = useRef(null);
   const searchInputRef = useRef(null);
 
@@ -186,11 +187,7 @@ export default function DeanSelfEvaluationReview({ role }) {
   const activeStatus = activeRecord ? displayStatus(activeRecord, reviewer) : '';
   const canReview = activeRecord?.status === 'submitted' && activeRecord?.review_status !== 'approved';
   const signatureNameKey = isVpaa ? 'vpaaReviewer' : isDean ? 'deanReviewer' : 'appraiser';
-  const signatureImageKey = isVpaa ? 'vpaaReviewerSignature' : isDean ? 'deanReviewerSignature' : 'appraiserSignature';
-  const signatureFileNameKey = isVpaa ? 'vpaaReviewerSignatureName' : isDean ? 'deanReviewerSignatureName' : 'appraiserSignatureName';
   const appraiserName = activeConfirmations[signatureNameKey] || activeRecord?.reviewer_name || role?.user?.name || reviewer;
-  const appraiserSignature = activeConfirmations[signatureImageKey] || '';
-  const showReviewerSignature = (isProgramHead || isDean || isVpaa) && (canReview || appraiserSignature);
 
   async function openDetail(row) {
     setDetailLoading(true);
@@ -224,54 +221,8 @@ export default function DeanSelfEvaluationReview({ role }) {
     }
   }
 
-  async function saveAppraiserSignature(signature) {
-    if (!activeRecord) return;
-    setSavingSignature(true);
-    try {
-      const payload = await apiFetch('/api/self-evaluations.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update_review_signature',
-          role: targetRole,
-          record_id: activeRecord.id,
-          appraiser_name: appraiserName,
-          appraiser_signature: signature.dataUrl,
-          appraiser_signature_name: signature.name,
-        }),
-      });
-      addToast({ type: 'success', text: payload.message || 'Appraiser signature saved.' });
-      await openDetail(activeRecord);
-      await loadRows(true);
-    } catch (err) {
-      addToast({ type: 'error', text: err.message || 'Unable to save appraiser signature.' });
-    } finally {
-      setSavingSignature(false);
-    }
-  }
-
-  async function handleAppraiserSignatureUpload(event) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    try {
-      const signature = await readReviewSignatureFile(file);
-      await saveAppraiserSignature(signature);
-    } catch (err) {
-      addToast({ type: 'error', text: err.message || 'Unable to upload appraiser signature.' });
-    }
-  }
-
-  async function removeAppraiserSignature() {
-    await saveAppraiserSignature({ dataUrl: '', name: '' });
-  }
-
   async function approveEvaluation() {
     if (!activeRecord) return;
-    if ((isProgramHead || isDean || isVpaa) && !appraiserSignature) {
-      addToast({ type: 'error', text: `Upload the ${reviewer} reviewer signature before approving this ${subject.toLowerCase()} self evaluation.` });
-      return;
-    }
     const confirmed = await confirmProceed({
       title: 'Approve Evaluation?',
       message: `This will lock ${activeRecord.full_name || `this ${subject.toLowerCase()}`}'s self evaluation${isVpaa ? ' and record the VPAA approval' : ` and mark it ready for ${isDean ? 'Admin review' : 'Dean review'}`}.`,
@@ -331,6 +282,74 @@ export default function DeanSelfEvaluationReview({ role }) {
     window.setTimeout(() => searchInputRef.current?.focus({ preventScroll: true }), 260);
   }
 
+  if (!isProgramHead && reviewWorkspace === 'goals') {
+    return (
+      <section className="dean-self-review module-wide page-enter">
+        <div className="self-review-workspace-tabs" role="tablist" aria-label={`${reviewer} review modules`}>
+          <button type="button" role="tab" aria-selected="false" onClick={() => setReviewWorkspace('self')}><ClipboardList size={17} /><span>Self-Evaluation Reviews</span></button>
+          <button type="button" role="tab" aria-selected="true" className="active" onClick={() => setReviewWorkspace('goals')}><FileText size={17} /><span>Goals Record Reviews</span></button>
+        </div>
+        <GoalsRecordSheet role={role} mode="review" reviewPeriodId={selectedPeriodId} reviewPeriod={selectedPeriod} />
+      </section>
+    );
+  }
+
+  function exportApprovedReview(format) {
+    if (activeRecord?.review_status !== 'approved') {
+      addToast({ type: 'error', text: `The ${reviewer} must approve this evaluation before it can be exported.` });
+      return;
+    }
+    const paper = document.querySelector('.dean-self-review-modal .review-paper-form');
+    if (!paper) return;
+    const styles = `<style>
+      @page{size:A4 portrait;margin:4mm}
+      *{box-sizing:border-box}
+      html,body{width:100%;height:auto}
+      body{font-family:Arial,sans-serif;color:#111;margin:0;font-size:6.5pt;line-height:1.08;zoom:.74}
+      h1,h2,h3,p{margin:1px 0}h1,h2,h3{text-align:center}h1{font-size:11pt}h2{font-size:9.5pt}h3{font-size:7.5pt}
+      img{max-width:38px;max-height:38px}.self-eval-paper-head{margin-bottom:2px}.self-eval-school-brand{gap:4px}
+      table{width:100%;border-collapse:collapse;margin:2px 0 3px;font-size:6pt;line-height:1.05;page-break-inside:auto}
+      tr{page-break-inside:avoid}th,td{border:1px solid #111;padding:1.5px 2px;vertical-align:top}th{background:#eef8f3}
+      td p,th p{margin:0}.paper-field{display:inline-block;width:49%;margin:1px 0}.paper-box{border:1px solid #111;min-height:16px;padding:2px;margin:1px 0 2px}
+      .paper-section{page-break-inside:auto;margin-top:3px}.paper-section h3{text-align:left;border-bottom:1px solid #111;padding-bottom:1px}
+      .self-eval-question{margin:2px 0 1px}.review-paper-rating{display:inline-block;border:1px solid #111;padding:1px 3px;margin:1px}
+      .self-eval-paper-fields{gap:1px 5px}.review-paper-form{width:135.13%;max-width:none;padding:0;border:0;box-shadow:none;transform-origin:top left}
+      .self-eval-helper,.paper-subtitle,small{font-size:5.8pt;line-height:1.05}.self-eval-approval-summary{padding:2px;margin:2px 0}
+      .no-export,.no-print,button{display:none!important}
+    </style>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${activeRecord.full_name || 'Self Evaluation'}</title>${styles}</head><body>${paper.outerHTML}</body></html>`;
+    if (format === 'word') {
+      const blob = new Blob([html], { type: 'application/msword' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${String(activeRecord.full_name || 'employee').replace(/[^a-z0-9]+/gi, '-')}-self-evaluation.doc`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      return;
+    }
+    const frame = document.createElement('iframe');
+    frame.style.position = 'fixed';
+    frame.style.width = '1px';
+    frame.style.height = '1px';
+    frame.style.right = '0';
+    frame.style.bottom = '0';
+    frame.style.border = '0';
+    frame.style.opacity = '0';
+    document.body.appendChild(frame);
+    frame.contentDocument.open();
+    frame.contentDocument.write(html);
+    frame.contentDocument.close();
+    window.setTimeout(async () => {
+      await Promise.all(Array.from(frame.contentDocument.images).map((image) => image.complete
+        ? Promise.resolve()
+        : new Promise((resolve) => { image.onload = resolve; image.onerror = resolve; })));
+      frame.contentWindow.onafterprint = () => frame.remove();
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      window.setTimeout(() => frame.remove(), 60000);
+    }, 350);
+  }
+
   return (
     <section className="dean-self-review module-wide page-enter">
       <div className="role-summary-header dean-self-review-head">
@@ -354,6 +373,12 @@ export default function DeanSelfEvaluationReview({ role }) {
         </div>
         <img className="dean-self-review-robot" src={reviewRobotImage} alt="" aria-hidden="true" />
       </div>
+      {!isProgramHead && (
+        <div className="self-review-workspace-tabs self-review-workspace-tabs-below" role="tablist" aria-label={`${reviewer} review modules`}>
+          <button type="button" role="tab" aria-selected="true" className="active" onClick={() => setReviewWorkspace('self')}><ClipboardList size={17} /><span>Self-Evaluation Reviews</span></button>
+          <button type="button" role="tab" aria-selected="false" onClick={() => setReviewWorkspace('goals')}><FileText size={17} /><span>Goals Record Reviews</span></button>
+        </div>
+      )}
 
       <div className="dean-self-review-summary">
         {cards.map((item) => {
@@ -475,78 +500,29 @@ export default function DeanSelfEvaluationReview({ role }) {
 
               <div className="dean-self-review-modal-grid">
               <section className="dean-self-review-detail">
-                <ReviewBlock title="Ratings and Behavioral Evidence">
-                  {objectEntries(activeAnswers.selfRatings).length === 0 ? <p>No self rating entries are available.</p> : objectEntries(activeAnswers.selfRatings).map(([key, value]) => (
-                    <div className="dean-self-review-mini-row" key={key}>
-                      <span>{reviewCriterionLabel(key)}</span>
-                      <div className="dean-self-review-rating"><strong>{value}</strong><small>{ratingDescriptor(value)}</small></div>
-                    </div>
-                  ))}
-                  {objectEntries(activeAnswers.selfEvidence).map(([key, value]) => (
-                    <div className="dean-self-review-evidence" key={key}><strong>{reviewCriterionLabel(key)}</strong><span>Behavioral Evidence</span><p>{value || 'No evidence provided.'}</p></div>
-                  ))}
-                </ReviewBlock>
-                <ReviewBlock title="Goals and Accomplishments">
-                  {collection(activeAnswers.achievedGoals).map((row, index) => <TextPair key={index} leftLabel="Goal" rightLabel="Accomplishment" left={row.goals} right={row.accomplishment} />)}
-                  <p><strong>Other Accomplishments:</strong> {activeAnswers.otherAccomplishments || 'None recorded.'}</p>
-                </ReviewBlock>
-                <ReviewBlock title="Performance Outputs">
-                  {collection(activeAnswers.performanceOutputs).map((row, index) => (
-                    <div className="dean-self-review-output" key={index}>
-                      <strong>{row.goals || 'Goal not specified'}</strong>
-                      <p>{row.accomplishment || 'No accomplishment details.'}</p>
-                      <div className="dean-self-review-output-meta"><span>Weight {row.weight || 0}%</span><span>Rating {row.rating || 'Pending'}</span></div>
-                    </div>
-                  ))}
-                </ReviewBlock>
-                <ReviewBlock title="Strengths, Areas for Improvement, and Faculty Goals">
-                  <p><strong>Personal Strengths:</strong> {activeAnswers.personalStrengths || activeAnswers.appraiseeStrengths || 'None recorded.'}</p>
-                  <p><strong>Areas for Improvement:</strong></p>
-                  {collection(activeAnswers.improvementPlans).map((row, index) => (
-                    <TextPair key={index} leftLabel="Development Area" rightLabel="Action Plan and Timeline" left={row.area} right={`${row.actionPlan || ''}${row.timeFrame ? ` (${row.timeFrame})` : ''}`} />
-                  ))}
-                  <p><strong>Further Contribution / Goals:</strong> {activeAnswers.furtherContribution || 'None recorded.'}</p>
-                  <p><strong>Faculty Comments:</strong> {activeAnswers.comments || 'None recorded.'}</p>
-                </ReviewBlock>
+                <ReviewPaperForm record={activeRecord} answers={activeAnswers} reviewer={reviewer} reviewerName={appraiserName} />
               </section>
 
               <aside className="dean-self-review-side">
                 <div className="dean-self-review-side-head">
                   <span>Review Decision</span>
                   <strong>{activeRecord.full_name || 'Faculty Self Evaluation'}</strong>
-                  <small>Review the evidence, add notes, sign, then approve or return for revision.</small>
+                  <small>Review the completed paper form, add notes, then approve or return it for revision.</small>
                 </div>
                 <label className="dean-self-review-notes">{reviewer} Review Notes
                   <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={6} disabled={!canReview || savingNotes} placeholder="Add clarification remarks or review notes. Original faculty ratings remain unchanged." />
                 </label>
-                {showReviewerSignature && (
-                  <div className={`dean-self-review-signature ${appraiserSignature ? 'has-signature' : ''} ${canReview && !appraiserSignature ? 'needs-signature' : ''}`}>
-                    <div className="dean-self-review-signature-head">
-                      <small>{reviewer} Verification</small>
-                      <strong>Reviewer Signature</strong>
-                      <span>{appraiserName || reviewer}</span>
-                    </div>
-                    <div className="dean-self-review-signature-preview">
-                      {appraiserSignature ? (
-                        <img src={appraiserSignature} alt={`${reviewer} reviewer signature`} />
-                      ) : (
-                        <span>Upload {reviewer} virtual signature</span>
-                      )}
-                    </div>
-                    <div className="dean-self-review-signature-actions">
-                      <label className={`evaluation-nav-btn secondary dean-self-review-signature-button ${!canReview || savingSignature ? 'disabled' : ''}`}>
-                        {savingSignature ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                        <span>{appraiserSignature ? 'Replace Signature' : 'Upload Signature'}</span>
-                        <input type="file" accept="image/*" onChange={handleAppraiserSignatureUpload} disabled={!canReview || savingSignature} />
-                      </label>
-                      {appraiserSignature && canReview && (
-                        <button type="button" className="evaluation-nav-btn secondary dean-self-review-signature-button is-remove" onClick={removeAppraiserSignature} disabled={savingSignature}>
-                          <Trash2 size={16} /> <span>Remove</span>
-                        </button>
-                      )}
-                    </div>
-                    {canReview && !appraiserSignature && <small className="dean-self-review-signature-required">Required before approval</small>}
-                    {activeConfirmations[signatureFileNameKey] && <small className="dean-self-review-signature-file" title={activeConfirmations[signatureFileNameKey]}>{activeConfirmations[signatureFileNameKey]}</small>}
+                <div className="dean-self-review-signature has-signature">
+                  <div className="dean-self-review-signature-head">
+                    <small>{reviewer} Verification</small>
+                    <strong>Printed Name of Reviewer</strong>
+                    <span>{appraiserName || reviewer}</span>
+                  </div>
+                </div>
+                {activeRecord.review_status === 'approved' && (
+                  <div className="dean-self-review-secondary-actions">
+                    <button type="button" className="evaluation-nav-btn secondary" onClick={() => exportApprovedReview('pdf')}><Printer size={15} /> Direct Print / PDF</button>
+                    <button type="button" className="evaluation-nav-btn secondary" onClick={() => exportApprovedReview('word')}><Download size={15} /> Download Word</button>
                   </div>
                 )}
                 <div className="dean-self-review-secondary-actions">
@@ -658,4 +634,80 @@ function TextPair({ left, right, leftLabel = 'Item', rightLabel = 'Details' }) {
       <div><span>{rightLabel}</span><p>{right || 'No details recorded.'}</p></div>
     </div>
   );
+}
+
+function ReviewPaperForm({ record, answers, reviewer, reviewerName }) {
+  const confirmations = answers.confirmations || {};
+  const rows = (items, minimum = 1) => {
+    const values = collection(items);
+    return values.length ? values : Array.from({ length: minimum }, () => ({}));
+  };
+  const answer = (value) => String(value || '').trim() || 'Not provided';
+  const weightedRating = (row) => {
+    const scale = { E: 5, EE: 4, ME: 3, MM: 2, DE: 1 };
+    return (((Number(row.weight) || 0) / 100) * (scale[row.rating] || Number(row.rating) || 0)).toFixed(4);
+  };
+  return (
+    <div className="self-eval-paper self-eval-paper-form review-paper-form">
+      <header className="self-eval-paper-head">
+        <strong className="self-eval-form-code">{record.role === 'faculty' ? 'PMAS FORM 3b' : 'PMAS FORM 3a'}</strong>
+        <div className="self-eval-school-brand">
+          <img src="/assets/images/ndmc-seal.png" alt="" />
+          <div><h1>NOTRE DAME OF MIDSAYAP COLLEGE</h1><h2>Performance Appraisal Sheet</h2><p>({record.role === 'faculty' ? 'Faculty' : 'Administrative'})</p></div>
+        </div>
+      </header>
+      <div className="self-eval-paper-fields">
+        <div className="paper-line-field"><span>Name</span><strong>{answer(record.full_name)}</strong></div>
+        <div className="paper-line-field"><span>Appraisal Period</span><strong>{answer(record.evaluation_period)}</strong></div>
+        <div className="paper-line-field wide"><span>Position Title</span><strong>{answer(record.position_title)}</strong></div>
+        <div className="paper-line-field wide"><span>Department</span><strong>{answer(record.faculty_department || record.department)}</strong></div>
+      </div>
+
+      <section className="self-eval-section paper-section">
+        <h3>Part I - Self-Evaluation</h3>
+        <p className="paper-subtitle">(accomplished by employee to be appraised)</p>
+        <h4>1. Goals achieved and significant accomplishments</h4>
+        <table className="self-eval-table"><thead><tr><th>Goals</th><th>Actual Accomplishment</th></tr></thead><tbody>
+          {rows(answers.achievedGoals).map((row, index) => <tr key={index}><td>{answer(row.goals)}</td><td>{answer(row.accomplishment)}</td></tr>)}
+        </tbody></table>
+        <div className="paper-answer-box"><span>Other Accomplishments Aside From Goals Achievement</span><div>{answer(answers.otherAccomplishments)}</div></div>
+        <ReviewAnswer number="2" label="Goals that did not meet the agreed standards and reasons" value={answers.unmetGoalsReason} />
+        <ReviewAnswer number="3" label="Personal strengths and their contribution to performance" value={answers.personalStrengths} />
+        <ReviewAnswer number="4" label="Overall performance rating" value={`${answer(answers.overallSelfRating)} — ${answer(answers.ratingBasis)}`} />
+        <ReviewAnswer number="5" label="Further contribution to the organization" value={answers.furtherContribution} />
+      </section>
+
+      <section className="self-eval-section paper-section">
+        <h3>Part II - Performance Outputs Appraisal</h3>
+        <p className="paper-subtitle">Degree of Achievement of Mutually Agreed Work Goals</p>
+        <table className="self-eval-table"><thead><tr><th>Goals</th><th>Weight</th><th>Actual Accomplishment</th><th>Standard Met / Rating</th><th>Weighted Rating</th></tr></thead><tbody>
+          {rows(answers.performanceOutputs).map((row, index) => <tr key={index}><td>{answer(row.goals)}</td><td>{row.weight || 0}%</td><td>{answer(row.accomplishment)}</td><td>{answer(row.rating)}</td><td>{weightedRating(row)}</td></tr>)}
+        </tbody></table>
+      </section>
+
+      <section className="self-eval-section paper-section">
+        <h3>Part III - Performance Factors</h3>
+        <table className="self-eval-table"><thead><tr><th>Performance Factor</th><th>Self Rating</th><th>Behavioral Evidence</th></tr></thead><tbody>
+          {objectEntries(answers.selfRatings).map(([key, value]) => <tr key={key}><td>{reviewCriterionLabel(key)}</td><td>{value} - {ratingDescriptor(value)}</td><td>{answer(answers.selfEvidence?.[key])}</td></tr>)}
+          {objectEntries(answers.selfRatings).length === 0 && <tr><td colSpan="3">No performance-factor ratings recorded.</td></tr>}
+        </tbody></table>
+      </section>
+
+      <section className="self-eval-section paper-section">
+        <h3>Part IV - Summary</h3>
+        <ReviewAnswer label="Appraisee's Strengths" value={answers.appraiseeStrengths || answers.personalStrengths} />
+        <table className="self-eval-table"><thead><tr><th>Areas of Improvement</th><th>Action Plan</th><th>Time Frame</th></tr></thead><tbody>
+          {rows(answers.improvementPlans).map((row, index) => <tr key={index}><td>{answer(row.area)}</td><td>{answer(row.actionPlan)}</td><td>{answer(row.timeFrame)}</td></tr>)}
+        </tbody></table>
+        <ReviewAnswer label="Appraisee's Comments on the Appraisal" value={answers.comments} />
+        <table className="self-eval-table paper-signature-table"><thead><tr><th>Printed Name of Appraisee</th><th>Printed Name of Reviewer</th><th>Review Date</th></tr></thead><tbody><tr>
+          <td>{answer(confirmations.appraisee || record.full_name)}</td><td>{answer(reviewerName || reviewer)}</td><td>{formatDate(record.reviewed_at)}</td>
+        </tr></tbody></table>
+      </section>
+    </div>
+  );
+}
+
+function ReviewAnswer({ number = '', label, value }) {
+  return <div className="paper-answer-box"><span>{number ? `${number}. ${label}` : label}</span><div>{String(value || '').trim() || 'Not provided'}</div></div>;
 }

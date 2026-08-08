@@ -6,6 +6,7 @@ require_once __DIR__ . '/../includes/admin_data.php';
 require_once __DIR__ . '/../includes/evaluation_cards.php';
 require_once __DIR__ . '/../includes/evaluation_period.php';
 require_once __DIR__ . '/../includes/evaluation_consistency_sync.php';
+require_once __DIR__ . '/../includes/subject_assignments.php';
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $allowedDevOrigins = [
@@ -362,7 +363,7 @@ function department_analysis_department_aliases(array $departments): array
     return array_values(array_unique(array_filter($aliases)));
 }
 
-function department_analysis_user_scope(array $user): array
+function department_analysis_user_scope(array $user, int $evaluationPeriodId = 0): array
 {
     $role = (string) ($user['role'] ?? '');
     $userId = (int) ($user['id'] ?? 0);
@@ -387,7 +388,7 @@ function department_analysis_user_scope(array $user): array
 
     if ($role === 'program_head') {
         require_once __DIR__ . '/../includes/program_head_data.php';
-        $programs = program_head_programs($userId);
+        $programs = program_head_programs($userId, $evaluationPeriodId);
         $scope['program_codes'] = department_analysis_program_codes($programs);
         $programDepartments = [];
         foreach ($programs as $program) {
@@ -542,6 +543,7 @@ try {
     dipascaf_ensure_form_b_schema();
     admin_ensure_archive_schema();
     admin_ensure_faculty_program_schema();
+    subject_assignments_ensure_schema();
 
     $selectedPeriod = dipascaf_selected_period_from_request($_GET, true);
     $selectedPeriodName = trim((string) ($selectedPeriod['period_name'] ?? ''));
@@ -580,7 +582,7 @@ try {
     }
 
     // ── Resolve scope from the authenticated user, not request input ───
-    $userScope = department_analysis_user_scope($user);
+    $userScope = department_analysis_user_scope($user, (int)($selectedPeriod['id'] ?? 0));
     $roleFilter = strtolower(trim((string) ($_GET['role'] ?? '')));
     $allowedRoleFilters = ['dean', 'program_head', 'teacher'];
     if (($userScope['role'] ?? '') === 'vpaa' && in_array($roleFilter, $allowedRoleFilters, true)) {
@@ -595,13 +597,22 @@ try {
 
     // ── Load faculty grouped by program_code ─────────────────────────
     $facultyRows = admin_all(
-        "SELECT f.id, f.full_name, f.department, COALESCE(NULLIF(f.program_code, ''), 'Unassigned') AS program_code,
+        "SELECT f.id, f.full_name,
+                COALESCE(NULLIF(epp.department_snapshot, ''), f.department) AS department,
+                COALESCE(NULLIF(epp.program_snapshot, ''), NULLIF(f.program_code, ''), 'Unassigned') AS program_code,
                 f.position_title,
-                COALESCE(NULLIF(u.department, ''), f.department) AS user_department,
-                COALESCE(NULLIF(u.role, ''), '') AS user_role
+                COALESCE(NULLIF(epp.department_snapshot, ''), NULLIF(u.department, ''), f.department) AS user_department,
+                COALESCE(NULLIF(epp.role_snapshot, ''), NULLIF(u.role, ''), '') AS user_role
          FROM faculty f
-         LEFT JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
-         WHERE COALESCE(f.is_archived, 0) = 0"
+         JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         JOIN evaluation_period_participation epp
+           ON epp.evaluation_period_id = ? AND epp.user_id = u.id
+         WHERE COALESCE(f.is_archived, 0) = 0
+           AND f.is_active = 1 AND u.is_active = 1
+           AND epp.participation_status = 'included'
+           AND epp.work_status = 'active'
+           AND epp.employment_status IN ('active','newly_added')",
+        [(int)($selectedPeriod['id'] ?? 0)]
     );
 
     $groups = []; // program_code => [data]
@@ -695,6 +706,7 @@ try {
     // ── Completion gate: a faculty member is complete only when every assigned
     // evaluation for that evaluatee in the selected period has been submitted.
     $facultyEvaluationProgress = [];
+    $facultyEvaluationAssignments = [];
     if ($facultyProgramById !== []) {
         $facultyIdsForProgress = array_keys($facultyProgramById);
         $progressPlaceholders = implode(',', array_fill(0, count($facultyIdsForProgress), '?'));
@@ -719,7 +731,7 @@ try {
              LEFT JOIN peer_evaluation_assignments pea ON pea.peer_assignment_id = pa.id
              WHERE pa.evaluatee_faculty_id IN ($progressPlaceholders)
                AND COALESCE(pa.is_archived, 0) = 0
-               AND COALESCE(pa.assignment_type, '') <> 'self'
+               AND pa.status NOT IN ('not_required', 'reassigned')
                AND (pa.assignment_type <> 'peer' OR (pea.id IS NOT NULL AND COALESCE(pea.is_archived, 0) = 0))
                $assignmentPeriodWhere
              GROUP BY pa.evaluatee_faculty_id",
@@ -743,6 +755,82 @@ try {
                 }
                 if ($facultyEvaluationProgress[$facultyId]['isComplete']) {
                     $groups[$programCode]['completedFaculty'][$facultyId] = true;
+                }
+            }
+        }
+
+        $assignmentRows = admin_all(
+            "SELECT pa.id, pa.evaluatee_faculty_id, pa.evaluator_user_id, pa.evaluator_role,
+                    pa.assignment_type, pa.status, pa.deadline, pa.submitted_at,
+                    COALESCE(NULLIF(pa.evaluator_name_snapshot, ''), u.full_name, 'Unassigned evaluator') AS evaluator_name
+             FROM peer_assignments pa
+             LEFT JOIN users u ON u.id = pa.evaluator_user_id
+             LEFT JOIN peer_evaluation_assignments pea ON pea.peer_assignment_id = pa.id
+             WHERE pa.evaluatee_faculty_id IN ($progressPlaceholders)
+               AND COALESCE(pa.is_archived, 0) = 0
+               AND pa.status NOT IN ('not_required', 'reassigned')
+               AND (pa.assignment_type <> 'peer' OR (pea.id IS NOT NULL AND COALESCE(pea.is_archived, 0) = 0))
+               $assignmentPeriodWhere
+             ORDER BY FIELD(pa.status, 'pending', 'in_progress', 'reopened', 'submitted'), pa.deadline ASC, pa.id ASC",
+            array_merge($facultyIdsForProgress, $assignmentPeriodParams)
+        );
+
+        foreach ($assignmentRows as $row) {
+            $facultyId = (int) ($row['evaluatee_faculty_id'] ?? 0);
+            $rawStatus = strtolower((string) ($row['status'] ?? 'pending'));
+            $status = $rawStatus === 'submitted' ? 'completed' : 'pending';
+            $facultyEvaluationAssignments[$facultyId][] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'assignmentType' => (string) ($row['assignment_type'] ?? ''),
+                'evaluatorRole' => (string) ($row['evaluator_role'] ?? ''),
+                'evaluatorName' => (string) ($row['evaluator_name'] ?? 'Unassigned evaluator'),
+                'status' => $status,
+                'workflowStatus' => $rawStatus,
+                'deadline' => (string) ($row['deadline'] ?? ''),
+                'submittedAt' => (string) ($row['submitted_at'] ?? ''),
+                'requiredForCurrentDean' => (string) ($user['role'] ?? '') === 'dean'
+                    && (int) ($row['evaluator_user_id'] ?? 0) === (int) ($user['id'] ?? 0)
+                    && (string) ($row['evaluator_role'] ?? '') === 'dean',
+                'canEvaluate' => (string) ($user['role'] ?? '') === 'dean'
+                    && (int) ($row['evaluator_user_id'] ?? 0) === (int) ($user['id'] ?? 0)
+                    && (string) ($row['evaluator_role'] ?? '') === 'dean'
+                    && $rawStatus !== 'submitted'
+                    && (string) ($selectedPeriod['status'] ?? '') === 'open',
+            ];
+        }
+
+        $evaluationRules = admin_all(
+            "SELECT rule_name, evaluator_role, evaluatee_role, assignment_type, GREATEST(1, peer_count) AS required_count
+             FROM evaluation_rules
+             WHERE is_active = 1 AND assignment_type <> 'self'"
+        );
+        foreach ($facultyProgramById as $facultyId => $_programCode) {
+            $evaluateeRole = (string) ($facultyRoleById[$facultyId] ?? 'teacher');
+            $assignments = $facultyEvaluationAssignments[$facultyId] ?? [];
+            foreach ($evaluationRules as $rule) {
+                if ((string) ($rule['evaluatee_role'] ?? '') !== $evaluateeRole) continue;
+                $matchingCount = count(array_filter(
+                    $assignments,
+                    static fn (array $assignment): bool =>
+                        (string) ($assignment['assignmentType'] ?? '') === (string) ($rule['assignment_type'] ?? '')
+                        && (string) ($assignment['evaluatorRole'] ?? '') === (string) ($rule['evaluator_role'] ?? '')
+                ));
+                $requiredCount = (int) ($rule['required_count'] ?? 1);
+                for ($missingIndex = $matchingCount; $missingIndex < $requiredCount; $missingIndex++) {
+                    $facultyEvaluationAssignments[$facultyId][] = [
+                        'id' => null,
+                        'assignmentType' => (string) ($rule['assignment_type'] ?? ''),
+                        'evaluatorRole' => (string) ($rule['evaluator_role'] ?? ''),
+                        'evaluatorName' => 'Evaluator not assigned',
+                        'status' => 'missing',
+                        'workflowStatus' => 'missing',
+                        'deadline' => '',
+                        'submittedAt' => '',
+                        'requiredForCurrentDean' => (string) ($rule['evaluator_role'] ?? '') === 'dean'
+                            && (string) ($user['role'] ?? '') === 'dean',
+                        'canEvaluate' => false,
+                        'ruleName' => (string) ($rule['rule_name'] ?? 'Required evaluation'),
+                    ];
                 }
             }
         }
@@ -927,7 +1015,7 @@ try {
         }
 
         $facultyList = array_map(
-            static function (array $faculty) use ($group, $facultyEvaluationProgress, $selectedPeriod): array {
+            static function (array $faculty) use ($group, $facultyEvaluationProgress, $facultyEvaluationAssignments, $selectedPeriod): array {
                 $facultyId = (int) ($faculty['id'] ?? 0);
                 $result = $group['facultyResults'][$facultyId] ?? null;
                 $average = $result && (int) ($result['resultCount'] ?? 0) > 0
@@ -998,6 +1086,7 @@ try {
                     'complete' => (bool) ($progress['isComplete'] ?? false),
                     'assignmentTotal' => (int) ($progress['total'] ?? 0),
                     'assignmentCompleted' => (int) ($progress['completed'] ?? 0),
+                    'evaluationAssignments' => array_values($facultyEvaluationAssignments[$facultyId] ?? []),
                     'averageScore' => $average,
                     'scores' => $fields,
                     'weakAreas' => array_slice($weakAreas, 0, 4),
@@ -1028,6 +1117,7 @@ try {
 
         $data[] = [
             'id' => (string) $group['id'],
+            'group_type' => 'program',
             'program_code' => (string) $group['program_code'],
             'program' => $group['program'],
             'department_code' => $group['department_code'],
@@ -1044,7 +1134,144 @@ try {
         ];
     }
 
-    usort($data, static fn (array $a, array $b): int => strcmp((string) $a['program'], (string) $b['program']));
+    // Build parallel subject-performance groups. Evaluation results remain
+    // person-based and are attributed only to the period-snapshotted primary
+    // subject (or the current primary subject when no period is selected).
+    if (($userScope['role'] ?? '') !== 'program_head') {
+        $facultyAnalysisById = [];
+        foreach ($data as $groupRow) {
+            foreach (($groupRow['faculty'] ?? []) as $facultyRow) {
+                $facultyAnalysisById[(int)$facultyRow['id']] = $facultyRow;
+            }
+        }
+        $periodId = (int)($selectedPeriod['id'] ?? 0);
+        if ($periodId > 0) {
+            $subjectRows = admin_all(
+                "SELECT epfs.faculty_id,epfs.subject_area_id,epfs.subject_code_snapshot subject_code,
+                        epfs.subject_name_snapshot subject_name,epfs.department_id,epfs.is_primary,epfs.is_coordinator,
+                        d.department_code,d.department_name,cf.full_name coordinator_name
+                 FROM evaluation_period_faculty_subjects epfs
+                 JOIN departments d ON d.id=epfs.department_id
+                 LEFT JOIN evaluation_period_faculty_subjects coordinator
+                   ON coordinator.evaluation_period_id=epfs.evaluation_period_id
+                  AND coordinator.subject_area_id=epfs.subject_area_id
+                  AND coordinator.is_coordinator=1
+                 LEFT JOIN faculty cf ON cf.id=coordinator.faculty_id
+                 WHERE epfs.evaluation_period_id=?",
+                [$periodId]
+            );
+        } else {
+            $subjectRows = admin_all(
+                "SELECT fsa.faculty_id,sa.id subject_area_id,sa.subject_code,sa.subject_name,
+                        sa.department_id,fsa.is_primary,(sa.coordinator_faculty_id=fsa.faculty_id) is_coordinator,
+                        d.department_code,d.department_name,cf.full_name coordinator_name
+                 FROM faculty_subject_assignments fsa
+                 JOIN subject_areas sa ON sa.id=fsa.subject_area_id
+                 JOIN departments d ON d.id=sa.department_id
+                 LEFT JOIN faculty cf ON cf.id=sa.coordinator_faculty_id
+                 WHERE sa.is_active=1"
+            );
+        }
+        $subjectGroups = [];
+        $subjectFacultyIds = [];
+        foreach ($subjectRows as $subjectRow) {
+            $facultyId = (int)$subjectRow['faculty_id'];
+            if (!isset($facultyAnalysisById[$facultyId])) continue;
+            if ((int)$subjectRow['is_primary'] === 1) $subjectFacultyIds[$facultyId] = true;
+            $key = 'subject:' . (int)$subjectRow['subject_area_id'];
+            $subjectGroups[$key] ??= [
+                'id' => $key,
+                'group_type' => 'subject',
+                'subject_id' => (int)$subjectRow['subject_area_id'],
+                'subject_code' => (string)$subjectRow['subject_code'],
+                'subject_name' => (string)$subjectRow['subject_name'],
+                'program_code' => (string)$subjectRow['subject_code'],
+                'program' => (string)$subjectRow['subject_name'],
+                'department_code' => (string)$subjectRow['department_code'],
+                'department_name' => (string)$subjectRow['department_name'],
+                'coordinator_name' => (string)($subjectRow['coordinator_name'] ?? ''),
+                'faculty' => [],
+            ];
+            $member = $facultyAnalysisById[$facultyId];
+            $member['subject_id'] = (int)$subjectRow['subject_area_id'];
+            $member['subject_code'] = (string)$subjectRow['subject_code'];
+            $member['subject_name'] = (string)$subjectRow['subject_name'];
+            $member['is_subject_coordinator'] = (bool)$subjectRow['is_coordinator'];
+            $member['performance_attributed'] = (bool)$subjectRow['is_primary'];
+            $member['program_code'] = '';
+            $member['program_name'] = '';
+            if (!(bool)$subjectRow['is_primary']) {
+                $member['evaluated'] = false;
+                $member['complete'] = false;
+                $member['averageScore'] = null;
+                $member['assignmentTotal'] = 0;
+                $member['assignmentCompleted'] = 0;
+                $member['evaluationAssignments'] = [];
+                $member['scores'] = [];
+                $member['weakAreas'] = [];
+                $member['strengths'] = [];
+                $member['weakArea'] = '';
+                $member['strongArea'] = '';
+                $member['recommendation'] = 'Performance is reported under the primary subject assignment.';
+                $member['recommendations'] = [];
+            }
+            $subjectGroups[$key]['faculty'][] = $member;
+        }
+        foreach ($subjectGroups as $subjectGroup) {
+            $fieldBuckets = [];
+            $recommendationRows = [];
+            foreach ($subjectGroup['faculty'] as $member) {
+                if (empty($member['performance_attributed'])) continue;
+                foreach (($member['scores'] ?? []) as $field) {
+                    $name = (string)($field['name'] ?? '');
+                    if ($name === '') continue;
+                    $count = max(1, (int)($field['resultCount'] ?? 1));
+                    $fieldBuckets[$name] ??= ['name'=>$name,'total'=>0.0,'count'=>0,'seminar'=>$field['seminar'] ?? ''];
+                    $fieldBuckets[$name]['total'] += (float)$field['score'] * $count;
+                    $fieldBuckets[$name]['count'] += $count;
+                }
+                foreach (($member['recommendations'] ?? []) as $recommendation) {
+                    $recommendationRows[] = $recommendation + [
+                        'subject_code'=>$subjectGroup['subject_code'],
+                        'subject_name'=>$subjectGroup['subject_name'],
+                        'faculty_name'=>$member['name'] ?? '',
+                        'department_name'=>$subjectGroup['department_name'],
+                    ];
+                }
+            }
+            $fields = array_map(static fn(array $bucket): array => [
+                'name'=>$bucket['name'],
+                'score'=>round($bucket['total'] / max(1, $bucket['count']), 2),
+                'resultCount'=>$bucket['count'],
+                'seminar'=>$bucket['seminar'],
+            ], array_values($fieldBuckets));
+            usort($fields, static fn(array $a,array $b): int => $a['score'] <=> $b['score']);
+            $subjectGroup['facultyCount'] = count($subjectGroup['faculty']);
+            $subjectGroup['analysisFacultyCount'] = count(array_filter($subjectGroup['faculty'], static fn(array $row): bool => !empty($row['performance_attributed'])));
+            $subjectGroup['evaluatedCount'] = count(array_filter($subjectGroup['faculty'], static fn(array $row): bool => !empty($row['evaluated'])));
+            $subjectGroup['completeCount'] = count(array_filter($subjectGroup['faculty'], static fn(array $row): bool => !empty($row['complete'])));
+            $subjectGroup['fields'] = $fields;
+            $subjectGroup['recommendations'] = $recommendationRows;
+            $subjectGroup['weakAreaCount'] = count(array_filter($fields, static fn(array $field): bool => (float)$field['score'] < 3.5));
+            $subjectGroup['interventionCount'] = 0;
+            $subjectGroup['trend'] = $fields === [] ? 'No completed results yet' : 'Subject performance trend';
+            $data[] = $subjectGroup;
+        }
+        foreach ($data as &$group) {
+            if (($group['group_type'] ?? 'program') !== 'program' || ($group['program_code'] ?? '') !== 'Unassigned') continue;
+            $group['faculty'] = array_values(array_filter(
+                $group['faculty'] ?? [],
+                static fn(array $faculty): bool => !isset($subjectFacultyIds[(int)($faculty['id'] ?? 0)])
+            ));
+            $group['facultyCount'] = count($group['faculty']);
+            $group['evaluatedCount'] = count(array_filter($group['faculty'], static fn(array $faculty): bool => !empty($faculty['evaluated'])));
+            $group['completeCount'] = count(array_filter($group['faculty'], static fn(array $faculty): bool => !empty($faculty['complete'])));
+        }
+        unset($group);
+        $data = array_values(array_filter($data, static fn(array $group): bool => ($group['group_type'] ?? 'program') !== 'program' || ($group['program_code'] ?? '') !== 'Unassigned' || (int)$group['facultyCount'] > 0));
+    }
+
+    usort($data, static fn (array $a, array $b): int => (($a['group_type'] ?? 'program') <=> ($b['group_type'] ?? 'program')) ?: strcmp((string) $a['program'], (string) $b['program']));
     $recommendations = [];
     foreach ($data as $program) {
         foreach (($program['recommendations'] ?? []) as $recommendation) {
@@ -1098,6 +1325,8 @@ try {
         'data' => $data,
         'summary' => [
             'programs' => count($data),
+            'programGroups' => count(array_filter($data, static fn(array $row): bool => ($row['group_type'] ?? 'program') === 'program')),
+            'subjectGroups' => count(array_filter($data, static fn(array $row): bool => ($row['group_type'] ?? '') === 'subject')),
             'withResults' => count(array_filter($data, static fn (array $row): bool => count($row['fields']) > 0)),
             'recommendations' => $recommendations,
             'externalRecommendations' => $externalRecommendations,

@@ -27,8 +27,11 @@ function isAuthenticated(session) {
   return session?.isLoggedIn === true && session.authToken === AUTH_TOKEN;
 }
 
-function ProtectedRoute({ session, children }) {
+function ProtectedRoute({ session, children, requirePasswordChanged = false }) {
   if (!isAuthenticated(session)) return <Navigate to="/login" replace />;
+  if (requirePasswordChanged && session.user?.mustChangePassword) {
+    return <Navigate to="/change-password" replace />;
+  }
   return children;
 }
 
@@ -52,6 +55,7 @@ function RoleRoute({ session, children }) {
 }
 
 export default function App() {
+  const location = useLocation();
   const [session, setSession] = useLocalStorage('dipascaf-react-session', EMPTY_SESSION);
   const [sessionLoading, setSessionLoading] = useState(true);
 
@@ -111,6 +115,16 @@ export default function App() {
     );
   }
 
+  // Enforce the temporary-password gate across every application route,
+  // including browser Back/Forward navigation and direct dashboard URLs.
+  if (
+    isAuthenticated(session)
+    && session.user?.mustChangePassword
+    && !['/change-password', '/logout'].includes(location.pathname)
+  ) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   function login(user) {
     setSession({
       isLoggedIn: true,
@@ -155,11 +169,15 @@ export default function App() {
         <Route path="/logout" element={<LogoutPage onLogout={logout} />} />
         <Route path="/forgot-password" element={<LoginPage onLogin={login} session={session} portalType="user" initialRecovery />} />
         <Route path="/reset-password" element={<CredentialPage mode="reset" />} />
-        <Route path="/verify-email" element={<CredentialPage mode="verify" session={session} />} />
-        <Route path="/change-password" element={<Navigate to={isAuthenticated(session) ? `${(roles[session.roleKey] || roles.admin).basePath}/${(roles[session.roleKey] || roles.admin).nav[0].key}` : '/login'} replace />} />
-        <Route path="/verification-required" element={isAuthenticated(session) ? <CredentialPage mode="required" session={session} /> : <Navigate to="/login" replace />} />
+        <Route path="/change-password" element={
+          <ProtectedRoute session={session}>
+            {session.user?.mustChangePassword
+              ? <CredentialPage mode="change" session={session} onUserUpdate={updateUser} onLogout={logout} />
+              : <Navigate to={`${(roles[session.roleKey] || roles.admin).basePath}/${(roles[session.roleKey] || roles.admin).nav[0].key}`} replace />}
+          </ProtectedRoute>
+        } />
         <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route element={<ProtectedRoute session={session}><RoleRoute session={session}><DashboardLayout session={session} onLogout={logout} onUserUpdate={updateUser} /></RoleRoute></ProtectedRoute>}>
+        <Route element={<ProtectedRoute session={session} requirePasswordChanged><RoleRoute session={session}><DashboardLayout session={session} onLogout={logout} onUserUpdate={updateUser} /></RoleRoute></ProtectedRoute>}>
           <Route path="/admin/:section" element={<AdminDashboard role={{...roles.admin, user: {...roles.admin.user, ...(session.user || {})}}} onUserUpdate={updateUser} />} />
           <Route path="/admin/department/:departmentId" element={<DepartmentProfilePage />} />
           <Route path="/vpaa/:section" element={<VpaaDashboard role={{...roles.vpaa, user: {...roles.vpaa.user, ...(session.user || {})}}} />} />

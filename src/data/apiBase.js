@@ -15,8 +15,9 @@ export function apiUrl(path) {
     return `${base}${cleanPath}`;
   }
 
-  // Production is same-origin by default (for example https://pmas.example.com/api/...).
-  return cleanPath;
+  // Production is same-origin under Vite's configured application base.
+  const appBase = String(import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+  return `${appBase}${cleanPath}`;
 }
 
 export function assetUrl(path) {
@@ -38,5 +39,6 @@ export function assetUrl(path) {
     return `${base}${cleanPath}`;
   }
 
-  return cleanPath;
+  const appBase = String(import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+  return `${appBase}${cleanPath}`;
 }

@@ -1,0 +1,27 @@
+.evaluation-card-pagebar,.evaluation-card-pagination{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:16px 0;padding:12px 14px;border:1px solid var(--theme-border,#d9e7df);border-radius:14px;background:var(--theme-surface,#fff);color:var(--theme-muted,#64748b);box-shadow:0 7px 20px rgba(24,73,54,.05)}
+.evaluation-card-pagebar>div{display:flex;align-items:baseline;gap:5px}
+.evaluation-card-pagebar>div strong{color:var(--theme-text,#1f352c);font-size:.86rem}
+.evaluation-card-pagebar>div span,.evaluation-card-pagebar label,.evaluation-card-pagebar nav>span{font-size:.74rem;font-weight:700}
+.evaluation-card-pagebar label,.evaluation-card-pagebar nav{display:flex;align-items:center;gap:8px}
+.evaluation-card-pagebar select{height:36px;padding:0 30px 0 10px;border:1px solid var(--theme-border,#d9e7df);border-radius:9px;background:var(--theme-surface,#fff);color:var(--theme-text,#1f352c);font-weight:750}
+.evaluation-card-pagebar button,.evaluation-card-pagination button{min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;border:1px solid var(--theme-border,#d9e7df);border-radius:9px;background:var(--theme-surface,#fff);color:var(--theme-primary-strong,#08734d);font-weight:800;transition:border-color .16s ease,background .16s ease,transform .16s ease}
+.evaluation-card-pagebar button:hover:not(:disabled),.evaluation-card-pagination button:hover:not(:disabled){border-color:#69b792;background:#eef9f3;transform:translateY(-1px)}
+.evaluation-card-pagebar button:disabled,.evaluation-card-pagination button:disabled{cursor:not-allowed;opacity:.4}
+.evaluation-card-pagination{justify-content:center;margin-top:20px}
+.evaluation-card-pagination>div{display:flex;gap:6px}
+.evaluation-card-pagination>div button{padding:0;min-width:36px}
+.evaluation-card-pagination>div button.active{border-color:#10845a;background:#10845a;color:#fff;box-shadow:0 7px 16px rgba(16,132,90,.22)}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.evaluation-card-pagebar,.evaluation-card-pagination){border-color:#29445d;background:#102236;color:#9eb2c7;box-shadow:0 9px 24px rgba(0,0,0,.18)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .evaluation-card-pagebar>div strong{color:#eef6ff}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.evaluation-card-pagebar select,.evaluation-card-pagebar button,.evaluation-card-pagination button){border-color:#34536e;background:#142a40;color:#c5dcf3}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.evaluation-card-pagebar button,.evaluation-card-pagination button):hover:not(:disabled){border-color:#4b82ad;background:#193651}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .evaluation-card-pagination>div button.active{border-color:#3b82f6;background:#2563b8;color:#fff}
+
+@media(max-width:700px){
+  .evaluation-card-pagebar{display:grid;grid-template-columns:1fr auto}
+  .evaluation-card-pagebar nav{grid-column:1/-1;justify-content:space-between;padding-top:8px;border-top:1px solid var(--theme-border,#d9e7df)}
+  .evaluation-card-pagination{display:grid;grid-template-columns:1fr 1fr}
+  .evaluation-card-pagination>div{grid-column:1/-1;grid-row:1;justify-content:center}
+  .evaluation-card-pagination>button{width:100%}
+}

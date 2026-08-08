@@ -12,13 +12,15 @@ import { LIVE_DATA_CHANGED_EVENT, LIVE_DATA_STORAGE_KEY } from './useLiveRefresh
  * @returns {{ metrics: Array, actionCenter: Array|null, loading: boolean, error: string|null, timestamp: number|null, refresh: Function }}
  */
 export default function useRealtimeMetrics(role = 'admin', options = {}, intervalMs = 5000) {
-  const [data, setData] = useState({ metrics: [], actionCenter: null, timestamp: null });
+  const [data, setData] = useState({ metrics: [], actionCenter: null, overview: null, programs: [], timestamp: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
   const eventSourceRef = useRef(null);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
+  const isQuickTunnel = typeof window !== 'undefined'
+    && window.location.hostname.endsWith('.trycloudflare.com');
 
   const buildQuery = useCallback(() => {
     const params = new URLSearchParams({ role });
@@ -26,8 +28,9 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
     if (options.program) params.set('program', options.program);
     if (options.userId) params.set('user_id', options.userId);
     if (options.periodId) params.set('period_id', options.periodId);
+    if (options.trendDays) params.set('trend_days', options.trendDays);
     return params;
-  }, [role, options.department, options.program, options.userId, options.periodId]);
+  }, [role, options.department, options.program, options.userId, options.periodId, options.trendDays]);
 
   const buildUrl = useCallback(() => {
     const params = buildQuery();
@@ -46,6 +49,8 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
     setData({
       metrics: payload.data.metrics || [],
       actionCenter: payload.data.actionCenter || null,
+      overview: payload.data.overview || null,
+      programs: payload.data.programs || [],
       timestamp: payload.timestamp || Math.floor(Date.now() / 1000),
     });
     setError(null);
@@ -104,7 +109,11 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
 
     const startPolling = () => {
       if (!intervalRef.current) {
-        intervalRef.current = window.setInterval(fetchMetrics, intervalMs);
+        // Account-less Cloudflare Quick Tunnels do not support SSE. A slower
+        // polling interval keeps public dashboards current without repeatedly
+        // opening streams or overloading MariaDB when several users are online.
+        const pollingInterval = isQuickTunnel ? Math.max(intervalMs, 15000) : intervalMs;
+        intervalRef.current = window.setInterval(fetchMetrics, pollingInterval);
       }
     };
 
@@ -115,7 +124,7 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
       }
     };
 
-    if ('EventSource' in window) {
+    if ('EventSource' in window && !isQuickTunnel) {
       const source = new EventSource(buildStreamUrl(), { withCredentials: true });
       eventSourceRef.current = source;
 
@@ -134,7 +143,8 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
 
       source.addEventListener('error', () => {
         if (mountedRef.current) {
-          setError('Live stream reconnecting...');
+          // Streaming is optional. Keep the last successful dashboard payload
+          // visible and silently fall back to polling when SSE is unavailable.
           startPolling();
         }
       });
@@ -167,11 +177,13 @@ export default function useRealtimeMetrics(role = 'admin', options = {}, interva
       window.removeEventListener('storage', refreshOnStorage);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [applyPayload, buildStreamUrl, fetchMetrics, intervalMs]);
+  }, [applyPayload, buildStreamUrl, fetchMetrics, intervalMs, isQuickTunnel]);
 
   return {
     metrics: data.metrics,
     actionCenter: data.actionCenter,
+    overview: data.overview,
+    programs: data.programs,
     loading,
     error,
     timestamp: data.timestamp,

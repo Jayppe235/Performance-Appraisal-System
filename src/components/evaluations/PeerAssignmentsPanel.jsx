@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Archive,
@@ -116,6 +116,7 @@ export default function PeerAssignmentsPanel({
   excludeDeans = false,
   strictDepartmentScope = false,
   showLifecycleControls = true,
+  periodId: forcedPeriodId = null,
 }) {
   const {
     selectedPeriodId: globalSelectedPeriodId,
@@ -135,11 +136,25 @@ export default function PeerAssignmentsPanel({
   const [loading, setLoading] = useState(true);
   const [departmentChanging, setDepartmentChanging] = useState(false);
   const [monitorPage, setMonitorPage] = useState(1);
+  const [monitorPageSize, setMonitorPageSize] = useState(admin ? 5 : compact ? 6 : 10);
   const [busy, setBusy] = useState('');
-  const monitorPageSize = compact ? 6 : 10;
-  const activePeriodId = form.evaluation_period_id || globalSelectedPeriodId || '';
+  const requestSequenceRef = useRef(0);
+  // The shared period selector is the source of truth. The local form mirrors
+  // it for lifecycle actions but must never pin the monitor to an older year.
+  const activePeriodId = forcedPeriodId !== null
+    ? String(forcedPeriodId || '')
+    : (globalSelectedPeriodId || form.evaluation_period_id || '');
 
   const loadRows = useCallback(async (background = false) => {
+    // A parent with an explicit period must never fall back to the API's
+    // default/latest period while context is still loading.
+    if (forcedPeriodId !== null && !activePeriodId) {
+      setRows([]);
+      setSummary({ total: 0, completed: 0, pending: 0, overdue: 0, completionRate: 0 });
+      if (!background) setLoading(false);
+      return null;
+    }
+    const requestSequence = ++requestSequenceRef.current;
     if (!background) setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -150,8 +165,20 @@ export default function PeerAssignmentsPanel({
       if (strictDepartmentScope) params.set('strict_department', '1');
       const query = params.toString() ? `?${params.toString()}` : '';
       const payload = await apiFetch(`/api/peer-evaluation-assignments.php${query}`);
-      setRows(Array.isArray(payload.data) ? payload.data : []);
-      setSummary(payload.summary || { total: 0, completed: 0, pending: 0, overdue: 0, completionRate: 0 });
+      if (requestSequence !== requestSequenceRef.current) return null;
+      const responseRows = Array.isArray(payload.data) ? payload.data : [];
+      const periodRows = activePeriodId
+        ? responseRows.filter((row) => String(row.periodId) === String(activePeriodId))
+        : responseRows;
+      setRows(periodRows);
+      const completedRows = periodRows.filter((row) => row.status === 'completed').length;
+      setSummary({
+        total: periodRows.length,
+        completed: completedRows,
+        pending: periodRows.filter((row) => row.status === 'pending').length,
+        overdue: periodRows.filter((row) => row.status === 'overdue').length,
+        completionRate: periodRows.length ? Math.round((completedRows / periodRows.length) * 100) : 0,
+      });
       setInvalids(Array.isArray(payload.invalids) ? payload.invalids : []);
       setPeerLifecycle(payload.peerLifecycle || { status: 'unlocked', isLocked: false, total: 0, completed: 0, pending: 0, canLock: false, canUnlock: false });
       if (payload.setup) {
@@ -163,25 +190,28 @@ export default function PeerAssignmentsPanel({
         });
         setForm((current) => ({
           ...current,
-          evaluation_period_id: current.evaluation_period_id || globalSelectedPeriodId || String(payload.setup.periods?.[0]?.id || ''),
+          evaluation_period_id: globalSelectedPeriodId || current.evaluation_period_id || String(payload.setup.periods?.[0]?.id || ''),
           department_id: current.department_id || String(payload.setup.departments?.[0]?.id || ''),
           evaluator_role: current.evaluator_role || 'teacher',
         }));
       }
     } catch (error) {
+      if (requestSequence !== requestSequenceRef.current) return null;
       addToast({ type: 'error', text: error.message || 'Unable to load peer assignments.' });
     } finally {
-      if (!background) setLoading(false);
+      if (!background && requestSequence === requestSequenceRef.current) setLoading(false);
     }
-  }, [activePeriodId, admin, departmentId, excludeDeans, globalSelectedPeriodId, strictDepartmentScope]);
+  }, [activePeriodId, admin, departmentId, excludeDeans, forcedPeriodId, globalSelectedPeriodId, strictDepartmentScope]);
 
   const { refreshing: liveRefreshing } = useLiveRefresh(loadRows, [activePeriodId, admin, departmentId, excludeDeans, strictDepartmentScope], {
     intervalMs: 6000,
   });
 
   useEffect(() => {
-    if (!globalSelectedPeriodId || form.evaluation_period_id) return;
-    setForm((current) => ({ ...current, evaluation_period_id: globalSelectedPeriodId }));
+    if (!globalSelectedPeriodId || String(form.evaluation_period_id) === String(globalSelectedPeriodId)) return;
+    setForm((current) => ({ ...current, evaluation_period_id: String(globalSelectedPeriodId) }));
+    setMonitorPage(1);
+    setViewing(null);
   }, [form.evaluation_period_id, globalSelectedPeriodId]);
 
   const selectedDepartment = useMemo(
@@ -198,9 +228,7 @@ export default function PeerAssignmentsPanel({
     const role = form.evaluator_role;
     return setup.users.filter((user) => {
       if (user.role !== role) return false;
-      if (role === 'dean') {
-        return !selectedDepartment || Number(user.departmentId) === Number(selectedDepartment.id) || user.department === selectedDepartment.name || user.department === selectedDepartment.code;
-      }
+      if (role === 'dean') return true;
       return selectedDepartment && (Number(user.departmentId) === Number(selectedDepartment.id) || user.department === selectedDepartment.name || user.department === selectedDepartment.code);
     });
   }, [form.evaluator_role, selectedDepartment, setup.users]);
@@ -282,6 +310,14 @@ export default function PeerAssignmentsPanel({
     () => filteredRows.slice((monitorPage - 1) * monitorPageSize, monitorPage * monitorPageSize),
     [filteredRows, monitorPage, monitorPageSize],
   );
+  const visibleDeanRows = useMemo(
+    () => visibleMonitorRows.filter((row) => row.evaluatorRole === 'dean'),
+    [visibleMonitorRows],
+  );
+  const visibleDepartmentRows = useMemo(
+    () => visibleMonitorRows.filter((row) => row.evaluatorRole !== 'dean'),
+    [visibleMonitorRows],
+  );
 
   const grouped = useMemo(() => {
     const byDepartment = new Map();
@@ -304,6 +340,7 @@ export default function PeerAssignmentsPanel({
     const labels = {
       generate: 'Generate peer assignments',
       regenerate: 'Regenerate peer assignments',
+      validate: 'Validate peer assignments',
       lock: 'Lock peer assignments',
       unlock: 'Unlock peer assignments',
     };
@@ -314,9 +351,20 @@ export default function PeerAssignmentsPanel({
       }
       const confirmed = await confirmProceed({
         message: action === 'regenerate'
-          ? 'Unlocked pending peer-to-peer assignments for the selected period and department will be refreshed.'
-          : 'Peer-to-peer assignments will be generated for eligible Faculty and Program Heads in the selected period and department.',
+          ? form.evaluator_role === 'dean'
+            ? 'Unlocked pending Dean-to-Dean assignments for the selected period will be refreshed across departments.'
+            : 'Unlocked pending peer-to-peer assignments for the selected period and department will be refreshed.'
+          : form.evaluator_role === 'dean'
+            ? 'Dean-to-Dean assignments will be generated across eligible Deans from different departments.'
+            : 'Peer-to-peer assignments will be generated for eligible Faculty and Program Heads in the selected period and department.',
         confirmText: action === 'regenerate' ? 'Regenerate' : 'Generate',
+      });
+      if (!confirmed) return;
+    }
+    if (action === 'validate') {
+      const confirmed = await confirmProceed({
+        message: 'Validate all peer assignments against the finalized participant roster before period activation?',
+        confirmText: 'Validate Assignments',
       });
       if (!confirmed) return;
     }
@@ -342,6 +390,7 @@ export default function PeerAssignmentsPanel({
         body: JSON.stringify({
           action,
           include_program_heads: true,
+          peer_group: form.evaluator_role === 'dean' ? 'dean' : 'department',
           evaluation_period_id: form.evaluation_period_id || undefined,
           department_id: form.department_id || undefined,
         }),
@@ -364,6 +413,9 @@ export default function PeerAssignmentsPanel({
       if (field === 'evaluator_role') {
         next.evaluator_id = '';
         next.evaluatee_id = '';
+        next.department_id = value === 'dean'
+          ? ''
+          : current.department_id || String(setup.departments?.[0]?.id || '');
       }
       if (field === 'department_id') {
         next.evaluator_id = '';
@@ -461,12 +513,12 @@ export default function PeerAssignmentsPanel({
     setViewing(null);
   }
 
-  function renderAssignmentTable(items, label) {
+  function renderAssignmentTable(items, label, totalCount = items.length) {
     return (
       <div className="peer-admin-table-card">
         <div className="peer-group-title">
           <strong>{label}</strong>
-          <span>{items.length} assignment(s)</span>
+          <span>{totalCount} assignment(s)</span>
         </div>
         {items.length === 0 ? (
           <div className="dipascaf-empty peer-department-empty">
@@ -537,6 +589,49 @@ export default function PeerAssignmentsPanel({
     );
   }
 
+  function renderMonitorPagination() {
+    if (filteredRows.length === 0) return null;
+
+    const firstVisible = (monitorPage - 1) * monitorPageSize + 1;
+    const lastVisible = Math.min(monitorPage * monitorPageSize, filteredRows.length);
+
+    return (
+      <nav className="peer-monitor-pagination" aria-label="Peer assignment pages">
+        <span>Showing {firstVisible}–{lastVisible} of {filteredRows.length}</span>
+        <div className="peer-pagination-controls">
+          <label>
+            <span>Rows per page</span>
+            <select
+              value={monitorPageSize}
+              onChange={(event) => {
+                setMonitorPageSize(Number(event.target.value));
+                setMonitorPage(1);
+              }}
+              aria-label="Rows per page"
+            >
+              {[5, 6, 10, 20].map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setMonitorPage((page) => Math.max(1, page - 1))}
+            disabled={monitorPage === 1}
+          >
+            Previous
+          </button>
+          <strong>Page {monitorPage} of {monitorPages}</strong>
+          <button
+            type="button"
+            onClick={() => setMonitorPage((page) => Math.min(monitorPages, page + 1))}
+            disabled={monitorPage === monitorPages}
+          >
+            Next
+          </button>
+        </div>
+      </nav>
+    );
+  }
+
   return (
     <section className={`admin-box peer-assignment-panel module-wide page-enter ${compact ? 'compact' : ''}`}>
       <div className="peer-assignment-head">
@@ -596,13 +691,17 @@ export default function PeerAssignmentsPanel({
             {busy === 'unlock' ? <Loader2 size={16} className="animate-spin" /> : <Unlock size={16} />}
             Unlock
           </button>
-          <button type="button" onClick={() => runAction('generate')} disabled={!!busy || peerLifecycle.isLocked || !form.evaluation_period_id || !form.department_id}>
+          <button type="button" onClick={() => runAction('generate')} disabled={!!busy || peerLifecycle.isLocked || !form.evaluation_period_id || (form.evaluator_role !== 'dean' && !form.department_id)}>
             {busy === 'generate' ? <Loader2 size={16} className="animate-spin" /> : <UserRoundCheck size={16} />}
             Generate
           </button>
-          <button type="button" onClick={() => runAction('regenerate')} disabled={!!busy || peerLifecycle.isLocked || !form.evaluation_period_id || !form.department_id}>
+          <button type="button" onClick={() => runAction('regenerate')} disabled={!!busy || peerLifecycle.isLocked || !form.evaluation_period_id || (form.evaluator_role !== 'dean' && !form.department_id)}>
             {busy === 'regenerate' ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
             Regenerate
+          </button>
+          <button type="button" onClick={() => runAction('validate')} disabled={!!busy || peerLifecycle.isLocked || !form.evaluation_period_id || rows.length === 0 || invalids.length > 0}>
+            {busy === 'validate' ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+            Validate Assignments
           </button>
           <span className={invalids.length > 0 ? 'has-issues' : 'is-clean'}>
             {invalids.length > 0 ? `${invalids.length} issue(s) detected` : 'No duplicate or invalid assignments'}
@@ -620,7 +719,7 @@ export default function PeerAssignmentsPanel({
           <div className="peer-setup-form">
             <div className="peer-form-heading">
               <strong>1. Choose the evaluation</strong>
-              <span>Select the period and department for this assignment.</span>
+              <span>{form.evaluator_role === 'dean' ? 'Select the period, then choose two Deans from different departments.' : 'Select the period, evaluator type, and department for this assignment.'}</span>
             </div>
             <label>
               <span>Evaluation Period</span>
@@ -632,14 +731,30 @@ export default function PeerAssignmentsPanel({
               </select>
             </label>
             <label>
-              <span>Department</span>
-              <select value={form.department_id} onChange={(event) => updateForm('department_id', event.target.value)} required>
-                <option value="">Choose a department</option>
-                {setup.departments.map((department) => (
-                  <option key={department.id} value={department.id}>{department.label}</option>
+              <span>Peer Group</span>
+              <select value={form.evaluator_role} onChange={(event) => updateForm('evaluator_role', event.target.value)} required>
+                {roleOptions.length === 0 && <option value="teacher">Faculty</option>}
+                {roleOptions.map((role) => (
+                  <option key={role} value={role}>{role === 'dean' ? 'Dean-to-Dean' : `${roleLabel(role)}-to-${roleLabel(role)}`}</option>
                 ))}
               </select>
             </label>
+            {form.evaluator_role !== 'dean' ? (
+              <label>
+                <span>Department</span>
+                <select value={form.department_id} onChange={(event) => updateForm('department_id', event.target.value)} required>
+                  <option value="">Choose a department</option>
+                  {setup.departments.map((department) => (
+                    <option key={department.id} value={department.id}>{department.label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <div className="peer-dean-scope-note" role="note">
+                <ShieldCheck size={18} />
+                <span><strong>Institution-wide Dean selection</strong><small>The evaluator and evaluated Dean must belong to different departments.</small></span>
+              </div>
+            )}
           </div>
 
           {viewing && (
@@ -655,32 +770,23 @@ export default function PeerAssignmentsPanel({
               <span>Choose who will give the evaluation and who will receive it.</span>
             </div>
             <label>
-              <span>Evaluator Type</span>
-              <select value={form.evaluator_role} onChange={(event) => updateForm('evaluator_role', event.target.value)} required>
-                {roleOptions.length === 0 && <option value="teacher">Faculty</option>}
-                {roleOptions.map((role) => (
-                  <option key={role} value={role}>{roleLabel(role)}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Who will evaluate?</span>
+              <span>{form.evaluator_role === 'dean' ? 'Which Dean will evaluate?' : 'Who will evaluate?'}</span>
               <select value={form.evaluator_id} onChange={(event) => updateForm('evaluator_id', event.target.value)} required>
                 <option value="">Choose evaluator</option>
                 {evaluatorOptions.map((user) => (
                   <option key={`${user.role}-${user.id}`} value={user.id}>
-                    {user.name} {user.program ? `- ${user.program}` : ''}{user.actingRoleLabel ? ` (${user.actingRoleLabel})` : ''}
+                    {user.name} {form.evaluator_role === 'dean' ? `— ${user.department || 'Unassigned Department'}` : user.program ? `- ${user.program}` : ''}{user.actingRoleLabel ? ` (${user.actingRoleLabel})` : ''}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              <span>Who will be evaluated?</span>
+              <span>{form.evaluator_role === 'dean' ? 'Which other Dean will be evaluated?' : 'Who will be evaluated?'}</span>
               <select value={form.evaluatee_id} onChange={(event) => updateForm('evaluatee_id', event.target.value)} required>
-                <option value="">Choose faculty member</option>
+                <option value="">{form.evaluator_role === 'dean' ? 'Choose a Dean from another department' : 'Choose peer/evaluatee'}</option>
                 {peerOptions.map((user) => (
                   <option key={`${user.role}-${user.id}`} value={user.id}>
-                    {user.name} {user.program ? `- ${user.program}` : ''}{user.actingRoleLabel ? ` (${user.actingRoleLabel})` : ''}
+                    {user.name} {form.evaluator_role === 'dean' ? `— ${user.department || 'Unassigned Department'}` : user.program ? `- ${user.program}` : ''}{user.actingRoleLabel ? ` (${user.actingRoleLabel})` : ''}
                   </option>
                 ))}
               </select>
@@ -782,13 +888,31 @@ export default function PeerAssignmentsPanel({
             aria-busy={departmentChanging}
           >
             {departmentChanging && <div className="peer-filter-loading">Updating department assignments...</div>}
-            {deanRows.length > 0 && renderAssignmentTable(deanRows, 'Dean-to-Dean Peer Assignments')}
-            {renderAssignmentTable(
-              departmentRows,
-              selectedViewDepartment
-                ? `${selectedViewDepartment.code || selectedViewDepartment.name} Peer Assignments`
-                : 'All Department Peer Assignments'
-            )}
+            {filteredRows.length === 0
+              ? renderAssignmentTable(
+                [],
+                selectedViewDepartment
+                  ? `${selectedViewDepartment.code || selectedViewDepartment.name} Peer Assignments`
+                  : 'All Department Peer Assignments',
+                0,
+              )
+              : (
+                <>
+                  {visibleDeanRows.length > 0 && renderAssignmentTable(
+                    visibleDeanRows,
+                    'Dean-to-Dean Peer Assignments',
+                    deanRows.length,
+                  )}
+                  {visibleDepartmentRows.length > 0 && renderAssignmentTable(
+                    visibleDepartmentRows,
+                    selectedViewDepartment
+                      ? `${selectedViewDepartment.code || selectedViewDepartment.name} Peer Assignments`
+                      : 'All Department Peer Assignments',
+                    departmentRows.length,
+                  )}
+                </>
+              )}
+            {renderMonitorPagination()}
           </div>
         </div>
       )}
@@ -837,31 +961,7 @@ export default function PeerAssignmentsPanel({
               </div>
             </div>
           ))}
-          {filteredRows.length > monitorPageSize && (
-            <div className="peer-monitor-pagination">
-              <span>
-                Showing {(monitorPage - 1) * monitorPageSize + 1}–
-                {Math.min(monitorPage * monitorPageSize, filteredRows.length)} of {filteredRows.length}
-              </span>
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setMonitorPage((page) => Math.max(1, page - 1))}
-                  disabled={monitorPage === 1}
-                >
-                  Previous
-                </button>
-                <strong>{monitorPage} / {monitorPages}</strong>
-                <button
-                  type="button"
-                  onClick={() => setMonitorPage((page) => Math.min(monitorPages, page + 1))}
-                  disabled={monitorPage === monitorPages}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+          {renderMonitorPagination()}
         </div>
       )}
     </section>

@@ -801,10 +801,29 @@ function admin_activity(string $description): void
 function admin_completion_by_department(string $periodName = ''): array
 {
     admin_ensure_archive_schema();
-    $periodWhere = 'WHERE COALESCE(f.is_archived, 0) = 0 AND COALESCE(pa.is_archived, 0) = 0';
+    $periodWhere = "WHERE COALESCE(f.is_archived, 0) = 0
+        AND COALESCE(pa.is_archived, 0) = 0
+        AND pa.status NOT IN ('not_required','reassigned','cancelled','replaced')";
     $params = [];
     if ($periodName !== '') {
         $periodWhere .= ' AND pa.cycle_name = :period_name';
+        $periodWhere .= " AND EXISTS (
+            SELECT 1 FROM evaluation_period_participation evaluator_epp
+            JOIN appraisal_periods evaluator_ap ON evaluator_ap.id=evaluator_epp.evaluation_period_id
+            WHERE evaluator_ap.period_name=pa.cycle_name
+              AND evaluator_epp.user_id=pa.evaluator_user_id
+              AND evaluator_epp.participation_status='included'
+              AND evaluator_epp.work_status='active'
+              AND evaluator_epp.employment_status IN ('active','newly_added')
+        ) AND EXISTS (
+            SELECT 1 FROM evaluation_period_participation evaluatee_epp
+            JOIN appraisal_periods evaluatee_ap ON evaluatee_ap.id=evaluatee_epp.evaluation_period_id
+            WHERE evaluatee_ap.period_name=pa.cycle_name
+              AND evaluatee_epp.user_id=f.user_id
+              AND evaluatee_epp.participation_status='included'
+              AND evaluatee_epp.work_status='active'
+              AND evaluatee_epp.employment_status IN ('active','newly_added')
+        )";
         $params['period_name'] = $periodName;
     }
 
@@ -845,6 +864,51 @@ function admin_completion_by_department(string $periodName = ''): array
         $normalized[$normalizedDept]['submitted'] += (int) ($row['submitted'] ?? 0);
         $normalized[$normalizedDept]['pending'] += (int) ($row['pending'] ?? 0);
         $normalized[$normalizedDept]['overdue'] += (int) ($row['overdue'] ?? 0);
+    }
+
+    // Self-evaluations and absent peer assignments are required work even when no
+    // peer_assignments row exists yet. Include them so summary cards cannot
+    // report 100% while the program drill-down still shows missing actions.
+    if ($periodName !== '') {
+        $period = admin_one('SELECT id FROM appraisal_periods WHERE period_name=? LIMIT 1', [$periodName]);
+        $periodId = (int)($period['id'] ?? 0);
+        if ($periodId > 0) {
+            $requirements = admin_all(
+                "SELECT u.id,
+                        COALESCE(NULLIF(epp.department_snapshot,''),u.department,'Unassigned') department,
+                        EXISTS(SELECT 1 FROM peer_assignments px
+                               LEFT JOIN peer_evaluation_assignments pex ON pex.peer_assignment_id=px.id
+                               WHERE px.cycle_name=? AND px.evaluatee_faculty_id=epp.faculty_id
+                                 AND px.assignment_type='peer'
+                                 AND px.status NOT IN ('not_required','reassigned','cancelled','replaced')
+                                 AND COALESCE(px.is_archived,0)=0
+                                 AND pex.id IS NOT NULL AND COALESCE(pex.is_archived,0)=0) has_peer,
+                        COALESCE((SELECT se.status FROM pmas_self_evaluations se
+                                  WHERE se.evaluation_period=? AND se.user_id=u.id ORDER BY se.id DESC LIMIT 1),'missing') self_evaluation_status
+                 FROM evaluation_period_participation epp
+                 JOIN users u ON u.id=epp.user_id
+                 WHERE epp.evaluation_period_id=? AND u.is_active=1
+                   AND epp.participation_status='included' AND epp.work_status='active'
+                   AND epp.employment_status IN ('active','newly_added')",
+                [$periodName,$periodName,$periodId]
+            );
+            foreach ($requirements as $requirement) {
+                $dept = admin_normalize_department_name((string)$requirement['department']);
+                $normalized[$dept] ??= ['department'=>$dept,'total_assignments'=>0,'submitted'=>0,'pending'=>0,'overdue'=>0,'completion_pct'=>0];
+                // One Self-Evaluation per included participant.
+                $normalized[$dept]['total_assignments']++;
+                if ((string)$requirement['self_evaluation_status'] === 'submitted') {
+                    $normalized[$dept]['submitted']++;
+                } else {
+                    $normalized[$dept]['pending']++;
+                }
+                // One official peer evaluation per included participant.
+                if ((int)$requirement['has_peer'] === 0) {
+                    $normalized[$dept]['total_assignments']++;
+                    $normalized[$dept]['pending']++;
+                }
+            }
+        }
     }
 
     // Recalculate completion percentages after merge
@@ -925,7 +989,7 @@ function admin_weak_area_patterns(): array
 function admin_period_comparison(): array
 {
     $periods = admin_all(
-        "SELECT id, period_name, school_year, semester, status
+        "SELECT id, period_name, school_year, status
          FROM appraisal_periods
          ORDER BY date_start ASC, id ASC"
     );
@@ -994,7 +1058,6 @@ function admin_period_comparison(): array
             'period_id' => (int) ($period['id'] ?? 0),
             'period_name' => $periodName,
             'school_year' => (string) ($period['school_year'] ?? ''),
-            'semester' => (string) ($period['semester'] ?? ''),
             'status' => (string) ($period['status'] ?? ''),
             'total_assignments' => $total,
             'completed' => $completed,

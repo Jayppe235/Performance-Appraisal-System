@@ -111,6 +111,18 @@ body:has(.people-account-management) .people-account-pagination button:disabled 
   opacity:.78!important;
   cursor:not-allowed;
 }
+
+.people-section .people-account-pagination.is-top {
+  margin: 12px 0;
+  padding: 11px 14px;
+  border: 1px solid var(--theme-border,#dbe5df);
+  border-radius: 12px;
+  background: var(--theme-surface,#fff);
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-pagination.is-top {
+  border-color: #2b4058;
+  background: #101d30;
+}
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-pagination button:disabled {
   border-color:#2d4053!important;
   background:#121e2d!important;
@@ -728,17 +740,25 @@ body:has(.dean-body.dark-mode) .people-date-actions button:last-child{background
 }
 
 @keyframes account-button-glow {
-  0%,100% { box-shadow: 0 10px 24px rgba(22,131,88,.22), 0 0 0 0 rgba(52,211,153,0); }
-  50% { box-shadow: 0 13px 30px rgba(22,131,88,.32), 0 0 18px rgba(52,211,153,.2); }
+  0%,100% { box-shadow: 0 10px 26px rgba(30,64,175,.34), 0 0 0 0 rgba(59,130,246,0); }
+  50% { box-shadow: 0 14px 34px rgba(30,64,175,.46), 0 0 24px rgba(59,130,246,.34); }
+}
+
+@keyframes account-button-glow-green {
+  0%,100% { box-shadow:0 10px 25px rgba(5,122,85,.28),0 0 0 rgba(34,197,94,0); }
+  50% { box-shadow:0 14px 34px rgba(5,122,85,.38),0 0 24px rgba(34,197,94,.28); }
 }
 
 .people-account-heading {
   position: relative;
   padding: 12px 14px 14px !important;
-  border: 1px solid rgba(22,131,88,.12);
+  border: 1px solid rgba(59,130,246,.3);
   border-radius: 18px;
-  background: linear-gradient(135deg,rgba(240,250,245,.9),rgba(255,255,255,.78));
+  background: linear-gradient(135deg,#0b1f3a 0%,#0a2547 52%,#081a31 100%);
+  box-shadow:inset 0 1px 0 rgba(147,197,253,.1),0 12px 36px rgba(3,18,45,.2),0 0 24px rgba(37,99,235,.12);
 }
+
+.people-account-heading h2{color:#f3f8ff!important}.people-account-heading p:not(.eyebrow){color:#b9c9df!important}.people-account-heading .eyebrow{color:#7dd3fc!important}
 
 .people-account-heading-icon {
   position: relative;
@@ -746,8 +766,10 @@ body:has(.dean-body.dark-mode) .people-date-actions button:last-child{background
   width: 58px !important;
   height: 58px !important;
   border-radius: 17px !important;
-  background: linear-gradient(145deg,#e4f8ed,#f7fdfa) !important;
-  box-shadow: 0 12px 28px rgba(22,131,88,.16), 0 0 20px rgba(52,211,153,.12) !important;
+  border-color:rgba(96,165,250,.42)!important;
+  background: linear-gradient(145deg,#123a6b,#0b2850) !important;
+  color:#7dd3fc!important;
+  box-shadow: 0 12px 30px rgba(2,12,31,.32), 0 0 25px rgba(59,130,246,.28) !important;
   animation: account-icon-float 3.4s ease-in-out infinite;
 }
 
@@ -757,7 +779,7 @@ body:has(.dean-body.dark-mode) .people-date-actions button:last-child{background
   inset:-5px;
   z-index:-1;
   border-radius:21px;
-  background:rgba(52,211,153,.12);
+  background:rgba(59,130,246,.25);
   filter:blur(8px);
 }
 
@@ -766,18 +788,18 @@ body:has(.dean-body.dark-mode) .people-date-actions button:last-child{background
   padding: 0 20px !important;
   border: 1px solid rgba(255,255,255,.24) !important;
   border-radius: 13px !important;
-  background: linear-gradient(135deg,#168358,#22a06b) !important;
+  background: linear-gradient(135deg,#1d4ed8,#2563eb,#3b82f6) !important;
   animation: account-button-glow 3s ease-in-out infinite;
 }
 
 .people-account-heading>button:hover {
   transform: translateY(-3px) !important;
-  background: linear-gradient(135deg,#117149,#1d915f) !important;
-  box-shadow: 0 16px 34px rgba(22,131,88,.34),0 0 22px rgba(52,211,153,.22) !important;
+  background: linear-gradient(135deg,#1e40af,#1d4ed8,#2563eb) !important;
+  box-shadow: 0 16px 38px rgba(30,64,175,.48),0 0 28px rgba(59,130,246,.38) !important;
 }
 
 .people-account-heading>button:focus-visible {
-  outline: 3px solid rgba(52,211,153,.4);
+  outline: 3px solid rgba(96,165,250,.55);
   outline-offset: 3px;
 }
 
@@ -823,25 +845,80 @@ body:has(.dean-body.dark-mode) .people-date-actions button:last-child{background
 }
 
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading {
-  border-color:rgba(74,222,128,.17);
-  background:linear-gradient(135deg,rgba(10,39,31,.9),rgba(12,29,37,.86));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 12px 34px rgba(0,0,0,.14);
+  border-color:rgba(59,130,246,.34);
+  background:linear-gradient(135deg,#071a33 0%,#0a2445 55%,#07172d 100%);
+  box-shadow:inset 0 1px 0 rgba(147,197,253,.08),0 14px 38px rgba(0,0,0,.24),0 0 30px rgba(37,99,235,.14);
 }
 
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading-icon {
-  border-color:rgba(74,222,128,.32) !important;
-  background:linear-gradient(145deg,rgba(22,131,88,.28),rgba(16,82,60,.3)) !important;
-  color:#86efac !important;
-  box-shadow:0 12px 30px rgba(0,0,0,.24),0 0 22px rgba(52,211,153,.18) !important;
+  border-color:rgba(96,165,250,.42) !important;
+  background:linear-gradient(145deg,rgba(30,64,175,.48),rgba(12,43,82,.76)) !important;
+  color:#7dd3fc !important;
+  box-shadow:0 12px 30px rgba(0,0,0,.28),0 0 25px rgba(59,130,246,.3) !important;
 }
 
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading .eyebrow {
-  color:#86efac !important;
+  color:#7dd3fc !important;
 }
 
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading>button {
-  background:linear-gradient(135deg,#168358,#249a67) !important;
+  background:linear-gradient(135deg,#1d4ed8,#2563eb,#3b82f6) !important;
   color:#fff !important;
+}
+
+/* Keep light mode distinctly green while dark mode uses the navy-blue treatment. */
+.admin-body:not(.dark-mode) .people-account-heading,
+.admin-dashboard-body:not(.dark-mode) .people-account-heading {
+  border-color:rgba(22,163,74,.32)!important;
+  background:linear-gradient(135deg,#064e3b 0%,#08734d 52%,#07543e 100%)!important;
+  box-shadow:inset 0 1px 0 rgba(187,247,208,.16),0 14px 36px rgba(6,78,59,.2),0 0 25px rgba(34,197,94,.14)!important;
+}
+
+.admin-body:not(.dark-mode) .people-account-heading h2,
+.admin-dashboard-body:not(.dark-mode) .people-account-heading h2 {
+  color:#f0fdf4!important;
+}
+
+.admin-body:not(.dark-mode) .people-account-heading p:not(.eyebrow),
+.admin-dashboard-body:not(.dark-mode) .people-account-heading p:not(.eyebrow) {
+  color:#d1fae5!important;
+}
+
+.admin-body:not(.dark-mode) .people-account-heading .eyebrow,
+.admin-dashboard-body:not(.dark-mode) .people-account-heading .eyebrow {
+  color:#86efac!important;
+}
+
+.admin-body:not(.dark-mode) .people-account-heading-icon,
+.admin-dashboard-body:not(.dark-mode) .people-account-heading-icon {
+  border-color:rgba(134,239,172,.42)!important;
+  background:linear-gradient(145deg,#0d8057,#075d43)!important;
+  color:#bbf7d0!important;
+  box-shadow:0 12px 30px rgba(5,46,34,.28),0 0 25px rgba(34,197,94,.26)!important;
+}
+
+.admin-body:not(.dark-mode) .people-account-heading-icon::after,
+.admin-dashboard-body:not(.dark-mode) .people-account-heading-icon::after {
+  background:rgba(34,197,94,.24)!important;
+}
+
+.admin-body:not(.dark-mode) .people-account-heading>button,
+.admin-dashboard-body:not(.dark-mode) .people-account-heading>button {
+  border-color:rgba(255,255,255,.28)!important;
+  background:linear-gradient(135deg,#16a34a,#159764,#22c55e)!important;
+  color:#fff!important;
+  animation-name:account-button-glow-green!important;
+}
+
+.admin-body:not(.dark-mode) .people-account-heading>button:hover,
+.admin-dashboard-body:not(.dark-mode) .people-account-heading>button:hover {
+  background:linear-gradient(135deg,#15803d,#08734d,#16a34a)!important;
+  box-shadow:0 16px 38px rgba(5,122,85,.4),0 0 28px rgba(34,197,94,.3)!important;
+}
+
+.admin-body:not(.dark-mode) .people-account-heading>button:focus-visible,
+.admin-dashboard-body:not(.dark-mode) .people-account-heading>button:focus-visible {
+  outline-color:rgba(74,222,128,.62)!important;
 }
 
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-metrics article {
@@ -1208,4 +1285,921 @@ body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-m
   .profile-modal-panel .profile-password-section.is-open .profile-password-editor{min-height:0!important;padding:17px 14px 22px!important}
   .profile-modal-panel .profile-password-grid,.profile-modal-panel .profile-password-section.is-open .profile-password-grid{grid-template-columns:1fr!important;min-height:0!important}
   .profile-modal-panel .profile-password-grid>label:last-child{grid-column:auto!important}
+}
+/* Secure user-account reporting workspace */
+.people-account-heading-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.people-account-heading-actions>button{min-height:44px;padding:0 15px;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:11px;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;font-weight:800;white-space:nowrap;box-shadow:0 9px 20px rgba(37,99,235,.2)}
+.people-account-heading-actions .people-account-report-button{border:1px solid rgba(15,118,80,.28);background:#fff;color:#0f7650;box-shadow:0 7px 18px rgba(15,118,80,.12)}
+.people-account-heading-actions .people-account-report-button:hover{background:#eaf8f1;border-color:#55b88b;color:#0a6241;box-shadow:0 9px 20px rgba(15,118,80,.17)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-heading-actions .people-account-report-button{border-color:#3b70a4;background:#142e49;color:#bfdbfe}
+.people-account-report-modal{width:min(1380px,96vw)!important;max-width:1380px!important}
+.people-account-report-workspace{display:grid;gap:15px;padding:20px;overflow:auto}
+.people-account-report-toolbar{display:grid;grid-template-columns:minmax(260px,1fr) auto auto;align-items:end;gap:14px;padding:15px;border:1px solid var(--theme-border,#dbe5df);border-radius:14px;background:var(--theme-surface-soft,#f8fbf9)}
+.people-account-report-toolbar label{display:grid;gap:6px;color:var(--theme-text,#22352d);font-size:.76rem;font-weight:800}
+.people-account-report-toolbar label select{min-height:43px;padding:0 12px;border:1px solid var(--theme-border,#d5e3dc);border-radius:10px;background:var(--theme-surface,#fff);color:var(--theme-text,#17231f)}
+.people-account-report-toolbar>div:nth-child(2){display:grid;gap:3px;min-width:100px;text-align:center}
+.people-account-report-toolbar>div:nth-child(2)>span{color:var(--theme-muted,#6b7e75);font-size:.67rem;font-weight:800;text-transform:uppercase}
+.people-account-report-toolbar>div:nth-child(2)>strong{font-size:1.35rem;color:var(--theme-primary,#168358)}
+.people-account-report-exports{display:flex;gap:7px}
+.people-account-report-exports button{min-height:43px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 13px;border:1px solid var(--theme-border,#d4e2db);border-radius:10px;background:var(--theme-surface,#fff);color:var(--theme-text,#253a31);font-weight:800}
+.people-account-report-exports button.primary{border-color:#2563eb;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;box-shadow:0 7px 16px rgba(37,99,235,.18)}
+.people-account-report-exports button:disabled{opacity:.48;cursor:not-allowed}
+.people-account-report-security{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;color:#1e3a5f}
+.people-account-report-security svg{flex:0 0 auto;margin-top:2px;color:#2563eb}
+.people-account-report-security strong,.people-account-report-security p{display:block;margin:0}.people-account-report-security p{margin-top:2px;font-size:.73rem;line-height:1.45;color:#516b88}
+.people-account-report-paper{padding:24px;border:1px solid #dbe4e0;border-radius:12px;background:#fff;color:#17231f;box-shadow:0 12px 34px rgba(15,23,42,.08)}
+.people-account-report-paper>header{text-align:center;margin-bottom:17px}.people-account-report-paper>header p,.people-account-report-paper>header h3,.people-account-report-paper>header span{display:block;margin:0}.people-account-report-paper>header p{font-family:Georgia,serif;font-size:1.18rem;font-weight:800}.people-account-report-paper>header h3{margin-top:4px;font-size:1rem;letter-spacing:.04em}.people-account-report-paper>header span{margin-top:5px;color:#64748b;font-size:.72rem}
+.people-account-report-table-wrap{overflow:auto;border:1px solid #d9e3df;border-radius:10px}
+.people-account-report-paper table{width:100%;min-width:920px;border-collapse:collapse;table-layout:fixed}
+.people-account-report-paper th{padding:10px 9px;border-right:1px solid #487fbf;background:#2f6fb7;color:#fff;font-size:.69rem;text-align:left;text-transform:uppercase;letter-spacing:.03em}
+.people-account-report-paper td{padding:10px 9px;border-top:1px solid #dfe7e3;border-right:1px solid #e4ebe8;font-size:.75rem;overflow-wrap:anywhere}.people-account-report-paper tbody tr:nth-child(even){background:#f7faf9}.people-account-report-paper td.empty{text-align:center;padding:28px;color:#64748b}
+.people-password-report-status{display:inline-flex;padding:5px 8px;border-radius:99px;font-size:.65rem;font-weight:850;white-space:nowrap}.people-password-report-status.temporary{background:#fff4df;color:#9a5a00}.people-password-report-status.changed{background:#e9f7ef;color:#176447}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-toolbar{border-color:#29465d;background:#0e2132}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-security{border-color:#2e5f8d;background:#102c47;color:#dbeafe}body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-security p{color:#a9c3dd}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-paper{border-color:#334155;background:#eef3f7;color:#17231f}
+@media(max-width:850px){.people-account-report-toolbar{grid-template-columns:1fr}.people-account-report-toolbar>div:nth-child(2){text-align:left}.people-account-report-exports{display:grid;grid-template-columns:repeat(3,1fr)}}
+@media(max-width:560px){.people-account-heading-actions{width:100%}.people-account-heading-actions button{flex:1}.people-account-report-workspace{padding:13px}.people-account-report-paper{padding:13px}.people-account-report-exports{grid-template-columns:1fr}}
+
+/* User account report modal: coherent light/dark presentation and contained table badges. */
+.people-account-report-modal .people-status{
+  position:static!important;
+  inset:auto!important;
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  transform:none!important;
+  z-index:auto!important;
+  margin:0;
+  white-space:nowrap;
+}
+.people-account-report-modal .people-account-report-paper td:nth-child(5){text-align:center}
+.people-account-report-modal .people-modal-header{position:sticky;top:0;z-index:5}
+
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal{
+  border-color:#d8e4df!important;
+  background:#f8fbfa!important;
+  color:#17231f!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-modal-header{
+  border-bottom-color:#e2ebe7!important;
+  background:#fff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-modal-heading>span{
+  color:#fff!important;
+  background:linear-gradient(135deg,#168358,#0f7650)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-toolbar{
+  border-color:#d5e4dd!important;
+  background:linear-gradient(135deg,#f5faf7,#edf7f2)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-toolbar select:focus{
+  outline:none!important;border-color:#1c9464!important;box-shadow:0 0 0 4px rgba(28,148,100,.14)!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-toolbar label,
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-toolbar>div:nth-child(2)>span{color:#52685e!important}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-toolbar>div:nth-child(2)>strong{color:#168358!important}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-exports button{
+  border-color:#b9ddca!important;background:#eef9f3!important;color:#116b49!important;box-shadow:none!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-exports button:hover:not(:disabled){
+  border-color:#62b88e!important;background:#def3e8!important;color:#095c3d!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-exports button.primary{
+  border-color:#168358!important;background:linear-gradient(135deg,#168358,#24996b)!important;color:#fff!important;box-shadow:0 7px 16px rgba(22,131,88,.2)!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-security{
+  border-color:#b9dfca!important;background:#edf9f3!important;color:#174f38!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-security svg{color:#168358!important}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-security p{color:#557065!important}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-paper{
+  border-color:#d5e0dc!important;background:#fff!important;color:#17231f!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-account-report-paper th{
+  border-color:#277c59!important;background:linear-gradient(180deg,#23845d,#176f4d)!important;color:#fff!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .people-account-report-modal .people-password-report-status.temporary{
+  background:#e7f7ee!important;color:#116b49!important
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal{
+  --theme-surface:#102236;
+  --theme-surface-soft:#0d1d2e;
+  --theme-border:#2b465e;
+  --theme-text:#edf5ff;
+  --theme-muted:#9eb1c4;
+  border-color:#29455d!important;
+  background:#091827!important;
+  color:#edf5ff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-modal-header{
+  border-bottom-color:#263f55!important;
+  background:linear-gradient(135deg,#10263a,#0b1b2b)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-modal-heading>span{
+  color:#bfdbfe!important;
+  border:1px solid #356a9c!important;
+  background:linear-gradient(135deg,#174b7b,#256eb5)!important;
+  box-shadow:0 8px 20px rgba(37,110,181,.22)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal :where(.people-modal-heading h2,.people-account-report-toolbar label){color:#edf5ff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal :where(.people-modal-heading p,.people-account-report-toolbar>div:nth-child(2)>span){color:#9eb4c9!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-toolbar{
+  border-color:#2c4b64!important;
+  background:linear-gradient(135deg,#10273a,#0c1e2f)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-toolbar select:focus{
+  outline:none!important;border-color:#4b9dea!important;box-shadow:0 0 0 4px rgba(59,130,246,.18)!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-toolbar>div:nth-child(2)>strong{color:#69adff!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-toolbar select,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-exports button:not(.primary){
+  border-color:#35536c!important;background:#142b3f!important;color:#e4eef7!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-security{
+  border-color:#315f88!important;background:#102d48!important;color:#dbeafe!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-security svg{color:#60a5fa!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-paper{
+  border-color:#304b62!important;background:#0e1f30!important;color:#e7f0f8!important;box-shadow:0 14px 36px rgba(0,0,0,.25)!important
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-paper>header span{color:#9fb2c5!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-table-wrap{border-color:#355069!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-paper th{border-color:#397bc1!important;background:#245f9f!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-paper td{border-color:#294158!important;color:#dce7f0!important;background:#102438!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-account-report-paper tbody tr:nth-child(even) td{background:#0c1d2d!important}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-password-report-status.changed{background:#153e35;color:#8ce0bc}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-report-modal .people-password-report-status.temporary{background:#44371b;color:#f8cf72}
+/* Make assignment conflicts unmistakable at the field where they occur. */
+.people-form-field.has-error > input,
+.people-form-field > input[aria-invalid="true"],
+.people-form-field.has-error > select,
+.people-form-field > select[aria-invalid="true"] {
+  border-color: #ef4444 !important;
+  background-color: #fffafa;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.18),
+    0 0 18px rgba(239, 68, 68, 0.28) !important;
+}
+
+.people-form-field.has-error > input:focus,
+.people-form-field > input[aria-invalid="true"]:focus,
+.people-form-field.has-error > select:focus,
+.people-form-field > select[aria-invalid="true"]:focus {
+  outline: none;
+  border-color: #dc2626 !important;
+  box-shadow:
+    0 0 0 4px rgba(239, 68, 68, 0.24),
+    0 0 24px rgba(239, 68, 68, 0.38) !important;
+}
+
+.people-form-field.has-error .people-field-label {
+  color: #b91c1c;
+}
+
+.people-multi-program-field {
+  grid-column: span 1;
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.people-multi-program-field > .people-field-label {
+  order: -1;
+}
+
+.people-multi-program-field > .people-field-error {
+  order: 2;
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  border: 1px solid #f3a7ad;
+  border-radius: 10px;
+  background: #fff1f2;
+  color: #b42336 !important;
+  padding: 9px 11px;
+  line-height: 1.4;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.07);
+}
+
+.people-multi-program-field > .people-inline-add {
+  order: 3;
+  align-self: flex-start;
+  margin-top: 0;
+}
+
+.people-program-multi-select {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #cfe5da;
+  border-radius: 13px;
+  background: #f8fcfa;
+  padding: 10px;
+}
+
+.people-program-multi-select > button {
+  width: 100%;
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #cfe2d8 !important;
+  border-radius: 11px;
+  background: #ffffff !important;
+  color: #173f31 !important;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+.people-program-multi-select > button:hover {
+  transform: translateY(-1px);
+  border-color: #65b590 !important;
+  background: #f0faf5 !important;
+  color: #0f5e40 !important;
+  box-shadow: 0 8px 18px rgba(22,131,88,.11) !important;
+}
+
+.people-program-multi-select > button.selected {
+  border-color: #168358 !important;
+  background: linear-gradient(135deg, #168358, #249b69) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 20px rgba(22,131,88,.2), 0 0 0 3px rgba(22,131,88,.1) !important;
+}
+
+.people-program-multi-select > button:focus-visible {
+  outline: 3px solid rgba(37, 153, 105, .3);
+  outline-offset: 2px;
+}
+
+.people-program-check {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #9ccab5;
+  border-radius: 7px;
+}
+
+.people-program-multi-select > button.selected .people-program-check {
+  border-color: #168358;
+  background: #168358;
+  color: #fff;
+}
+
+.people-program-multi-select button > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.people-program-multi-select button strong {
+  color: inherit !important;
+}
+
+.people-program-multi-select small,
+.people-primary-program small {
+  color: #62766c !important;
+  font-size: .68rem;
+}
+
+.people-program-multi-select > button.selected small {
+  color: rgba(255,255,255,.82) !important;
+}
+
+.people-primary-program {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.people-primary-program > span {
+  color: #36564a;
+  font-size: .72rem;
+  font-weight: 850;
+}
+
+.people-subject-coordinator {
+  display: grid;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.people-subject-coordinator > span {
+  color: #36564a;
+  font-size: .72rem;
+  font-weight: 850;
+}
+
+.people-subject-coordinator-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.people-subject-coordinator-options > label {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid #cfe2d8;
+  border-radius: 11px;
+  background: #fff;
+  color: #173f31;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+.people-subject-coordinator-options > label:hover {
+  border-color: #65b590;
+  background: #f0faf5;
+}
+
+.people-subject-coordinator-options > label.selected {
+  border-color: #168358;
+  background: #eaf8f1;
+  box-shadow: 0 0 0 3px rgba(22,131,88,.09);
+}
+
+.people-form-field .people-subject-coordinator-options input[type="checkbox"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.people-subject-checkbox {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #91bda9;
+  border-radius: 6px;
+  background: #fff;
+  color: #fff;
+}
+
+.people-subject-coordinator-options > label.selected .people-subject-checkbox {
+  border-color: #168358;
+  background: #168358;
+}
+
+.people-subject-coordinator-options label > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.people-subject-coordinator-options strong {
+  color: inherit;
+  font-size: .78rem;
+}
+
+.people-subject-coordinator-options small,
+.people-subject-coordinator > small {
+  color: #62766c !important;
+  font-size: .68rem;
+  line-height: 1.35;
+}
+
+.people-subject-coordinator-options > label:has(input:focus-visible) {
+  outline: 3px solid rgba(37,153,105,.3);
+  outline-offset: 2px;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-coordinator > span {
+  color: #d9e8f2;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-coordinator-options > label {
+  border-color: #34556b;
+  background: #142b40;
+  color: #e8f4fc;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-coordinator-options > label.selected {
+  border-color: #43c493;
+  background: #153a34;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-checkbox {
+  border-color: #56758a;
+  background: #0d2133;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-coordinator-options > label.selected .people-subject-checkbox {
+  border-color: #43c493;
+  background: #168358;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.people-subject-coordinator-options small,.people-subject-coordinator > small) {
+  color: #9eb2c1 !important;
+}
+
+@media (max-width: 620px) {
+  .people-subject-coordinator-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+.people-program-multi-select.has-conflict {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.14), 0 0 20px rgba(239,68,68,.18);
+}
+
+.admin-body.dark-mode .people-form-field.has-error > select,
+.admin-body.dark-mode .people-form-field.has-error > input,
+.admin-dashboard-body.dark-mode .people-form-field.has-error > select,
+.admin-dashboard-body.dark-mode .people-form-field.has-error > input,
+body:has(.admin-body.dark-mode) .people-form-field.has-error > select,
+body:has(.admin-body.dark-mode) .people-form-field.has-error > input,
+body:has(.admin-dashboard-body.dark-mode) .people-form-field.has-error > select,
+body:has(.admin-dashboard-body.dark-mode) .people-form-field.has-error > input,
+.admin-body.dark-mode .people-form-field > select[aria-invalid="true"],
+.admin-body.dark-mode .people-form-field > input[aria-invalid="true"],
+.admin-dashboard-body.dark-mode .people-form-field > select[aria-invalid="true"],
+.admin-dashboard-body.dark-mode .people-form-field > input[aria-invalid="true"],
+body:has(.admin-body.dark-mode) .people-form-field > select[aria-invalid="true"],
+body:has(.admin-body.dark-mode) .people-form-field > input[aria-invalid="true"],
+body:has(.admin-dashboard-body.dark-mode) .people-form-field > select[aria-invalid="true"],
+body:has(.admin-dashboard-body.dark-mode) .people-form-field > input[aria-invalid="true"] {
+  border-color: #fb7185 !important;
+  background-color: rgba(69, 10, 20, 0.34);
+  color: #fff1f2;
+  box-shadow:
+    0 0 0 3px rgba(251, 113, 133, 0.2),
+    0 0 20px rgba(244, 63, 94, 0.3) !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-program-multi-select {
+  border-color: #31536a !important;
+  background: #0d2133 !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-program-multi-select > button {
+  border-color: #34556b !important;
+  background: #142b40 !important;
+  color: #e8f4fc !important;
+  box-shadow: none !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-program-multi-select > button:hover {
+  border-color: #4f819f !important;
+  background: #19374f !important;
+  color: #ffffff !important;
+  box-shadow: 0 9px 20px rgba(0,0,0,.22) !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-program-multi-select > button.selected {
+  border-color: #43c493 !important;
+  background: linear-gradient(135deg, #166b52, #168358) !important;
+  color: #f0fdf7 !important;
+  box-shadow: 0 9px 22px rgba(0,0,0,.26), 0 0 0 3px rgba(52,211,153,.1) !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-program-multi-select > button small {
+  color: #a9bdca !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-program-multi-select > button.selected small {
+  color: #c8f7e4 !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.people-program-multi-select small,.people-primary-program small) {
+  color: #9eb2c1 !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-primary-program > span {
+  color: #d9e8f2;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-multi-program-field > .people-field-error {
+  border-color: #7f4650;
+  background: #3a2028;
+  color: #fecdd3 !important;
+  box-shadow: 0 0 0 3px rgba(244,63,94,.07), 0 0 16px rgba(244,63,94,.08);
+}
+
+.admin-body.dark-mode .people-form-field.has-error .people-field-label,
+.admin-dashboard-body.dark-mode .people-form-field.has-error .people-field-label,
+body:has(.admin-body.dark-mode) .people-form-field.has-error .people-field-label,
+body:has(.admin-dashboard-body.dark-mode) .people-form-field.has-error .people-field-label {
+  color: #fda4af;
+}
+/* Per-subject Faculty/Coordinator designation */
+.people-subject-designations {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.people-subject-designations > span {
+  color: #173d31;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.people-subject-designation-list {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  gap: 9px;
+}
+
+.people-subject-designation-list > label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgba(22, 131, 88, 0.2);
+  border-radius: 13px;
+  background: rgba(22, 131, 88, 0.05);
+  padding: 10px 12px;
+}
+
+.people-subject-designation-list > label.coordinator {
+  border-color: rgba(37, 99, 235, 0.36);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.people-subject-designation-list label > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.people-subject-designation-list strong {
+  color: #143c30;
+  font-size: 0.8rem;
+}
+
+.people-subject-designation-list small,
+.people-subject-designations > small {
+  color: #657b72;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.people-subject-designation-list select {
+  display: block;
+  width: 100% !important;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-designations > span,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-designation-list strong {
+  color: #e5efff;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-designation-list > label {
+  border-color: rgba(96, 165, 250, 0.25);
+  background: rgba(30, 64, 104, 0.18);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-subject-designation-list > label.coordinator {
+  border-color: rgba(96, 165, 250, 0.52);
+  background: rgba(37, 99, 235, 0.2);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.people-subject-designation-list small,.people-subject-designations > small) {
+  color: #aebdd2;
+}
+
+@media (max-width: 620px) {
+  .people-subject-designation-list > label {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Use the available side space for subject assignment controls. */
+.people-subject-assignment-field {
+  grid-column: 1 / -1;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  gap: 16px;
+  align-items: start;
+  padding: 18px 20px 20px;
+  border: 1px solid #d5e8df;
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(255,255,255,.72), rgba(241,250,246,.82));
+  box-sizing: border-box;
+}
+
+.people-subject-assignment-field > .people-field-label {
+  grid-column: 1;
+  grid-row: auto;
+  margin-bottom: 0;
+}
+
+.people-subject-assignment-field > .people-subject-picker {
+  grid-column: 1;
+  grid-row: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.people-subject-assignment-field > .people-primary-program {
+  grid-column: 1;
+  grid-row: auto;
+  width: 100%;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.people-subject-assignment-field > .people-subject-designations {
+  grid-column: 1;
+  grid-row: auto;
+  width: 100%;
+  min-width: 0;
+  margin-top: 0;
+  overflow: hidden;
+}
+
+.people-subject-assignment-field > .people-inline-add {
+  grid-column: 1;
+  grid-row: auto;
+  justify-self: start;
+}
+
+.people-faculty-position {
+  padding: 14px 16px;
+  border: 1px solid #dcece5;
+  border-radius: 12px;
+  background: rgba(255,255,255,.78);
+}
+
+.people-faculty-position input {
+  display: block;
+  width: 100% !important;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.people-subject-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.people-subject-picker > span {
+  color: #36564a;
+  font-size: .72rem;
+  font-weight: 850;
+}
+
+.people-subject-picker > small {
+  color: #62766c;
+  font-size: .68rem;
+}
+
+.people-subject-empty {
+  padding: 14px 16px;
+  border: 1px dashed #bfd9cd;
+  border-radius: 12px;
+  color: #62766c;
+  background: rgba(255,255,255,.55);
+  font-size: .78rem;
+}
+
+.people-subject-assignment-field .people-primary-program select {
+  display: block;
+  width: 100% !important;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.people-subject-designations > span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+/* Explicit Faculty program/subject assignment track selector. */
+.people-faculty-track-field {
+  grid-column: 1 / -1;
+}
+
+.people-faculty-track-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.people-faculty-track-options > button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  min-height: 76px;
+  border: 1px solid #cbded5 !important;
+  border-radius: 13px;
+  background: #f8fcfa !important;
+  color: #284d40 !important;
+  padding: 12px 14px;
+  text-align: left;
+  box-shadow: none !important;
+}
+
+.people-faculty-track-options > button > svg {
+  color: #168358;
+}
+
+.people-faculty-track-options > button > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.people-faculty-track-options strong {
+  color: inherit;
+  font-size: 0.82rem;
+}
+
+.people-faculty-track-options small {
+  color: #687d74;
+  font-size: 0.69rem;
+  line-height: 1.4;
+}
+
+.people-faculty-track-options > button.active {
+  border-color: #168358 !important;
+  background: linear-gradient(135deg, rgba(22, 131, 88, 0.14), rgba(22, 131, 88, 0.06)) !important;
+  color: #126b49 !important;
+  box-shadow: 0 0 0 3px rgba(22, 131, 88, 0.1) !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-faculty-track-options > button {
+  border-color: rgba(96, 165, 250, 0.24) !important;
+  background: rgba(20, 42, 68, 0.68) !important;
+  color: #d8e8fb !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-faculty-track-options > button.active {
+  border-color: rgba(96, 165, 250, 0.62) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.3), rgba(30, 64, 175, 0.16)) !important;
+  color: #f1f7ff !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-faculty-track-options small {
+  color: #aebed2;
+}
+
+@media (max-width: 680px) {
+  .people-faculty-track-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Keep the portaled Edit Account modal dark during edit/focus states. */
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal {
+  color-scheme: dark;
+  background: #0d1728 !important;
+  color: #edf5ff !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal :is(
+  .people-user-form,
+  .people-user-form-scroll,
+  .people-form-section,
+  .people-assignment-summary
+) {
+  background-color: #0f1b2d !important;
+  color: #edf5ff !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal :is(
+  input,
+  select,
+  textarea
+) {
+  border-color: #2b4261 !important;
+  background-color: #101a2c !important;
+  color: #f1f6ff !important;
+  -webkit-text-fill-color: #f1f6ff;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal :is(
+  input:focus,
+  select:focus,
+  textarea:focus
+) {
+  border-color: #60a5fa !important;
+  background-color: #101a2c !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal select option {
+  background: #101a2c;
+  color: #f1f6ff;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal input:-webkit-autofill,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal input:-webkit-autofill:hover,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #101a2c inset !important;
+  -webkit-text-fill-color: #f1f6ff !important;
+  caret-color: #f1f6ff;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-faculty-track-options > button:is(:hover, :focus, :focus-visible, :active) {
+  border-color: rgba(96, 165, 250, 0.5) !important;
+  background: #172b46 !important;
+  color: #f1f7ff !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-faculty-track-options > button.active,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .people-account-modal .people-faculty-track-options > button.active:is(:hover, :focus, :focus-visible, :active) {
+  border-color: #60a5fa !important;
+  background: linear-gradient(135deg, #1d4f91, #173b70) !important;
+  color: #ffffff !important;
+}
+
+/* The account editor is portaled under body, so inherit the body theme directly. */
+body.dark-mode .people-account-modal {
+  color-scheme: dark;
+  border-color: #29415f !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.16), transparent 30%),
+    linear-gradient(145deg, #111d30, #0a1424) !important;
+  color: #edf5ff !important;
+}
+
+body.dark-mode .people-account-modal :is(
+  .people-user-form,
+  .people-user-form-scroll,
+  .people-form-section,
+  .people-assignment-summary
+) {
+  border-color: #29405d !important;
+  background:
+    linear-gradient(145deg, rgba(18, 32, 52, 0.98), rgba(12, 24, 42, 0.98)) !important;
+  color: #edf5ff !important;
+}
+
+body.dark-mode .people-account-modal :is(input, select, textarea) {
+  border-color: #355172 !important;
+  background: #0d182a !important;
+  color: #f4f8ff !important;
+  -webkit-text-fill-color: #f4f8ff !important;
+}
+
+body.dark-mode .people-account-modal :is(input, select, textarea):focus {
+  border-color: #60a5fa !important;
+  background: #101d31 !important;
+  color: #ffffff !important;
+}
+
+body.dark-mode .people-account-modal select option {
+  background: #0d182a !important;
+  color: #f4f8ff !important;
+}
+
+body.light-mode .people-account-modal,
+body:not(.dark-mode) .people-account-modal {
+  border-color: rgba(22, 131, 88, 0.24) !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(22, 131, 88, 0.13), transparent 32%),
+    linear-gradient(145deg, #f7fcf9, #edf7f2) !important;
+  color: #102c22 !important;
+}
+
+body.light-mode .people-account-modal :is(.people-user-form-scroll, .people-form-section),
+body:not(.dark-mode) .people-account-modal :is(.people-user-form-scroll, .people-form-section) {
+  border-color: rgba(22, 131, 88, 0.18) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(239, 249, 244, 0.94)) !important;
+}
+
+body.light-mode .people-account-modal :is(input, select, textarea),
+body:not(.dark-mode) .people-account-modal :is(input, select, textarea) {
+  border-color: rgba(22, 131, 88, 0.25) !important;
+  background: #f8fcfa !important;
+  color: #143d30 !important;
 }

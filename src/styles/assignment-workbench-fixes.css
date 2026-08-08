@@ -145,3 +145,77 @@
   .category-monitor-self-status { align-items: stretch; flex-direction: column; margin-inline: 12px; }
   .category-monitor-self-view { width: 100%; }
 }
+/* Evaluator breakdown filters: isolate the controls from global form styles. */
+.peer-monitor-panel .peer-monitor-tools {
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
+}
+
+.peer-monitor-panel .peer-monitor-tools .peer-monitor-period {
+  display: block;
+  width: 100% !important;
+  min-width: 0;
+  height: 52px;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 44px 0 16px !important;
+  overflow: hidden;
+  border-radius: 14px;
+  line-height: 52px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peer-monitor-panel .peer-monitor-tools .peer-monitor-search {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 !important;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.peer-monitor-panel .peer-monitor-tools .peer-monitor-search > svg {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.peer-monitor-panel .peer-monitor-tools .peer-monitor-search > input {
+  display: block;
+  width: 100% !important;
+  height: 50px !important;
+  min-height: 50px !important;
+  margin: 0 !important;
+  padding: 0 16px 0 46px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: normal;
+}
+
+.peer-monitor-panel .peer-monitor-tools .peer-monitor-search > input:focus {
+  outline: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 760px) {
+  .peer-monitor-panel .peer-monitor-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .peer-monitor-panel .peer-monitor-tools {
+    max-width: none;
+  }
+}

@@ -39,7 +39,7 @@ function performance_report_metadata(): array
     return [
         'departments' => admin_all('SELECT id, department_code AS code, department_name AS name, dean_user_id, logo_image FROM departments WHERE is_active = 1 ORDER BY department_name'),
         'programs' => admin_all('SELECT id, department_id, program_code AS code, program_name AS name FROM programs WHERE is_active = 1 ORDER BY program_name'),
-        'periods' => admin_all('SELECT id, period_name, school_year, semester, date_start, date_end, status FROM appraisal_periods ORDER BY date_start DESC, id DESC'),
+        'periods' => admin_all('SELECT id, period_name, school_year, date_start, date_end, status FROM appraisal_periods ORDER BY date_start DESC, id DESC'),
     ];
 }
 
@@ -47,6 +47,11 @@ function performance_report_metadata(): array
 function performance_report_user_scope(array $user, array $filters, array $metadata): array
 {
     $role = (string) ($user['role'] ?? '');
+    $requestedPeriodId = (int)($filters['period_id'] ?? $filters['evaluation_period_id'] ?? 0);
+    if ($requestedPeriodId > 0 && $role !== 'dean') {
+        require_once __DIR__ . '/evaluation_participation.php';
+        if (dipascaf_period_dean_scope($requestedPeriodId, (int)$user['id']) !== []) $role = 'dean';
+    }
     if (!in_array($role, ['dean', 'program_head'], true)) return [$filters, $metadata];
 
     if ($role === 'dean') {
@@ -73,10 +78,21 @@ function performance_report_user_scope(array $user, array $filters, array $metad
         return [$filters, $metadata];
     }
 
-    $programs = admin_all(
-        'SELECT id, department_id, program_code FROM programs WHERE program_head_user_id = :id AND is_active = 1 ORDER BY program_name',
-        ['id' => (int) $user['id']]
-    );
+    $programs = [];
+    if ($requestedPeriodId > 0) {
+        require_once __DIR__ . '/evaluation_participation.php';
+        $programs = array_map(static fn(array $row): array => [
+            'id'=>(int)$row['program_id'],
+            'department_id'=>(int)$row['department_id'],
+            'program_code'=>(string)$row['program_code'],
+        ], dipascaf_period_program_head_programs($requestedPeriodId, (int)$user['id'], false));
+    }
+    if ($programs === []) {
+        $programs = admin_all(
+            'SELECT id, department_id, program_code FROM programs WHERE program_head_user_id = :id AND is_active = 1 ORDER BY program_name',
+            ['id' => (int) $user['id']]
+        );
+    }
     if ($programs === [] && trim((string) ($user['program'] ?? '')) !== '') {
         $programs = admin_all(
             'SELECT p.id, p.department_id, p.program_code
@@ -97,8 +113,9 @@ function performance_report_user_scope(array $user, array $filters, array $metad
         throw new PerformanceReportScopeException('The requested program is outside your assigned reporting scope.');
     }
     $requestedDepartmentId = (int) ($filters['department_id'] ?? 0);
-    $filters['program'] = in_array($requestedProgram, $allowedProgramCodes, true) ? $requestedProgram : $allowedProgramCodes[0];
-    $assignedDepartmentId = (int) $programs[array_search($filters['program'], $allowedProgramCodes, true)]['department_id'];
+    $filters['program'] = in_array($requestedProgram, $allowedProgramCodes, true) ? $requestedProgram : '';
+    $filters['_allowed_program_codes'] = $allowedProgramCodes;
+    $assignedDepartmentId = (int)$programs[0]['department_id'];
     if ($requestedDepartmentId > 0 && $requestedDepartmentId !== $assignedDepartmentId) {
         throw new PerformanceReportScopeException('The requested department is outside your assigned reporting scope.');
     }
@@ -118,6 +135,10 @@ function performance_report_build(array $filters): array
     $departmentId = (int) ($filters['department_id'] ?? 0);
     $role = (string) ($filters['role'] ?? 'teacher');
     $program = strtoupper(trim((string) ($filters['program'] ?? '')));
+    $allowedProgramCodes = array_values(array_unique(array_filter(array_map(
+        static fn($value): string => strtoupper(trim((string)$value)),
+        is_array($filters['_allowed_program_codes'] ?? null) ? $filters['_allowed_program_codes'] : []
+    ))));
     $periodId = (int) ($filters['period_id'] ?? 0);
     $sort = (string) ($filters['sort'] ?? 'name');
 
@@ -137,6 +158,14 @@ function performance_report_build(array $filters): array
     if ($program !== '') {
         $where[] = 'f.program_code = :program';
         $params['program'] = $program;
+    } elseif ($allowedProgramCodes !== []) {
+        $programParts = [];
+        foreach ($allowedProgramCodes as $index => $code) {
+            $key = 'allowed_program_' . $index;
+            $programParts[] = ':' . $key;
+            $params[$key] = $code;
+        }
+        $where[] = 'UPPER(f.program_code) IN (' . implode(',', $programParts) . ')';
     }
     if ($period !== null) {
         $where[] = 'p.cycle_name = :cycle_name';
@@ -144,7 +173,7 @@ function performance_report_build(array $filters): array
     }
 
     $resultSql = "
-        SELECT assignment_id, ROUND(SUM(weighted_score), 4) AS score
+        SELECT assignment_id, LEAST(5.0000, GREATEST(0.0000, ROUND(SUM(weighted_score), 4))) AS score
         FROM (
             SELECT assignment_id, weighted_score FROM pmas_form_a_category_results WHERE status = 'completed' AND COALESCE(is_archived, 0) = 0
             UNION ALL

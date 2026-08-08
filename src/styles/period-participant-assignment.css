@@ -1,0 +1,1201 @@
+.period-participant-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.period-participant-tools {
+  grid-template-columns: minmax(280px, 1.35fr) repeat(3, minmax(170px, .8fr)) !important;
+  align-items: end;
+  border: 1px solid #d8eae1;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fcfa, #f1f8f5);
+  padding: 14px;
+  box-shadow: 0 10px 24px rgba(20, 93, 67, .06);
+}
+
+.period-participant-tools :is(input, select) {
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.period-participant-tools :is(input, select):focus {
+  outline: 0;
+  border-color: #43a77e;
+  box-shadow: 0 0 0 4px rgba(22, 131, 88, .11);
+}
+
+.period-participant-tools select:disabled {
+  cursor: not-allowed;
+  opacity: .62;
+}
+
+.period-participant-tool-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  border-top: 1px solid #dcebe4;
+  padding-top: 12px;
+}
+
+.period-participant-tool-actions > span {
+  margin-right: auto;
+  color: #60766b;
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+.period-participant-tool-actions button {
+  width: auto;
+}
+
+.period-participant-row-actions button {
+  min-height: 36px;
+}
+
+.period-participant-row-actions .edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #b9d8ca;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f5fbf8, #eaf7f1);
+  color: #116447;
+  padding: 0 11px;
+  font-size: .68rem;
+  font-weight: 850;
+  box-shadow: 0 6px 14px rgba(17,100,71,.08);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.period-participant-row-actions .edit:hover {
+  transform: translateY(-2px);
+  border-color: #65b590;
+  box-shadow: 0 10px 20px rgba(17,100,71,.14);
+}
+
+.period-participant-row-actions .exclude {
+  border: 1px solid #e4b1a7 !important;
+  background: linear-gradient(135deg, #fff8f6, #ffefec) !important;
+  color: #a23e31 !important;
+  box-shadow: none !important;
+}
+
+.period-participant-row-actions .exclude:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #d98677 !important;
+  background: #ffe9e4 !important;
+}
+
+.period-participant-row-actions .exclude.is-excluded {
+  border-color: #d4dce1 !important;
+  background: #f0f3f5 !important;
+  color: #65747e !important;
+  opacity: 1;
+}
+
+.period-assignment-source {
+  color: #11805a !important;
+  font-size: .61rem !important;
+  font-weight: 800 !important;
+}
+
+/* Explicit badge colors prevent inherited table text from reducing contrast. */
+.period-participants-panel .period-status {
+  display: inline-flex;
+  min-height: 29px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  padding: 5px 10px;
+  line-height: 1;
+}
+
+.period-participants-panel .period-status.account-active {
+  border-color: #a9dbc4 !important;
+  background: #e4f7ee !important;
+  color: #086444 !important;
+}
+
+.period-participants-panel .period-status.included {
+  border-color: #9fd8bf !important;
+  background: #dcf5e8 !important;
+  color: #075f41 !important;
+}
+
+.period-participants-panel .period-status.account-inactive {
+  border-color: #cbd5dd !important;
+  background: #eef2f5 !important;
+  color: #465866 !important;
+}
+
+.period-participants-panel .period-status.excluded {
+  border-color: #e2b8ae !important;
+  background: #fff0ed !important;
+  color: #963b31 !important;
+}
+
+.period-history-count {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  width: min(100%, 145px);
+  border: 1px solid #d4e7dd;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fbfefc, #f0f8f4);
+  padding: 8px 10px 8px 8px;
+  color: #314d41;
+  box-shadow: 0 4px 12px rgba(20, 93, 67, .05);
+}
+
+.period-participant-table-wrap .period-history-count strong {
+  display: grid !important;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: #dff4e9;
+  color: #08704b;
+  font-size: .9rem;
+  line-height: 1;
+  text-align: center;
+}
+
+.period-history-count span {
+  display: grid;
+  gap: 2px;
+  color: #385649;
+  font-size: .68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.period-history-count span small {
+  color: #74897f;
+  font-size: .55rem;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.period-new-account-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 6px;
+  border: 1px solid #9fd8bf;
+  border-radius: 999px;
+  background: #dcf5e8;
+  color: #075f41;
+  padding: 5px 9px;
+  font-size: .62rem;
+  font-weight: 850;
+}
+
+.period-participant-table-wrap tr.is-new-account td {
+  background: linear-gradient(90deg, #f5fcf8, #fff);
+}
+
+.period-participant-table-wrap tbody td {
+  padding-top: 16px !important;
+  padding-bottom: 16px !important;
+  vertical-align: middle;
+}
+
+.period-activity-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(58px, 1fr));
+  width: min(100%, 245px);
+  overflow: hidden;
+  border: 1px solid #d4e7dd;
+  border-radius: 12px;
+  background: #f8fcfa;
+  box-shadow: 0 4px 12px rgba(20, 93, 67, .04);
+}
+
+.period-activity-summary span {
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  gap: 2px;
+  min-height: 52px;
+  border-right: 1px solid #dcebe4;
+  color: #60766b;
+  padding: 7px 6px;
+  white-space: nowrap;
+}
+
+.period-activity-summary span:last-child {
+  border-right: 0;
+}
+
+.period-activity-summary strong {
+  color: #0c6c4a;
+  font-size: .88rem;
+  line-height: 1;
+}
+
+.period-activity-summary small {
+  color: #647b70;
+  font-size: .55rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.period-participant-pagination {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid #d9e9e1;
+  background: linear-gradient(180deg, #fbfefc, #f3f9f6);
+  padding: 13px 16px;
+}
+
+.period-participant-pagination > div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  color: #63786e;
+  font-size: .7rem;
+}
+
+.period-participant-pagination > div strong {
+  color: #173f31;
+}
+
+.period-participant-pagination label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #60766b;
+  font-size: .67rem;
+  font-weight: 800;
+}
+
+.period-participant-pagination select {
+  min-height: 34px;
+  border: 1px solid #c9e1d5;
+  border-radius: 9px;
+  background: #fff;
+  color: #244638;
+  padding: 0 28px 0 9px;
+}
+
+.period-participant-pagination nav {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.period-participant-pagination nav > span {
+  min-width: 82px;
+  color: #63786e;
+  text-align: center;
+  font-size: .67rem;
+}
+
+.period-participant-pagination button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #bedccc;
+  border-radius: 9px;
+  background: #fff;
+  color: #116447;
+  padding: 0 11px;
+  font-size: .67rem;
+  font-weight: 850;
+}
+
+.period-participant-pagination button:hover:not(:disabled) {
+  border-color: #65b590;
+  background: #edf9f3;
+}
+
+.period-participant-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.period-assignment-modal form {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  gap: 16px;
+  padding: 28px 30px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid #b9dccc;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 0 0, rgba(37, 167, 112, .08), transparent 30%),
+    linear-gradient(180deg, #ffffff, #f8fcfa);
+  box-shadow: 0 28px 80px rgba(2, 28, 20, .28);
+}
+
+/* The animated module panel creates a stacking context. Remove it while the
+   dialog is open so fixed overlays sit above the module header and controls. */
+.peer-assignment-module-panel:has(.period-assignment-modal) {
+  transform: none !important;
+  filter: none !important;
+  animation: none !important;
+}
+
+.period-assignment-modal {
+  z-index: 2147483000 !important;
+  align-items: start;
+  justify-items: center;
+  overflow: auto;
+  padding: clamp(20px, 4vh, 44px) 20px 20px;
+  background: rgba(2, 8, 23, .76) !important;
+  backdrop-filter: blur(8px) saturate(.8) !important;
+}
+
+body:has(.period-assignment-modal) {
+  overflow: hidden;
+}
+
+.period-assignment-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding-right: 48px;
+}
+
+.period-assignment-heading .icon {
+  flex: 0 0 auto;
+  border: 1px solid #b8d9f5;
+  background: #eaf4ff;
+  color: #2563a9;
+}
+
+.period-assignment-heading > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.period-assignment-heading small {
+  color: #6f8379;
+  font-size: .65rem;
+  font-weight: 850;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.period-assignment-heading h3 {
+  color: #153f31;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.period-assignment-modal > form > p {
+  max-width: 680px;
+  color: #5d7268;
+  font-size: .88rem;
+}
+
+.period-assignment-modal > form > p strong {
+  color: #193f31;
+}
+
+.period-assignment-modal .close {
+  top: 18px;
+  right: 18px;
+  width: 42px;
+  height: 42px;
+  border-color: #cfe4da;
+  border-radius: 12px;
+  background: #f7fbf9;
+  color: #526b60;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+}
+
+.period-assignment-modal .close:hover {
+  transform: rotate(4deg);
+  border-color: #83c6a7;
+  background: #eaf8f1;
+  color: #0f6a49;
+}
+
+.period-assignment-modal .period-assignment-current {
+  border-color: #c8e2d6;
+  background: linear-gradient(135deg, #f3faf6, #eaf7f1);
+  box-shadow: inset 4px 0 0 #28a874;
+}
+
+.period-assignment-modal .period-assignment-current span {
+  color: #527064;
+}
+
+.period-assignment-modal .period-assignment-current strong {
+  color: #153e30;
+  font-size: .82rem;
+  line-height: 1.5;
+}
+
+.period-assignment-modal form > label {
+  gap: 8px;
+  color: #284b3d;
+  font-size: .75rem;
+}
+
+.period-assignment-modal form > label > select,
+.period-assignment-modal form > label > textarea,
+.period-assignment-modal .period-acting-dean-fields select,
+.period-assignment-modal .period-acting-dean-fields textarea {
+  min-height: 50px;
+  border: 1px solid #c7ddd2;
+  border-radius: 13px;
+  background: #fff;
+  color: #203c31;
+  padding-left: 15px;
+  font-weight: 750;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.period-assignment-modal form :is(select, textarea):focus {
+  outline: 0;
+  border-color: #36a777;
+  box-shadow: 0 0 0 4px rgba(22, 131, 88, .12);
+}
+
+.period-assignment-modal .period-acting-dean-fields {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #bdd9cc;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #f7fcf9, #edf7f2);
+  padding: 16px;
+  box-shadow: none;
+}
+
+.period-assignment-modal .period-acting-dean-fields > strong {
+  color: #173f31;
+  font-size: .9rem;
+}
+
+.period-assignment-modal .period-acting-dean-fields > small {
+  margin-top: -7px;
+  color: #61776c;
+  font-size: .72rem;
+  line-height: 1.5;
+}
+
+.period-assignment-modal .period-acting-dean-fields label {
+  display: grid;
+  gap: 7px;
+  color: #284b3d;
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.period-administrative-reason > span,
+.period-previous-dean-control > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.period-administrative-reason em {
+  border-radius: 999px;
+  background: #e5f4ec;
+  color: #17704f;
+  padding: 3px 7px;
+  font-size: .54rem;
+  font-style: normal;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.period-assignment-modal .period-administrative-reason textarea {
+  min-height: 104px;
+  padding: 12px 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.period-administrative-reason > small,
+.period-previous-dean-control > small {
+  color: #6d8177;
+  font-size: .64rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.period-administrative-reason > small {
+  justify-self: end;
+}
+
+.period-previous-dean-control {
+  border-top: 1px solid #d3e5dc;
+  padding-top: 13px;
+}
+
+.period-assignment-modal .period-assignment-warning {
+  border-color: #ead49b;
+  background: linear-gradient(135deg, #fffbef, #fff7df);
+  color: #765513;
+  padding: 12px 14px;
+}
+
+.period-assignment-modal footer {
+  position: sticky;
+  bottom: -24px;
+  z-index: 2;
+  margin: 2px -30px -24px;
+  padding: 16px 30px 24px;
+  border-top: 1px solid #dcebe4;
+  background: rgba(248, 252, 250, .96);
+  backdrop-filter: blur(12px);
+}
+
+.period-assignment-modal footer button {
+  min-height: 46px;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-size: .78rem;
+}
+
+.period-assignment-modal footer button:first-child {
+  border-color: #cadfd5;
+  background: #fff;
+  color: #4b665a;
+}
+
+.period-assignment-modal footer button:last-child {
+  border-color: #11875b !important;
+  background: linear-gradient(135deg, #1aa66d, #087c52) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 22px rgba(10, 126, 83, .24);
+}
+
+.period-assignment-modal footer button:last-child:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #20b879, #0b8b5d) !important;
+  box-shadow: 0 14px 28px rgba(10, 126, 83, .3);
+}
+
+.period-assignment-modal footer button:last-child:disabled {
+  cursor: not-allowed;
+  border-color: #a8bbb2 !important;
+  background: #a8bbb2 !important;
+  box-shadow: none;
+  opacity: .72;
+}
+
+.period-program-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 5px 0;
+}
+
+.period-program-chips > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #b9ddcb;
+  border-radius: 999px;
+  background: #eaf8f1;
+  color: #0d6547;
+  padding: 4px 8px;
+  font-size: .64rem;
+}
+
+.period-program-chips em {
+  border-left: 1px solid currentColor;
+  padding-left: 5px;
+  font-size: .55rem;
+  font-style: normal;
+  font-weight: 850;
+  opacity: .8;
+}
+
+.period-program-chips > span.co-head {
+  border-color: #e7c878;
+  background: #fff8df;
+  color: #79560b;
+}
+
+.period-program-selector,
+.period-lead-selector {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d4e6dd;
+  border-radius: 13px;
+  margin: 0;
+  padding: 12px;
+}
+
+.period-program-selector legend,
+.period-lead-selector legend {
+  padding: 0 6px;
+  color: #264b3d;
+  font-size: .78rem;
+  font-weight: 850;
+}
+
+.period-program-selector legend small {
+  margin-left: 6px;
+  color: #71847b;
+  font-weight: 650;
+}
+
+.period-program-selector > label {
+  display: grid !important;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #dce9e2;
+  border-radius: 11px;
+  background: #fbfdfc;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.period-program-selector > label.selected {
+  border-color: #66b993;
+  background: #ecf9f2;
+  box-shadow: 0 0 0 3px rgba(22,131,88,.08);
+}
+
+.period-program-selector input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.period-program-selector .check {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #a8c9b9;
+  border-radius: 7px;
+  color: #fff;
+}
+
+.period-program-selector label.selected .check {
+  border-color: #168358;
+  background: #168358;
+}
+
+.period-program-selector label > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.period-program-selector label small,
+.period-lead-selector > small {
+  color: #6c7f76;
+  font-size: .67rem;
+}
+
+.period-lead-selector > label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+}
+
+.period-cohead-conflict {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #e7ba58;
+  border-radius: 13px;
+  background: #fff9e8;
+  color: #75520b;
+  padding: 12px;
+}
+
+.period-cohead-conflict > div {
+  display: flex;
+  gap: 9px;
+}
+
+.period-cohead-conflict > div span {
+  display: grid;
+}
+
+.period-cohead-conflict ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.period-cohead-conflict li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.66);
+  padding: 7px 9px;
+  font-size: .7rem;
+}
+
+.period-cohead-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800 !important;
+}
+
+.period-assignment-current {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #d4e6dd;
+  border-radius: 12px;
+  background: #f5faf7;
+  padding: 12px 14px;
+}
+
+.period-assignment-current span {
+  color: #6b7f76;
+  font-size: .67rem;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.period-assignment-current strong {
+  color: #193f31;
+  font-size: .78rem;
+}
+
+.period-assignment-warning {
+  display: block;
+  border: 1px solid #f0d79f;
+  border-radius: 10px;
+  background: #fff9eb;
+  color: #805b16;
+  padding: 10px 12px;
+  font-size: .68rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.period-previous-dean-note {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #c7ddf3;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .7);
+  padding: 11px 13px;
+}
+
+.period-previous-dean-note strong {
+  color: #244a3c;
+  font-size: .75rem;
+}
+
+.period-previous-dean-note span {
+  color: #60748a;
+  font-size: .72rem;
+  line-height: 1.45;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-participant-row-actions .edit {
+  border-color: #365f7d;
+  background: linear-gradient(135deg, #16344f, #173d58);
+  color: #b9dcf5;
+  box-shadow: 0 7px 16px rgba(0,0,0,.18);
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-participant-row-actions .exclude {
+  border-color: #7a4548 !important;
+  background: linear-gradient(135deg, #442a30, #38252a) !important;
+  color: #fecaca !important;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-participant-row-actions .exclude.is-excluded {
+  border-color: #455c6c !important;
+  background: #243746 !important;
+  color: #aebdca !important;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-participant-tools {
+  border-color: #294b60;
+  background: linear-gradient(135deg, #10283b, #0d2133);
+  box-shadow: 0 12px 28px rgba(0,0,0,.16);
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-participant-tool-actions {
+  border-color: #294b60;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-participant-tool-actions > span {
+  color: #9fb6c5;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-assignment-source {
+  color: #79c8a7 !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode)
+  .period-participants-panel .period-status.account-active {
+  border-color: #28785d !important;
+  background: #153f34 !important;
+  color: #a7f3d0 !important;
+  box-shadow: 0 0 14px rgba(52, 211, 153, .08);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode)
+  .period-participants-panel .period-status.included {
+  border-color: #2c7461 !important;
+  background: #173d35 !important;
+  color: #b4f4d6 !important;
+  box-shadow: 0 0 14px rgba(74, 222, 128, .07);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode)
+  .period-participants-panel .period-status.account-inactive {
+  border-color: #4b6172 !important;
+  background: #243748 !important;
+  color: #d2dee7 !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode)
+  .period-participants-panel .period-status.excluded {
+  border-color: #7d4a4c !important;
+  background: #42292e !important;
+  color: #fecaca !important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-history-count {
+  color: #d6e5ee;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-new-account-badge {
+  border-color: #28785d;
+  background: #153f34;
+  color: #a7f3d0;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-history-count strong {
+  border: 0;
+  background: #15513f;
+  color: #b8f7d8;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-participant-table-wrap tr.is-new-account td {
+  background: linear-gradient(90deg, #12352f, #102234);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-history-count,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-activity-summary {
+  border-color: #294e62;
+  background: linear-gradient(145deg, #142e41, #11283a);
+  color: #b7cbd8;
+  box-shadow: none;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-history-count span {
+  color: #d6e5ee;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.period-history-count span small, .period-activity-summary small) {
+  color: #91a9b8;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-activity-summary span {
+  border-color: #294e62;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-activity-summary strong {
+  color: #86e1b8;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-participant-pagination {
+  border-color: #294b60;
+  background: linear-gradient(180deg, #102438, #0d1f30);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-participant-pagination :is(div, label, nav > span) {
+  color: #9fb6c5;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-participant-pagination > div strong {
+  color: #eef8ff;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-participant-pagination :is(select, button) {
+  border-color: #345b72;
+  background: #122b40;
+  color: #e7f4ff;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-assignment-current {
+  border-color: #31506a;
+  background: #11283d;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-assignment-current span {
+  color: #93acc0;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-assignment-current strong {
+  color: #edf7ff;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-assignment-warning {
+  border-color: #665229;
+  background: #342b19;
+  color: #f0ce84;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-previous-dean-note {
+  border-color: #31506a;
+  background: rgba(13, 30, 45, .72);
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-previous-dean-note strong {
+  color: #dceaf4;
+}
+
+:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode) .period-previous-dean-note span {
+  color: #a9bfd0;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.period-program-selector,.period-lead-selector) {
+  border-color: #31506a;
+  background: #102438;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.period-program-selector,.period-lead-selector) legend {
+  color: #dceaf4;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-program-selector > label {
+  border-color: #304d63;
+  background: #122a3f;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-program-selector > label.selected {
+  border-color: #3b9c78;
+  background: #143a35;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-cohead-conflict {
+  border-color: #79622d;
+  background: #332a18;
+  color: #f4d58d;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-cohead-conflict li {
+  background: rgba(15,23,42,.45);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-program-chips > span {
+  border-color: #2d755d;
+  background: #173c33;
+  color: #a7f3d0;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-program-chips > span.co-head {
+  border-color: #75612e;
+  background: #352c1a;
+  color: #f6d889;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-heading small {
+  color: #92aabd;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-heading .icon {
+  border-color: #355f85;
+  background: #173650;
+  color: #93c5fd;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal form {
+  border-color: #315a73;
+  background:
+    radial-gradient(circle at 0 0, rgba(45, 212, 191, .09), transparent 30%),
+    linear-gradient(180deg, #10283b, #0d2031);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, .5);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-heading h3 {
+  color: #f1f8ff;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal > form > p {
+  color: #afc4d1;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal > form > p strong {
+  color: #f4f9fc;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .close {
+  border-color: #345970;
+  background: #153247;
+  color: #b8cedb;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .close:hover {
+  border-color: #56b69a;
+  background: #17453e;
+  color: #b8f3dd;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .period-assignment-current {
+  border-color: #31546a;
+  background: linear-gradient(135deg, #132d40, #102739);
+  box-shadow: inset 4px 0 0 #31b985;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .period-assignment-current span {
+  color: #91aabd;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .period-assignment-current strong,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal form > label {
+  color: #e4f0f7;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal form :is(select, textarea) {
+  border-color: #345a71;
+  background: #0b1d2c;
+  color: #edf7fc;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal form :is(select, textarea):focus {
+  border-color: #49bc94;
+  background: #0d2333;
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, .11);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .period-acting-dean-fields {
+  border-color: #31566d;
+  background: linear-gradient(145deg, #132c40, #102538);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .period-acting-dean-fields > strong,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .period-acting-dean-fields label {
+  color: #e7f2f8;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .period-acting-dean-fields > small,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal :is(.period-administrative-reason, .period-previous-dean-control) > small {
+  color: #9eb5c4;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-administrative-reason em {
+  background: #174739;
+  color: #a7f3d0;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-previous-dean-control {
+  border-color: #315066;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal .period-assignment-warning {
+  border-color: #68582f;
+  background: linear-gradient(135deg, #30291b, #282317);
+  color: #f0d28a;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal footer {
+  border-color: #29485e;
+  background: rgba(13, 32, 49, .96);
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .period-assignment-modal footer button:first-child {
+  border-color: #3a5c70;
+  background: #173247;
+  color: #d6e6ee;
+}
+
+@media (max-width: 720px) {
+  .period-participant-row-actions,
+  .period-participant-row-actions button {
+    width: 100%;
+  }
+
+  .period-assignment-modal {
+    align-items: start;
+    padding: 10px;
+  }
+
+  .period-assignment-modal form {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    padding: 22px 18px 18px;
+    border-radius: 18px 18px 12px 12px;
+  }
+
+  .period-assignment-modal footer {
+    bottom: -18px;
+    margin: 0 -18px -18px;
+    padding: 14px 18px 18px;
+  }
+}
+
+@media (max-width: 1150px) {
+  .period-participant-tools {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .period-participant-search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .period-participant-tools {
+    grid-template-columns: 1fr !important;
+  }
+
+  .period-participant-search,
+  .period-participant-tool-actions {
+    grid-column: auto;
+  }
+
+  .period-participant-tool-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .period-participant-tool-actions > span {
+    grid-column: 1 / -1;
+  }
+
+  .period-participant-tool-actions button {
+    width: 100%;
+  }
+
+  .period-participant-pagination {
+    grid-template-columns: 1fr;
+  }
+
+  .period-participant-pagination nav {
+    justify-content: space-between;
+  }
+
+  .period-participant-pagination label {
+    justify-content: space-between;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .period-participant-row-actions .edit {
+    transition-duration: .01ms;
+  }
+}

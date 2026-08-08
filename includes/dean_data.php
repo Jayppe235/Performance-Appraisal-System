@@ -5,8 +5,17 @@ require_once __DIR__ . '/admin_data.php';
 require_once __DIR__ . '/evaluation_cards.php';
 require_once __DIR__ . '/evaluation_participation.php';
 
-function dean_departments(int $deanUserId): array
+function dean_departments(int $deanUserId, ?int $evaluationPeriodId = null): array
 {
+    if ($evaluationPeriodId !== null && $evaluationPeriodId > 0) {
+        $periodRows = dipascaf_period_dean_scope($evaluationPeriodId, $deanUserId);
+        if ($periodRows !== []) {
+            return array_values(array_unique(array_map(
+                static fn(array $row): string => (string)($row['department_code'] ?: $row['department_name']),
+                $periodRows
+            )));
+        }
+    }
     $departments = admin_all(
         'SELECT department_code FROM departments WHERE dean_user_id = :dean_user_id AND is_active = 1',
         ['dean_user_id' => $deanUserId]

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowRight, CheckCircle2, PartyPopper, Plus, RotateCcw, Save, Send, Trash2, Upload } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarRange, CheckCircle2, PartyPopper, Plus, RotateCcw, Save, Send, Trash2, Upload } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { apiUrl } from '../../data/apiBase.js';
 import { addToast } from '../common/Toast.jsx';
 import { confirmProceed, confirmSaveChanges, confirmSubmitEvaluation } from '../common/ConfirmationModal.jsx';
 import { DynamicQuestionnaireBuilder, DynamicQuestionnaireRenderer } from './DynamicSelfQuestionnaire.jsx';
+import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
+import PeriodSelector from './PeriodSelector.jsx';
 
 const emptyAnswers = {
   achievedGoals: [{ goals: '', accomplishment: '' }],
@@ -212,8 +214,9 @@ const adminRoleOptions = [
   { value: 'program_head', label: 'Program Head Self Evaluation' },
 ];
 
-export default function SelfEvaluationModule({ role, initialTargetRole = null, targetRoleOptions = adminRoleOptions, displayMode = 'manage', assignmentId = null, managedRecordId = null, onSubmitted = null, pendingEvaluations = [], onEvaluateNext = null, onFinish = null }) {
+export default function SelfEvaluationModule({ role, initialTargetRole = null, targetRoleOptions = adminRoleOptions, displayMode = 'manage', assignmentId = null, managedRecordId = null, onSubmitted = null, pendingEvaluations = [], onEvaluateNext = null, onFinish = null, templateOverride = null, onTemplateChange = null }) {
   const [searchParams] = useSearchParams();
+  const { selectedPeriodId, selectedPeriod } = useEvaluationPeriod();
   const isAdmin = role?.key === 'admin';
   const routeAssignmentId = assignmentId ?? searchParams.get('assignment_id') ?? null;
   const managedRecordIdNumber = Number(managedRecordId || 0);
@@ -238,10 +241,12 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
   const [showValidation, setShowValidation] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [questionnaireUpdated, setQuestionnaireUpdated] = useState(false);
+  const [goalsGate, setGoalsGate] = useState({ loading: true, approved: false, record: null });
   const hydratedRef = useRef(false);
   const dirtyRef = useRef(false);
   const dirtyVersionRef = useRef(0);
   const saveInFlightRef = useRef(false);
+  const loadRequestRef = useRef(0);
   const latestDraftRef = useRef({
     answers: cloneAnswers(),
     employee: { name: role?.user?.name || '', positionTitle: '', department: role?.user?.department || '', appraisalPeriod: '' },
@@ -254,6 +259,18 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
     canAutoSave: false,
   });
 
+  useEffect(() => {
+    if (displayMode === 'preview' && templateOverride?.definition) {
+      setTemplateInfo(templateOverride);
+    }
+  }, [displayMode, templateOverride]);
+
+  useEffect(() => {
+    if (isAdmin && displayMode !== 'preview' && !loading && templateInfo?.definition) {
+      onTemplateChange?.(templateInfo);
+    }
+  }, [displayMode, isAdmin, loading, onTemplateChange, templateInfo]);
+
   const managedReviewerRole = roleParam(role?.key);
   const isManagedReadOnly = displayMode === 'managed_view';
   const isManagedReviewerEdit = managedMode
@@ -262,7 +279,9 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
     && managedRecordIdNumber > 0;
   const effectiveRole = isAdmin || isManagedReviewerEdit ? targetRole : role?.key;
   const canEdit = !isManagedReadOnly && ((!isAdmin && status !== 'submitted') || (isManagedReviewerEdit && managedPermissions?.canEditSubmitted === true));
-  const showCareer = isAdmin || ['dean', 'vpaa', 'programHead', 'program_head'].includes(effectiveRole);
+  // Part V belongs to the official PMAS form and must remain visible in the
+  // employee/user form preview for every supported account role.
+  const showCareer = true;
   const t = templateInfo.template || {};
 
   const computed = useMemo(() => {
@@ -352,6 +371,8 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
       (section.questions || []).forEach((question) => {
         const value = answers.dynamicResponses?.[question.id] ?? answers.selfRatings?.[question.id] ?? '';
         if (question.required && String(value).trim() === '') errors[`dynamic:${question.id}`] = 'Complete all required questionnaire items.';
+        if (question.evidenceEnabled && question.evidenceRequired && !String(answers.dynamicResponses?.[`${question.id}__evidence`] || '').trim()) errors[`dynamic:${question.id}:evidence`] = 'Complete the required behavioral evidence field.';
+        if (question.commentsEnabled && question.commentsRequired && !String(answers.dynamicResponses?.[`${question.id}__comment`] || '').trim()) errors[`dynamic:${question.id}:comment`] = 'Complete the required comments field.';
       });
     }
     if (section.type === 'category') {
@@ -387,11 +408,15 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
         errors.ratingBasis = 'Please explain the basis for your self-evaluation rating.';
       }
     }
+    const approvalRequirements = templateInfo.definition?.approvalRequirements || {};
     if (section.type === 'confirmation' && !answers.confirmations.appraisee.trim()) {
       errors.confirmation = 'Typed name confirmation for the appraisee is required.';
     }
-    if (section.type === 'confirmation' && !answers.confirmations.appraiseeSignature) {
+    if (section.type === 'confirmation' && approvalRequirements.requireEmployeeSignature !== false && !answers.confirmations.appraiseeSignature) {
       errors.appraiseeSignature = 'Upload the appraisee virtual signature.';
+    }
+    if (section.type === 'confirmation' && approvalRequirements.requireReviewerComments && !String(answers.comments || '').trim()) {
+      errors.reviewerComments = 'Comments are required before this evaluation can be submitted for review.';
     }
     return errors;
   }
@@ -439,13 +464,17 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
   }
 
   const load = useCallback(async (nextRole = targetRole) => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setLoadError('');
+    if (isAdmin) setRecords([]);
     try {
       const params = new URLSearchParams({ role: nextRole });
       if (routeAssignmentId) params.set('assignment_id', String(routeAssignmentId));
       if (managedRecordIdNumber > 0) params.set('record_id', String(managedRecordIdNumber));
+      if (isAdmin && selectedPeriodId) params.set('period_id', String(selectedPeriodId));
       const payload = await apiFetch(`/api/self-evaluations.php?${params.toString()}`);
+      if (requestId !== loadRequestRef.current) return;
       const loadedTemplate = payload.template || { title: '', template: {}, definition: { schemaVersion: 2, scales: [], sections: [] }, revision: 1 };
       setTemplateInfo(loadedTemplate);
       setFormCategories((loadedTemplate.definition?.sections || []).filter((section) => section.visible !== false && section.type === 'questions').map((section) => ({
@@ -486,6 +515,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
         hydratedRef.current = true;
       }
     } catch (error) {
+      if (requestId !== loadRequestRef.current) return;
       const message = error.message || 'Unable to load self evaluation.';
       setLoadError(message);
       setAssignmentMissing(message.toLowerCase().includes('assignment'));
@@ -495,9 +525,9 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
       setManagedPermissions({});
       addToast({ type: 'error', text: message });
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
-  }, [managedRecordIdNumber, routeAssignmentId, targetRole]);
+  }, [isAdmin, managedRecordIdNumber, routeAssignmentId, selectedPeriodId, targetRole]);
 
   useEffect(() => {
     load(targetRole);
@@ -593,6 +623,41 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
       document.removeEventListener('visibilitychange', flushWhenHidden);
     };
   }, [saveDraftSilently]);
+
+  useEffect(() => {
+    if (isAdmin || isManagedReviewerEdit || loading) {
+      if (isAdmin || isManagedReviewerEdit) setGoalsGate({ loading: false, approved: true, record: null });
+      return;
+    }
+    let active = true;
+    apiFetch('/api/goals-records.php?mode=mine')
+      .then((payload) => {
+        if (!active) return;
+        const approved = payload.record?.status === 'approved';
+        setGoalsGate({ loading: false, approved, record: payload.record || null });
+        if (approved && payload.record?.goals?.length) {
+          setAnswers((current) => {
+            const existing = current.achievedGoals || [];
+            const existingOutputs = current.performanceOutputs || [];
+            const transferred = payload.record.goals.map((goal, index) => ({
+              goals: `${goal.keyResultArea}${goal.goalStatement ? ` — ${goal.goalStatement}` : ''}`,
+              accomplishment: existing[index]?.accomplishment || '',
+              approvedGoal: true,
+            }));
+            const performanceOutputs = payload.record.goals.map((goal, index) => ({
+              goals: `${goal.keyResultArea}${goal.goalStatement ? ` — ${goal.goalStatement}` : ''}`,
+              weight: goal.weight,
+              accomplishment: existingOutputs[index]?.accomplishment || '',
+              rating: existingOutputs[index]?.rating || '',
+              approvedGoal: true,
+            }));
+            return { ...current, achievedGoals: transferred, performanceOutputs };
+          });
+        }
+      })
+      .catch(() => active && setGoalsGate({ loading: false, approved: false, record: null }));
+    return () => { active = false; };
+  }, [isAdmin, isManagedReviewerEdit, loading]);
 
   function markDraftDirty() {
     dirtyRef.current = true;
@@ -792,7 +857,8 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
     : effectiveRole === 'dean'
     ? 'Administrative'
     : 'Program Head';
-  const isPaperSection = activeSection?.type === 'partI';
+  const paperSectionTypes = ['partI', 'questions', 'category', 'outputs', 'summary', 'confirmation', 'career'];
+  const isPaperSection = paperSectionTypes.includes(activeSection?.type);
   const submitBlocker = !canEdit
     ? status === 'submitted'
       ? isManagedReviewerEdit
@@ -856,16 +922,42 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
     );
   }
 
-  if (isAdmin && displayMode === 'preview') {
+  if (!isAdmin && !isManagedReviewerEdit && !goalsGate.loading && !goalsGate.approved) {
     return (
-      <section className="self-evaluation-page self-eval-preview-only">
-        <div className="dynamic-preview-heading"><span>{formCode}</span><div><h2>{templateInfo.title}</h2><p>{templateInfo.definition?.description}</p></div><b>Revision {templateInfo.revision || 1}</b></div>
-        <DynamicQuestionnaireRenderer definition={templateInfo.definition} answers={{}} preview disabled />
+      <section className="admin-box module-wide self-evaluation-page page-enter">
+        <div className="notice warning self-eval-load-warning">
+          <div>
+            <strong>Goals Record Sheet Required</strong>
+            <p>You must complete, submit, and obtain approval for your Goals Record Sheet before proceeding with your Self-Evaluation.</p>
+          </div>
+        </div>
       </section>
     );
   }
 
-  if (isAdmin) {
+  if (isAdmin && displayMode === 'preview') {
+    return (
+      <section className="self-evaluation-page self-eval-preview-only">
+        <div className="dynamic-preview-heading">
+          <span>{formCode}</span>
+          <div>
+            <h2>{templateInfo.title}</h2>
+            <p>{templateInfo.definition?.description}</p>
+          </div>
+          <b>Revision {templateInfo.revision || 1}</b>
+        </div>
+        <AdminSelfEvaluationTablePreview
+          title={templateInfo.title}
+          template={t}
+          definition={templateInfo.definition}
+          formCode={formCode}
+          audienceLabel={audienceLabel}
+        />
+      </section>
+    );
+  }
+
+  if (isAdmin && displayMode !== 'preview') {
     return (
       <section className="admin-box module-wide self-evaluation-page page-enter">
         <div className="box-title self-eval-title">
@@ -873,23 +965,50 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
             <h2>PMAS Self Evaluation Questionnaires</h2>
             <span>Manage Form B and Form A self evaluation wording without changing the layout.</span>
           </div>
-          <select value={targetRole} onChange={(event) => setTargetRole(event.target.value)}>
-            {targetRoleOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <div className="self-eval-period-toolbar">
+            <div className="self-eval-current-period">
+              <CalendarRange size={18} />
+              <span>Current Evaluation Period<strong>{selectedPeriod?.period_name || 'Select a period'}</strong></span>
+            </div>
+            <PeriodSelector compact />
+            <select value={targetRole} onChange={(event) => setTargetRole(event.target.value)}>
+              {targetRoleOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <DynamicQuestionnaireBuilder
-          title={templateInfo.title || ''}
-          definition={templateInfo.definition || { schemaVersion: 2, scales: [], sections: [] }}
-          revision={templateInfo.revision || 1}
-          saving={saving}
-          onTitleChange={(title) => setTemplateInfo((prev) => ({ ...prev, title }))}
-          onChange={(definition) => setTemplateInfo((prev) => ({ ...prev, definition }))}
-          onSave={saveTemplate}
-        />
+        <div className="self-questionnaire-workspace">
+          <div className="self-questionnaire-builder-pane">
+            <div className="self-questionnaire-pane-label"><span>Questionnaire Management · Version {templateInfo.revision || 1}</span><strong>{targetRole === 'faculty' ? 'Faculty Self-Evaluation Form Builder' : 'Leadership Self-Evaluation Form Builder'}</strong><p>Create, arrange, preview, and publish the exact form used for this audience.</p></div>
+            <DynamicQuestionnaireBuilder
+              title={templateInfo.title || ''}
+              definition={templateInfo.definition || { schemaVersion: 2, scales: [], sections: [] }}
+              revision={templateInfo.revision || 1}
+              saving={saving}
+              onTitleChange={(title) => setTemplateInfo((prev) => ({ ...prev, title }))}
+              onChange={(definition) => setTemplateInfo((prev) => ({ ...prev, definition }))}
+              onSave={saveTemplate}
+            />
+          </div>
+          <aside className="self-questionnaire-preview-pane">
+            <div className="self-questionnaire-preview-head"><div><span>Live employee preview</span><strong>{templateInfo.title}</strong></div><b>Revision {templateInfo.revision || 1}</b></div>
+            <div className="self-questionnaire-preview-scroll">
+              <AdminSelfEvaluationTablePreview
+                title={templateInfo.title}
+                template={t}
+                definition={templateInfo.definition}
+                formCode={formCode}
+                audienceLabel={audienceLabel}
+              />
+            </div>
+          </aside>
+        </div>
         <div className="self-eval-section">
-          <h3>Submitted Self Evaluations</h3>
+          <div className="self-eval-records-heading">
+            <div><h3>Submitted Self Evaluations</h3><p>Showing records only for <strong>{selectedPeriod?.period_name || 'the selected evaluation period'}</strong>.</p></div>
+            <span><CalendarRange size={15} /> {selectedPeriod?.school_year || selectedPeriod?.period_name || 'No period selected'}</span>
+          </div>
           <div className="self-eval-table-wrap">
             <table className="self-eval-table">
               <thead><tr><th>Name</th><th>Role</th><th>Period</th><th>Overall</th><th>Level</th><th>Status</th><th>Action</th></tr></thead>
@@ -935,6 +1054,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
           computed={computed}
           recordMeta={recordMeta}
           evaluationRole={targetRole}
+          definition={templateInfo.definition}
         />
       </section>
     );
@@ -1023,7 +1143,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
         </div>
 
         <div className="form-scroll-questions">
-          <div className="form-category-panel">
+          <div className={`form-category-panel ${isPaperSection && activeSection?.type !== 'partI' ? 'self-eval-paper self-eval-paper-form self-eval-paper-continuation' : ''}`}>
             {activeSection?.type === 'partI' && (
               <ModernPartISelfEvaluationSection
                 answers={answers}
@@ -1080,6 +1200,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
                 validationErrors={validationErrors}
                 updateAnswer={updateAnswer}
                 programHeadReviewedAt={recordMeta?.program_head_reviewed_at || ''}
+                approvalRequirements={templateInfo.definition?.approvalRequirements}
               />
             )}
             {activeSection?.type === 'career' && (
@@ -1131,22 +1252,9 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
 }
 
 function ModernPartISelfEvaluationSection({ answers, canEdit, employee, formCode, audienceLabel, title, template, showValidation, validationErrors, updateAnswer, updateRow, addRow, removeRow }) {
-  const formLetter = formCode.toLowerCase().includes('3b') ? 'B' : 'A';
-  const formTitle = title || `PMAS Form ${formLetter} Self Evaluation for ${audienceLabel.toUpperCase()}`;
   return (
     <div className="self-eval-paper self-eval-paper-form">
-      <header className="self-eval-paper-head">
-        <strong className="self-eval-form-code">{formCode}</strong>
-        <div className="self-eval-school-brand">
-          <img src="/assets/images/ndmc-seal.png" alt="" />
-          <div>
-            <h1>NOTRE DAME OF MIDSAYAP</h1>
-            <h2>COLLEGE</h2>
-            <p>{formTitle}</p>
-            <small>({audienceLabel})</small>
-          </div>
-        </div>
-      </header>
+      <OfficialSelfEvaluationHeader formCode={formCode} audienceLabel={audienceLabel} title={title} />
 
       <div className="self-eval-paper-fields">
         <PaperLine label="Name" value={employee.name || 'Auto-filled employee name'} />
@@ -1164,9 +1272,9 @@ function ModernPartISelfEvaluationSection({ answers, canEdit, employee, formCode
         <EditableTable columns={['Goals', 'Actual Accomplishment']} rows={answers.achievedGoals} disabled={!canEdit}
           render={(row, index) => (
             <>
-              <td><textarea value={row.goals} onChange={(event) => updateRow('achievedGoals', index, 'goals', event.target.value)} disabled={!canEdit} /></td>
+              <td><textarea value={row.goals} onChange={(event) => updateRow('achievedGoals', index, 'goals', event.target.value)} disabled={!canEdit || row.approvedGoal} readOnly={!!row.approvedGoal} title={row.approvedGoal ? 'Transferred from the approved Goals Record Sheet' : ''} /></td>
               <td><textarea value={row.accomplishment} onChange={(event) => updateRow('achievedGoals', index, 'accomplishment', event.target.value)} disabled={!canEdit} /></td>
-              <RemoveCell disabled={!canEdit || answers.achievedGoals.length === 1} onClick={() => removeRow('achievedGoals', index)} />
+              <RemoveCell disabled={!canEdit || row.approvedGoal || answers.achievedGoals.length === 1} onClick={() => removeRow('achievedGoals', index)} />
             </>
           )}
           onAdd={() => addRow('achievedGoals', { goals: '', accomplishment: '' })}
@@ -1302,7 +1410,7 @@ function ModernOutputsSection({ answers, canEdit, showValidation, validationErro
   const weightDifference = Math.abs(100 - computed.totalWeight);
   return (
     <>
-      <h3>Performance Outputs Appraisal</h3>
+      <h3>Part II - Performance Outputs Appraisal</h3>
       <p className="self-eval-modern-description">Degree of Achievement of Mutually Agreed Work Goals.</p>
       {hasError && <div className="field-error-label"><AlertCircle size={12} /><span>{validationErrors.performanceOutputs}</span></div>}
       <EditableTable columns={['Goals', 'Weight', 'Actual Accomplishment', 'Standard Met or Rating', 'Weighted Rating']} rows={answers.performanceOutputs} disabled={!canEdit}
@@ -1310,16 +1418,16 @@ function ModernOutputsSection({ answers, canEdit, showValidation, validationErro
           const weighted = ((Number(row.weight) || 0) / 100) * ratingValue(row.rating);
           return (
             <>
-              <td><textarea value={row.goals} onChange={(e) => updateRow('performanceOutputs', index, 'goals', e.target.value)} disabled={!canEdit} /></td>
-              <td><input type="number" min="0" max="100" value={row.weight} onChange={(e) => updateRow('performanceOutputs', index, 'weight', e.target.value)} disabled={!canEdit} /></td>
+              <td><textarea value={row.goals} onChange={(e) => updateRow('performanceOutputs', index, 'goals', e.target.value)} disabled={!canEdit || row.approvedGoal} readOnly={!!row.approvedGoal} title={row.approvedGoal ? 'Transferred from the approved Goals Record Sheet' : ''} /></td>
+              <td><input type="number" min="0" max="100" value={row.weight} onChange={(e) => updateRow('performanceOutputs', index, 'weight', e.target.value)} disabled={!canEdit || row.approvedGoal} readOnly={!!row.approvedGoal} title={row.approvedGoal ? 'Transferred from the approved Goals Record Sheet' : ''} /></td>
               <td><textarea value={row.accomplishment} onChange={(e) => updateRow('performanceOutputs', index, 'accomplishment', e.target.value)} disabled={!canEdit} /></td>
               <td><select value={row.rating} onChange={(e) => updateRow('performanceOutputs', index, 'rating', e.target.value)} disabled={!canEdit}><option value="">Select</option>{outputRatings.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select></td>
               <td><strong>{weighted ? weighted.toFixed(4) : '0.0000'}</strong></td>
-              <RemoveCell disabled={!canEdit || answers.performanceOutputs.length === 1} onClick={() => removeRow('performanceOutputs', index)} />
+              <RemoveCell disabled={!canEdit || row.approvedGoal || answers.performanceOutputs.length === 1} onClick={() => removeRow('performanceOutputs', index)} />
             </>
           );
         }}
-        onAdd={() => addRow('performanceOutputs', { goals: '', weight: '', accomplishment: '', rating: '' })}
+        onAdd={answers.performanceOutputs.some((row) => row.approvedGoal) ? undefined : () => addRow('performanceOutputs', { goals: '', weight: '', accomplishment: '', rating: '' })}
       />
       <div className={`self-eval-weight-total ${weightComplete ? 'is-complete' : 'is-incomplete'}`}>
         <span>
@@ -1344,10 +1452,19 @@ function ModernSummarySection({ answers, canEdit, showValidation, validationErro
     <>
       <h3>Part IV - Summary and Overall Rating</h3>
       <p className="self-eval-modern-description">Summarize strengths, areas of improvement, and the computed rating.</p>
-      <Question title="Appraisee's Strengths" text={template.strengthsQuestion || "What favorable qualities or attitudes other than those covered by the performance factors does the appraisee have which can help him/her excel in the performance of his/her job?"} />
-      <PaperBox value={answers.appraiseeStrengths} onChange={(value) => updateAnswer('appraiseeStrengths', value)} disabled={!canEdit} rows={4} />
-      <Question title="Areas of Improvement" text={template.improvementInstruction || "List areas in which the appraisee's qualities, attitudes, skills, and performance can be improved in relation to the present position. Itemize action plan to be undertaken in this regard."} />
-      <EditableTable columns={['Areas of Improvement', 'Action Plan', 'Time Frame']} rows={answers.improvementPlans} disabled={!canEdit}
+      <section className="self-eval-summary-entry">
+        <div className="self-eval-summary-prompt">
+          <strong>Appraisee&apos;s Strengths</strong>
+          <p>{template.strengthsQuestion || "What favorable qualities or attitudes other than those covered by the performance factors does the appraisee have which can help him/her excel in the performance of his/her job?"}</p>
+        </div>
+        <PaperBox value={answers.appraiseeStrengths} onChange={(value) => updateAnswer('appraiseeStrengths', value)} disabled={!canEdit} rows={4} />
+      </section>
+      <section className="self-eval-summary-entry">
+        <div className="self-eval-summary-prompt">
+          <strong>Areas of Improvement</strong>
+          <p>{template.improvementInstruction || "List areas in which the appraisee's qualities, attitudes, skills, and performance can be improved in relation to the present position. Itemize action plan to be undertaken in this regard."}</p>
+        </div>
+        <EditableTable columns={['Areas of Improvement', 'Action Plan', 'Time Frame']} rows={answers.improvementPlans} disabled={!canEdit}
         render={(row, index) => (
           <>
             <td><textarea value={row.area} onChange={(e) => updateRow('improvementPlans', index, 'area', e.target.value)} disabled={!canEdit} /></td>
@@ -1357,18 +1474,31 @@ function ModernSummarySection({ answers, canEdit, showValidation, validationErro
           </>
         )}
         onAdd={() => addRow('improvementPlans', { area: '', actionPlan: '', timeFrame: '' })}
-      />
+        />
+      </section>
       <div className="form-category-computation-grid self-eval-modern-computation">
         <article><span>Performance Outputs x 0.70</span><strong>{(computed.outputs * 0.7).toFixed(4)}</strong></article>
         <article><span>Performance Factors x 0.30</span><strong>{computed.factors === null ? 'Pending' : (computed.factors * 0.3).toFixed(4)}</strong></article>
         <article><span>Overall Rating</span><strong>{computed.overall === null ? 'Pending' : computed.overall.toFixed(4)}</strong></article>
         <article><span>Level</span><strong>{computed.level || 'Pending'}</strong></article>
       </div>
+      <div className="self-eval-table-wrap">
+        <table className="self-eval-table paper-rating-guide-table">
+          <thead><tr><th colSpan="2">Level of Performance</th></tr></thead>
+          <tbody>
+            <tr><td>Exceptional</td><td>4.51 to 5.00</td></tr>
+            <tr><td>Exceeds Expectations</td><td>3.76 to 4.50</td></tr>
+            <tr><td>Meets Expectations</td><td>3.01 to 3.75</td></tr>
+            <tr><td>Meets Most Expectations</td><td>2.26 to 3.00</td></tr>
+            <tr><td>Does Not Meet Expectations</td><td>2.25 or lower</td></tr>
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }
 
-function ModernConfirmationSection({ answers, appraiseeName, canEdit, showValidation, validationErrors, updateAnswer, programHeadReviewedAt }) {
+function ModernConfirmationSection({ answers, appraiseeName, canEdit, showValidation, validationErrors, updateAnswer, programHeadReviewedAt, approvalRequirements = {} }) {
   const programHeadName = String(answers.confirmations.appraiser || '').trim();
   const programHeadSignature = answers.confirmations.appraiserSignature || '';
   const programHeadSignatureName = answers.confirmations.appraiserSignatureName || '';
@@ -1404,11 +1534,17 @@ function ModernConfirmationSection({ answers, appraiseeName, canEdit, showValida
     <>
       <h3>Comments and Confirmation</h3>
       <PaperBox label="Appraisee's Comments on the Appraisal" value={answers.comments} onChange={(value) => updateAnswer('comments', value)} disabled={!canEdit} rows={4} />
+      {showValidation && validationErrors.reviewerComments && <div className="field-error-label"><AlertCircle size={12} /><span>{validationErrors.reviewerComments}</span></div>}
+      <p className="self-eval-helper">We have jointly reviewed and discussed this performance appraisal.</p>
+      <div className="self-eval-runtime-approval">
+        <strong>Approval route</strong>
+        <span>{(approvalRequirements.reviewers || ['employee', 'program_head', 'dean']).map((reviewer) => String(reviewer).replaceAll('_', ' ')).join(' → ')}</span>
+      </div>
       {showValidation && validationErrors.confirmation && <div className="field-error-label"><AlertCircle size={12} /><span>{validationErrors.confirmation}</span></div>}
       <div className="self-eval-modern-field-grid">
         <div className="self-eval-signature-field">
           <label>Printed Name of Appraisee<input autoComplete="off" value={answers.confirmations.appraisee || appraiseeName || ''} readOnly aria-readonly="true" title="Automatically filled from the appraisee profile" /></label>
-          <div className={`self-eval-signature-upload ${answers.confirmations.appraiseeSignature ? 'has-signature' : ''} ${showValidation && validationErrors.appraiseeSignature ? 'has-validation-error' : ''}`}>
+          {approvalRequirements.requireEmployeeSignature !== false && <div className={`self-eval-signature-upload ${answers.confirmations.appraiseeSignature ? 'has-signature' : ''} ${showValidation && validationErrors.appraiseeSignature ? 'has-validation-error' : ''}`}>
             <div className="self-eval-signature-preview">
               {answers.confirmations.appraiseeSignature ? (
                 <img src={answers.confirmations.appraiseeSignature} alt="Uploaded appraisee signature" />
@@ -1430,7 +1566,7 @@ function ModernConfirmationSection({ answers, appraiseeName, canEdit, showValida
             </div>
             {answers.confirmations.appraiseeSignatureName && <small>{answers.confirmations.appraiseeSignatureName}</small>}
             {showValidation && validationErrors.appraiseeSignature && <div className="field-error-label"><AlertCircle size={12} /><span>{validationErrors.appraiseeSignature}</span></div>}
-          </div>
+          </div>}
         </div>
         <label className="self-eval-confirmation-date">Date<input type="date" autoComplete="off" value={answers.confirmations.date || ''} onChange={(e) => updateAnswer('confirmations', { ...answers.confirmations, date: e.target.value })} disabled={!canEdit} /></label>
         {programHeadSignature && (
@@ -1466,7 +1602,7 @@ function submittedValue(value, fallback = 'Not provided') {
   return text === '' ? fallback : text;
 }
 
-function SubmittedSelfEvaluationPreview({ answers, employee, formCode, audienceLabel, categories, categoryStats, computed, recordMeta, evaluationRole }) {
+function SubmittedSelfEvaluationPreview({ answers, employee, formCode, audienceLabel, categories, categoryStats, computed, recordMeta, evaluationRole, definition }) {
   const confirmations = answers.confirmations || {};
   const submittedDate = confirmations.date || '';
   const outputs = (answers.performanceOutputs || []).filter((row) => [row.goals, row.accomplishment, row.weight, row.rating].some((value) => String(value || '').trim() !== ''));
@@ -1501,18 +1637,26 @@ function SubmittedSelfEvaluationPreview({ answers, employee, formCode, audienceL
   ];
 
   return (
-    <div className="self-eval-preview-summary">
-      <div className="evaluation-form-meta self-eval-modern-meta">
-        {[
-          ['Employee', employee.name],
-          ['Position', employee.positionTitle],
-          ['Department', employee.department],
-          ['Evaluation Form', `${formCode} - ${audienceLabel}`],
-          ['Appraisal Period', employee.appraisalPeriod],
-          ['Submitted Date', submittedDate],
-        ].map(([label, value]) => (
-          <div key={label}><span>{label}</span><strong>{submittedValue(value, 'Not set')}</strong></div>
-        ))}
+    <div className="self-eval-preview-summary self-eval-paper self-eval-paper-form submitted-self-eval-paper">
+      <header className="self-eval-paper-head">
+        <strong className="self-eval-form-code">{formCode}</strong>
+        <div className="self-eval-school-brand">
+          <img src="/assets/images/ndmc-seal.png" alt="" />
+          <div>
+            <h1>NOTRE DAME OF MIDSAYAP COLLEGE</h1>
+            <h2>Performance Appraisal Sheet</h2>
+            <p>({audienceLabel})</p>
+            <small>Submitted Self-Evaluation</small>
+          </div>
+        </div>
+      </header>
+
+      <div className="self-eval-paper-fields">
+        <PaperLine label="Name" value={submittedValue(employee.name, 'Not set')} />
+        <PaperLine label="Appraisal Period" value={submittedValue(employee.appraisalPeriod, 'Not set')} />
+        <PaperLine label="Position Title" value={submittedValue(employee.positionTitle, 'Not set')} wide />
+        <PaperLine label="Department" value={submittedValue(employee.department, 'Not set')} wide />
+        <PaperLine label="Submitted Date" value={submittedValue(submittedDate, 'Not recorded')} wide />
       </div>
 
       <div className="self-eval-preview-score-grid">
@@ -1521,6 +1665,17 @@ function SubmittedSelfEvaluationPreview({ answers, employee, formCode, audienceL
         <article><span>Overall Rating</span><strong>{computed.overall === null ? 'Pending' : computed.overall.toFixed(4)}</strong></article>
         <article><span>Level</span><strong>{computed.level || 'Pending'}</strong></article>
       </div>
+
+      {(definition?.sections || []).some((section) => section.type === 'questions' && section.visible !== false) && (
+        <section className="self-eval-preview-card">
+          <h3>Questionnaire Responses</h3>
+          <DynamicQuestionnaireRenderer
+            definition={{ ...definition, sections: (definition.sections || []).filter((section) => section.type === 'questions') }}
+            answers={{ ...(answers.dynamicResponses || {}), ...(answers.selfRatings || {}) }}
+            disabled
+          />
+        </section>
+      )}
 
       <section className="self-eval-preview-card">
         <h3>Self Rating Summary</h3>
@@ -1633,7 +1788,7 @@ function SubmittedSelfEvaluationPreview({ answers, employee, formCode, audienceL
 function ModernCareerSection({ answers, canEdit, updateAnswer, updateCareer }) {
   return (
     <>
-      <h3>Employee Career Development Assessment</h3>
+      <h3>Part V - Employee Career Development Assessment</h3>
       <PaperBox label="Most Probable Next Job" value={answers.careerDevelopment.nextJob} onChange={(value) => updateAnswer('careerDevelopment', { ...answers.careerDevelopment, nextJob: value })} disabled={!canEdit} rows={2} />
       <div className="self-eval-modern-field-grid">
         <label>Present Career Development Status
@@ -1684,21 +1839,15 @@ function Question({ title, text }) {
   return <div className="self-eval-question"><strong>{title}</strong><p>{text}</p></div>;
 }
 
-function AdminSelfEvaluationTablePreview({ title, template, formCode, audienceLabel }) {
-  const blankRows = [0, 1, 2];
+function AdminSelfEvaluationTablePreview({ title, template, definition, formCode, audienceLabel }) {
+  const blankRows = [0, 1, 2, 3, 4];
+  const questionDefinition = {
+    ...(definition || {}),
+    sections: (definition?.sections || []).filter((section) => section.type === 'questions'),
+  };
   return (
-    <div className="self-eval-paper admin-self-eval-paper-preview">
-      <header className="self-eval-paper-head">
-        <strong className="self-eval-form-code">{formCode}</strong>
-        <div className="self-eval-school-brand">
-          <img src="/assets/images/ndmc-seal.png" alt="" />
-          <div>
-            <h1>NOTRE DAME OF MIDSAYAP COLLEGE</h1>
-            <h2>{title || 'Performance Appraisal Sheet'}</h2>
-            <p>({audienceLabel})</p>
-          </div>
-        </div>
-      </header>
+    <div className="self-eval-paper admin-self-eval-paper-preview self-eval-original-preview">
+      <OfficialSelfEvaluationHeader formCode={formCode} audienceLabel={audienceLabel} title={title} />
 
       <div className="self-eval-paper-fields">
         <PaperLine label="Name" value="Auto-filled employee name" />
@@ -1710,26 +1859,35 @@ function AdminSelfEvaluationTablePreview({ title, template, formCode, audienceLa
       <div className="self-eval-section paper-section">
         <h3>Part I - SELF-EVALUATION</h3>
         <p className="paper-subtitle">(to be accomplished by employee to be appraised)</p>
-        <Question title="1" text={template.question1} />
+        <Question title="1" text={template.question1 || 'List down goals you have achieved and other significant accomplishments you have met during the appraisal period.'} />
         <PreviewTable columns={['Goals', 'Actual Accomplishment']} rows={blankRows} />
         <PreviewBox label="Other Accomplishments Aside From Goals Achievement" />
-        <Question title="2" text={template.question2} />
+        <Question title="2" text={template.question2 || 'List also goals that did not meet mutually agreed standards of performance and specify reasons why they were not met.'} />
         <PreviewBox />
-        <Question title="3" text={template.question3} />
+      </div>
+
+      <div className="self-eval-section paper-section self-eval-reference-page-break">
+        <Question title="3" text={template.question3 || 'What personal strengths do you have that contributed to your performance level during the appraisal period under review? How did they contribute to your performance level?'} />
         <PreviewBox />
-        <Question title="4" text={template.question4} />
-        <div className="self-eval-rating-grid paper-checkbox-grid">
-          {ratings.map((item) => <label key={item.value} className="self-eval-radio paper-checkbox"><input type="radio" disabled /> {item.label}</label>)}
+        <Question title="4" text={template.question4 || 'How would you evaluate your overall performance considering performance outputs and work behaviors during this period in review?'} />
+        <div className="paper-checkbox-grid self-eval-preview-rating-list">
+          {ratings.map((item) => <span key={item.value}><i aria-hidden="true" />{item.label}</span>)}
         </div>
         <PreviewBox label="Please explain your basis for the rating." />
-        <Question title="5" text={template.question5} />
+        <Question title="5" text={template.question5 || 'How can you further contribute your talents, knowledge, and skills to the organization to help improve its overall performance?'} />
         <PreviewBox />
+        {(questionDefinition.sections || []).length > 0 && (
+          <div className="self-eval-preview-supplemental">
+            <strong>Additional questionnaire items</strong>
+            <DynamicQuestionnaireRenderer definition={questionDefinition} answers={{}} disabled preview />
+          </div>
+        )}
       </div>
 
       <div className="self-eval-section paper-section">
         <h3>Part II - PERFORMANCE OUTPUTS APPRAISAL</h3>
         <p className="self-eval-helper">Degree of Achievement of Mutually Agreed Work Goals</p>
-        <PreviewTable columns={['Goals', 'Weight', 'Actual Accomplishment', 'Standard Met or Rating', 'Weighted Rating']} rows={blankRows} />
+        <PreviewTable columns={['Goals', 'Weight', 'Actual Accomplishment', 'Standard Met / Rating', 'Weighted Rating']} rows={blankRows} />
         <div className="self-eval-total">Total Weighted Rating for the Performance Outputs <strong>Auto-computed</strong></div>
       </div>
 
@@ -1742,30 +1900,31 @@ function AdminSelfEvaluationTablePreview({ title, template, formCode, audienceLa
       </div>
 
       <div className="self-eval-section paper-section">
-        <h3>Overall Rating Computation</h3>
+        <h3>Overall Rating</h3>
         <PreviewKeyValueTable rows={[
           ['Score for Performance Outputs x 0.70', 'Auto-computed'],
           ['Score for Performance Factors x 0.30', 'Input / available score'],
           ['Overall Rating', 'Auto-computed'],
           ['Level of Performance', 'Auto-identified'],
         ]} />
+      </div>
+
+      <div className="self-eval-section paper-section self-eval-reference-page-break">
+        <h3>Level of Performance</h3>
         <PreviewKeyValueTable rows={[
           ['Exceptional', '4.51 to 5.00'],
           ['Exceeds Expectations', '3.76 to 4.50'],
           ['Meets Expectations', '3.01 to 3.75'],
           ['Meets Most Expectations', '2.26 to 3.00'],
           ['Does Not Meet Expectations', '2.25 or lower'],
-        ]} title="Level of Performance" />
-      </div>
-
-      <div className="self-eval-section paper-section">
+        ]} />
         <h3>Appraisee's Comments on the Appraisal</h3>
         <PreviewBox />
-      </div>
-
-      <div className="self-eval-section paper-section">
-        <h3>Confirmation</h3>
         <p className="self-eval-helper">We have jointly reviewed and discussed this performance appraisal.</p>
+        <div className="self-eval-approval-summary">
+          <strong>Required approvals</strong>
+          <span>{(definition?.approvalRequirements?.reviewers || ['employee', 'program_head', 'dean']).map((reviewer) => String(reviewer).replaceAll('_', ' ')).join(' → ')}</span>
+        </div>
         <PreviewTable columns={['Printed Name and Signature of Appraisee', 'Printed Name and Signature of Appraiser', 'Printed Name and Signature of Reviewer', 'Date']} rows={[0]} />
       </div>
 
@@ -1779,6 +1938,22 @@ function AdminSelfEvaluationTablePreview({ title, template, formCode, audienceLa
         <PreviewTable columns={['Signature of Appraiser', 'Signature of Reviewer', 'Date']} rows={[0]} />
       </div>
     </div>
+  );
+}
+
+function OfficialSelfEvaluationHeader({ formCode, audienceLabel }) {
+  return (
+    <header className="self-eval-paper-head">
+      <strong className="self-eval-form-code">{formCode || 'PMAS FORM 3b'}</strong>
+      <div className="self-eval-school-brand">
+        <img src="/assets/images/ndmc-seal.png" alt="Notre Dame of Midsayap College seal" />
+        <div>
+          <h1>NOTRE DAME OF MIDSAYAP COLLEGE</h1>
+          <h2>Performance Appraisal Sheet</h2>
+          <p>({audienceLabel || 'Faculty'})</p>
+        </div>
+      </div>
+    </header>
   );
 }
 
@@ -1844,7 +2019,7 @@ function EditableTable({ columns, rows, render, onAdd, disabled }) {
           <tbody>{rows.map((row, index) => <tr key={index}>{render(row, index)}</tr>)}</tbody>
         </table>
       </div>
-      {!disabled && <button type="button" className="evaluation-nav-btn secondary self-eval-add-row" onClick={onAdd}><Plus size={15} /> Add Row</button>}
+      {!disabled && typeof onAdd === 'function' && <button type="button" className="evaluation-nav-btn secondary self-eval-add-row" onClick={onAdd}><Plus size={15} /> Add Row</button>}
     </div>
   );
 }

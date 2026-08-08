@@ -5,6 +5,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 
 const USER_CODE_START = 2025001;
+const STANDARD_TEMPORARY_PASSWORD = 'APPRAISIA_NDMC';
 
 function valid_user_code(mixed $value): bool
 {
@@ -109,38 +110,4 @@ function send_account_link(PDO $db, array $user, string $type): bool
         . '<p><a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . ($isReset ? 'Reset password' : 'Verify email') . '</a></p>'
         . '<p>This link expires ' . ($isReset ? 'in 30 minutes.' : 'in 24 hours.') . '</p>';
     return resend_email((string) $user['email'], $subject, $html);
-}
-
-function send_email_verification_code(PDO $db, array $user): bool
-{
-    $code = (string) random_int(100000, 999999);
-    $hash = hash('sha256', (int) $user['id'] . ':' . $code);
-    $db->prepare("UPDATE auth_tokens SET consumed_at=NOW() WHERE user_id=? AND token_type='email_verification' AND consumed_at IS NULL")->execute([(int) $user['id']]);
-    $db->prepare("INSERT INTO auth_tokens (user_id,token_type,token_hash,expires_at) VALUES (?,'email_verification',?,DATE_ADD(NOW(),INTERVAL 10 MINUTE))")
-        ->execute([(int) $user['id'], $hash]);
-    $safeName = htmlspecialchars((string) $user['full_name'], ENT_QUOTES, 'UTF-8');
-    $html = '<p>Hello ' . $safeName . ',</p><p>Your APPRAISIA email verification code is:</p>'
-        . '<p style="font-size:28px;font-weight:700;letter-spacing:8px">' . $code . '</p>'
-        . '<p>This code expires in 10 minutes. Do not share it with anyone.</p>';
-    return resend_email((string) $user['email'], 'Your APPRAISIA verification code', $html);
-}
-
-function consume_email_verification_code(PDO $db, int $userId, string $code): bool
-{
-    if (preg_match('/^[0-9]{6}$/', $code) !== 1) return false;
-    $hash = hash('sha256', $userId . ':' . $code);
-    $db->beginTransaction();
-    try {
-        $stmt = $db->prepare("SELECT id FROM auth_tokens WHERE user_id=? AND token_type='email_verification' AND token_hash=? AND consumed_at IS NULL AND expires_at>NOW() FOR UPDATE");
-        $stmt->execute([$userId, $hash]);
-        $tokenId = $stmt->fetchColumn();
-        if (!$tokenId) { $db->rollBack(); return false; }
-        $db->prepare('UPDATE auth_tokens SET consumed_at=NOW() WHERE id=?')->execute([$tokenId]);
-        $db->prepare('UPDATE users SET email_verified_at=NOW() WHERE id=?')->execute([$userId]);
-        $db->commit();
-        return true;
-    } catch (Throwable $e) {
-        if ($db->inTransaction()) $db->rollBack();
-        throw $e;
-    }
 }

@@ -1,4 +1,4 @@
-<?php
+p<?php
 declare(strict_types=1);
 require_once __DIR__ . '/../includes/dean_data.php';
 require_once __DIR__ . '/../includes/teacher_data.php';

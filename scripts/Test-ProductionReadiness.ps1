@@ -4,7 +4,16 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $SiteRoot) { $SiteRoot = Join-Path $root 'release/site' }
 
-$required = @('index.html', '.htaccess', 'api/health.php', 'includes/config.php', 'includes/credentials.php', 'vendor/autoload.php')
+$required = @(
+    'index.html',
+    '.htaccess',
+    'api/health.php',
+    'includes/config.php',
+    'includes/credentials.php',
+    'vendor/autoload.php',
+    'bin/Check-Database.php',
+    'bin/Bootstrap-TestAccounts.php'
+)
 foreach ($item in $required) {
     if (-not (Test-Path (Join-Path $SiteRoot $item))) { throw "Missing production file: $item" }
 }

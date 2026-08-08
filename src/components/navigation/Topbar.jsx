@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, BadgeCheck, Bell, Camera, CheckCheck, ChevronDown, Clock, Dot, Eye, EyeOff, FileText, Info, KeyRound, Loader2, LogOut, Mail, Megaphone, Moon, RotateCcw, Save, Search, ShieldCheck, Sun, Trash2, User, X } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Bell, Camera, CheckCheck, ChevronDown, Clock, Dot, Eye, EyeOff, FileText, KeyRound, Loader2, LogOut, Mail, Megaphone, Moon, RotateCcw, Save, Search, ShieldCheck, Sun, Trash2, User, X } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { assetUrl } from '../../data/apiBase.js';
 import { confirmLogout, confirmSaveChanges } from '../common/ConfirmationModal.jsx';
-import ModernDatePicker from '../common/ModernDatePicker.jsx';
+import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
 
 function notificationsUrl() {
   return '/api/notifications.php';
@@ -83,17 +83,22 @@ const notificationFilters = [
 ];
 
 export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = false, onToggleDark, onResetDark, onLogout }) {
+  const { selectedPeriodId } = useEvaluationPeriod();
   const { section = role.nav[0].key } = useParams();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const recentSearchKey = `dipascaf-recent-searches-${role.key}`;
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem(recentSearchKey) || '[]'); } catch { return []; }
+  });
   const [notifications, setNotifications] = useState([]);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountClosing, setAccountClosing] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState(role.user.name || '');
-  const [profileEmail, setProfileEmail] = useState(role.user.email || '');
-  const [profileBirthDate, setProfileBirthDate] = useState(role.user.birthDate || '');
+  const [profileEmail, setProfileEmail] = useState(String(role.user.email || '').toLowerCase().endsWith('@pmas.local') ? '' : (role.user.email || ''));
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -106,8 +111,6 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
   const [removeProfileImage, setRemoveProfileImage] = useState(false);
   const [profileMessage, setProfileMessage] = useState(null);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [verificationBusy, setVerificationBusy] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
 
   useEffect(() => {
@@ -137,16 +140,21 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
   const profileFileInputRef = useRef(null);
   const active = useMemo(() => role.nav.find((item) => item.key === section) || role.nav[0], [role, section]);
   const matches = role.nav.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()));
+  const suggestedSearches = role.key === 'admin' ? ['Evaluation Assignments', 'Evaluation Monitoring', 'Reports', 'People Management'] : role.nav.slice(0, 4).map(item => item.label);
+  const searchSuggestions = query.trim() ? matches : [
+    ...recentSearches.map(label => role.nav.find(item => item.label === label)).filter(Boolean),
+    ...suggestedSearches.map(label => role.nav.find(item => item.label === label)).filter(Boolean),
+  ].filter((item,index,items)=>items.findIndex(candidate=>candidate.key===item.key)===index).slice(0,6);
   const latestNotificationId = Number(notifications[0]?.id || 0);
   const avatarSrc = profileImageSrc(role.user.profileImage, profileImageVersion);
-  const avatarLabel = role.user.name || role.user.email || role.portal || 'User';
+  const avatarLabel = role.user.name || role.portal || 'User';
   const roleLabel = formatRole(role.user.databaseRole || role.key);
-  const savedProfileEmail = role.user.email || '';
-  const emailChanged = profileEmail.trim().toLowerCase() !== savedProfileEmail.trim().toLowerCase();
-  const displayedEmailVerified = Boolean(role.user.emailVerified) && !emailChanged;
   const isVpaaAccount = role.key === 'vpaa' || String(role.user.roleKey || role.user.databaseRole || '').toLowerCase() === 'vpaa';
   const profileDepartment = isVpaaAccount ? 'VPAA' : (role.user.department || 'Unassigned');
-  const profileProgram = role.user.program || 'Unassigned';
+  const [periodProfilePrograms, setPeriodProfilePrograms] = useState([]);
+  const profileProgram = periodProfilePrograms.length
+    ? periodProfilePrograms.map((program) => program.code).join(', ')
+    : (role.user.program || 'Unassigned');
   const passwordScore = [
     newPassword.length >= 8,
     /[A-Z]/.test(newPassword),
@@ -158,6 +166,22 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
     ? passwordScore >= 5 ? 'Strong' : passwordScore >= 3 ? 'Good' : 'Weak'
     : 'Not set';
   const passwordInputType = showPasswords ? 'text' : 'password';
+
+  useEffect(() => {
+    if (role.key !== 'program_head' || !selectedPeriodId) {
+      setPeriodProfilePrograms([]);
+      return;
+    }
+    let active = true;
+    apiFetch(`/api/dashboard.php?role=program_head&period_id=${encodeURIComponent(selectedPeriodId)}`)
+      .then((payload) => {
+        if (active && payload.ok) setPeriodProfilePrograms(payload.data?.programs || []);
+      })
+      .catch(() => {
+        if (active) setPeriodProfilePrograms([]);
+      });
+    return () => { active = false; };
+  }, [role.key, selectedPeriodId]);
 
   useEffect(() => {
     function syncNotificationSettings() {
@@ -372,7 +396,14 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
 
   function submitSearch(event) {
     event.preventDefault();
-    if (matches[0]) navigate(`${role.basePath}/${matches[0].key}`);
+    if (matches[0]) selectSearchResult(matches[0]);
+  }
+
+  function selectSearchResult(item) {
+    const next=[item.label,...recentSearches.filter(label=>label!==item.label)].slice(0,5);
+    setRecentSearches(next);
+    window.localStorage.setItem(recentSearchKey,JSON.stringify(next));
+    setQuery(''); setSearchFocused(false); navigate(`${role.basePath}/${item.key}`);
   }
 
   function openProfile() {
@@ -413,8 +444,7 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
 
   function resetProfileChanges() {
     setProfileName(role.user.name || '');
-    setProfileEmail(role.user.email || '');
-    setProfileBirthDate(role.user.birthDate || '');
+    setProfileEmail(String(role.user.email || '').toLowerCase().endsWith('@pmas.local') ? '' : (role.user.email || ''));
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
@@ -424,7 +454,6 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
     setRemoveProfileImage(false);
     setProfilePreview(profileImageSrc(role.user.profileImage, profileImageVersion));
     setProfileMessage(null);
-    setVerificationCode('');
     if (profileFileInputRef.current) {
       profileFileInputRef.current.value = '';
     }
@@ -439,51 +468,9 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
     }
   }
 
-  async function sendProfileVerificationCode(event) {
-    event.preventDefault();
-    if (verificationBusy) return;
-    setVerificationBusy(true);
-    setProfileMessage(null);
-    try {
-      const payload = await apiFetch('/api/auth.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send-verification-code' }),
-      });
-      if (payload.verified) onUserUpdate?.({ emailVerified: true });
-      setProfileMessage({ type: 'success', text: payload.message });
-    } catch (error) {
-      setProfileMessage({ type: 'error', text: error.message || 'Unable to send the verification code.' });
-    } finally {
-      setVerificationBusy(false);
-    }
-  }
-
-  async function verifyProfileEmail(event) {
-    event.preventDefault();
-    if (!/^\d{6}$/.test(verificationCode) || verificationBusy) return;
-    setVerificationBusy(true);
-    setProfileMessage(null);
-    try {
-      const payload = await apiFetch('/api/auth.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify-email-code', verification_code: verificationCode }),
-      });
-      onUserUpdate?.(payload.user || { emailVerified: true });
-      setVerificationCode('');
-      setProfileMessage({ type: 'success', text: 'Email verified successfully. The administrator account record has been updated.' });
-    } catch (error) {
-      setProfileMessage({ type: 'error', text: error.message || 'Unable to verify this email address.' });
-    } finally {
-      setVerificationBusy(false);
-    }
-  }
-
   function validateProfile() {
     if (!profileName.trim()) return 'Full name is required.';
-    if (!/^\S+@\S+\.\S+$/.test(profileEmail.trim())) return 'Enter a valid email address.';
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(profileBirthDate) || profileBirthDate > new Date().toISOString().slice(0, 10)) return 'Enter a valid birth date that is not in the future.';
+    if (profileEmail.trim() && !/^[^\s@]+@gmail\.com$/i.test(profileEmail.trim())) return 'Enter a valid Gmail address ending in @gmail.com, or leave it blank.';
     if (newPassword || confirmPassword || currentPassword) {
       if (!currentPassword) return 'Current password is required to change your password.';
       if (!newPassword) return 'Enter a new password.';
@@ -512,7 +499,6 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
       const formData = new FormData();
       formData.append('full_name', profileName.trim());
       formData.append('email', profileEmail.trim().toLowerCase());
-      formData.append('birth_date', profileBirthDate);
       if (currentPassword) formData.append('current_password', currentPassword);
       if (newPassword) formData.append('new_password', newPassword);
       if (confirmPassword) formData.append('confirm_password', confirmPassword);
@@ -528,8 +514,6 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
         const nextImageVersion = Date.now();
         setProfileImageVersion(nextImageVersion);
         onUserUpdate?.(payload.user);
-        setProfileEmail(payload.user.email || profileEmail.trim().toLowerCase());
-        setProfileBirthDate(payload.user.birthDate || profileBirthDate);
         setProfilePreview(profileImageSrc(payload.user.profileImage, nextImageVersion));
       }
       setCurrentPassword('');
@@ -551,7 +535,7 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
         <div className="box-title">
           <div>
             <h2>{avatarLabel}</h2>
-            <span>{role.user.email}</span>
+            <span>{role.user.userCode ? `Username ${role.user.userCode}` : roleLabel}</span>
           </div>
           <button type="button" className="modal-icon-close" onClick={closeProfile} aria-label="Close profile"><X size={18} /></button>
         </div>
@@ -580,14 +564,9 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
               Full Name
               <input value={profileName} onChange={(event) => setProfileName(event.target.value)} required />
             </label>
-            <label className={`profile-email-field ${emailChanged ? 'has-email-change' : ''}`}>
-              <span className="profile-email-label">Email Address <span className={`people-email-verification ${displayedEmailVerified ? 'is-verified' : 'is-unverified'}`}>{displayedEmailVerified ? <><BadgeCheck size={13} /> Verified</> : emailChanged ? <><Info size={13} /> Save to Verify</> : <><Info size={13} /> Not Verified</>}</span></span>
-              <span className="profile-email-input-wrap"><Mail size={17} /><input type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} autoComplete="email" required /></span>
-              {emailChanged && <small className="profile-email-change-note">Save your profile first. A new verification code will be sent to this address.</small>}
-              {!displayedEmailVerified && <div className="profile-email-verification-controls">
-                <button type="button" onClick={sendProfileVerificationCode} disabled={verificationBusy || emailChanged}>{verificationBusy ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />} Send Code</button>
-                <div><input aria-label="Profile email verification code" inputMode="numeric" maxLength="6" placeholder="6-digit code" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))} /><button type="button" onClick={verifyProfileEmail} disabled={verificationBusy || verificationCode.length !== 6}><BadgeCheck size={14} /> Verify</button></div>
-              </div>}
+            <label>
+              <span><Mail size={14} /> Gmail (Optional)</span>
+              <input type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} placeholder="name@gmail.com" autoComplete="email" />
             </label>
             <label>
               Role
@@ -598,12 +577,8 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
               <input value={profileDepartment} readOnly aria-readonly="true" />
             </label>
             <label>
-              Program
+              {periodProfilePrograms.length > 1 ? 'Programs for Selected Period' : 'Program'}
               <input value={profileProgram} readOnly aria-readonly="true" />
-            </label>
-            <label className="profile-birth-date-field">
-              Birth Date
-              <ModernDatePicker value={profileBirthDate} onChange={setProfileBirthDate} required />
             </label>
           </div>
           <div ref={passwordSectionRef} className={`profile-password-section ${passwordEditorOpen ? 'is-open' : ''}`}>
@@ -612,7 +587,7 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
             </button>
             {passwordEditorOpen && <div className="profile-password-editor">
               <div className="profile-section-title">
-                <strong>Change Password</strong>
+                <strong>Reset Password</strong>
                 <label className="profile-password-toggle">
                   <input type="checkbox" checked={showPasswords} onChange={(event) => setShowPasswords(event.target.checked)} />
                   {showPasswords ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -648,7 +623,7 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
         <h1>{active.label}</h1>
         <p className="admin-header-note">{role.note}</p>
       </div>
-      <form className="admin-search" onSubmit={submitSearch}>
+      <form className="admin-search" onSubmit={submitSearch} onBlur={(event)=>{if(!event.currentTarget.contains(event.relatedTarget))setSearchFocused(false)}}>
         <label htmlFor="top-search">Search dashboard section</label>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -656,9 +631,15 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
             id="top-search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            autoComplete="off"
             placeholder="Search sections, reports, evaluations..."
             className="pl-10"
           />
+          {searchFocused && <div className="top-search-suggestions" role="listbox" aria-label={query.trim()?'Search results':'Recent and suggested searches'}>
+            <span>{query.trim()?'Matching sections':recentSearches.length?'Recent and suggested':'Suggested searches'}</span>
+            {searchSuggestions.length ? searchSuggestions.map(item=><button key={item.key} type="button" role="option" onMouseDown={event=>event.preventDefault()} onClick={()=>selectSearchResult(item)}><Search size={14}/><span>{item.label}</span><ArrowRight size={14}/></button>) : <p>No dashboard sections match “{query}”.</p>}
+          </div>}
         </div>
       </form>
       <div className="admin-actions" aria-label="Dashboard actions">

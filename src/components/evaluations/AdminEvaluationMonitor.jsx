@@ -24,6 +24,10 @@ function statusBadge(status, value, title = '') {
     pending: 'badge-warning',
     overdue: 'badge-danger',
     submitted: 'badge-success',
+    approved: 'badge-success',
+    under_review: 'badge-info',
+    returned: 'badge-danger',
+    in_progress: 'badge-warning',
     reassigned: 'badge-warning',
     replaced: 'badge-warning',
     cancelled: 'badge-default',
@@ -35,6 +39,10 @@ function statusBadge(status, value, title = '') {
     pending: 'Pending',
     overdue: 'Overdue',
     submitted: 'Submitted',
+    approved: 'Approved',
+    under_review: 'Under Review',
+    returned: 'Returned for Revision',
+    in_progress: 'Draft',
     reassigned: 'Reassigned',
     replaced: 'Replaced',
     cancelled: 'Cancelled',
@@ -46,6 +54,34 @@ function statusBadge(status, value, title = '') {
       {value !== undefined ? `${labels[status] || status}: ${value}` : labels[status] || status}
     </span>
   );
+}
+
+function assignmentFormName(assignment = {}) {
+  if (assignment.type === 'self' || assignment.questionnaire_type === 'self') {
+    return 'Self-Evaluation';
+  }
+  const relationship = {
+    peer: 'Peer Evaluation',
+    program_head: 'Program Head Evaluation',
+    dean: 'Dean Evaluation',
+    vpaa: 'VPAA Evaluation',
+    self: 'Self-Evaluation',
+  }[assignment.type] || 'Performance Evaluation';
+  const form = assignment.questionnaire_type === 'admin' || assignment.type === 'vpaa'
+    ? 'PMAS Form A'
+    : 'PMAS Form B';
+  return `${form} – ${relationship}`;
+}
+
+function assignmentRoleLabel(role = '') {
+  return {
+    teacher: 'Peer Evaluator',
+    faculty: 'Faculty Member',
+    program_head: 'Program Head',
+    dean: 'Dean',
+    vpaa: 'VPAA',
+    self: 'Faculty Member',
+  }[role] || String(role).replaceAll('_', ' ');
 }
 
 function completionBar(pct) {
@@ -74,7 +110,9 @@ function RecommendationStatusBanner({ status, compact = false }) {
   const pending = Number(status.pending_count || 0);
   const submitted = Number(status.submitted_count || 0);
   const total = Number(status.total_assigned || 0);
-  const title = tone === 'final'
+  const title = total === 0
+    ? 'No evaluation assignments'
+    : tone === 'final'
     ? 'Final Recommendation'
     : tone === 'interim'
       ? `Interim Recommendation - ${pct}% complete`
@@ -89,7 +127,7 @@ function RecommendationStatusBanner({ status, compact = false }) {
       <div className="ai-rec-status-bar" aria-hidden="true">
         <span style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
       </div>
-      {tone !== 'final' && (
+      {tone !== 'final' && total > 0 && (
         <details className="ai-rec-pending-details">
           <summary>{pending} pending evaluator{pending === 1 ? '' : 's'} may change this recommendation</summary>
           {(status.pending_evaluators || []).length > 0 ? (
@@ -225,6 +263,7 @@ function SelfEvaluationSubmissionSection({ submission, onUpdated }) {
   const [busyAction, setBusyAction] = useState('');
   const [returnReason, setReturnReason] = useState('');
   const [returnOpen, setReturnOpen] = useState(false);
+  const [submissionOpen, setSubmissionOpen] = useState(false);
   const answers = submission?.answers || {};
   const statusLabel = selfEvalStatusLabel(submission?.status);
   const deanLabel = deanReviewStatusLabel(submission?.dean_review_status);
@@ -296,12 +335,22 @@ function SelfEvaluationSubmissionSection({ submission, onUpdated }) {
   }
 
   return (
-    <div className="eval-monitor-section self-eval-submission-section">
+    <div className={`eval-monitor-section self-eval-submission-section ${submissionOpen ? 'is-open' : 'is-collapsed'}`}>
       <div className="eval-monitor-section-head">
-        <div>
-          <h4><ClipboardCheck size={16} /> Self Evaluation Submission</h4>
-          <span>Submitted After Dean Approval</span>
-        </div>
+        <button
+          type="button"
+          className="self-eval-submission-toggle"
+          aria-expanded={submissionOpen}
+          aria-controls="self-evaluation-submission-content"
+          onClick={() => setSubmissionOpen((open) => !open)}
+        >
+          <span className="self-eval-submission-toggle-icon"><ClipboardCheck size={17} /></span>
+          <span>
+            <strong>Self Evaluation Submission</strong>
+            <small>Submitted After Dean Approval</small>
+          </span>
+          <ChevronDown size={18} className="self-eval-submission-chevron" />
+        </button>
         <div className="self-eval-admin-actions">
           <button type="button" className="eval-monitor-btn ghost compact" onClick={markReviewed} disabled={!canMarkReviewed || busyAction === 'reviewed'}>
             {busyAction === 'reviewed' ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Mark as Reviewed
@@ -312,6 +361,8 @@ function SelfEvaluationSubmissionSection({ submission, onUpdated }) {
         </div>
       </div>
 
+      {submissionOpen && (
+      <div className="self-eval-submission-content" id="self-evaluation-submission-content">
       <div className="self-eval-admin-status-grid">
         <article><span>Status</span><strong className={`self-eval-admin-badge ${selfEvalBadgeClass(statusLabel)}`}>{statusLabel}</strong></article>
         <article><span>Dean Review Status</span><strong className={`self-eval-admin-badge ${selfEvalBadgeClass(deanLabel)}`}>{deanLabel}</strong></article>
@@ -405,6 +456,8 @@ function SelfEvaluationSubmissionSection({ submission, onUpdated }) {
           ))}
         </div>
       </details>
+      </div>
+      )}
     </div>
   );
 }
@@ -416,15 +469,18 @@ function FacultyDetailModal({ faculty, onClose }) {
   const onCloseRef = useRef(onClose);
   const safeFaculty = faculty || {};
   const avgScore = safeFaculty.average_score;
-  const strengths = safeFaculty.strengths || [];
-  const weaknesses = safeFaculty.weaknesses || [];
-  const assignments = safeFaculty.evaluator_assignments || [];
-  const insights = safeFaculty.ai_insights || [];
-  const interventions = safeFaculty.interventions || [];
-  const results = safeFaculty.category_results || [];
+  const strengths = Array.isArray(safeFaculty.strengths) ? safeFaculty.strengths : [];
+  const weaknesses = Array.isArray(safeFaculty.weaknesses) ? safeFaculty.weaknesses : [];
+  const assignments = Array.isArray(safeFaculty.evaluator_assignments)
+    ? safeFaculty.evaluator_assignments.filter((assignment) => assignment && typeof assignment === 'object')
+    : [];
+  const insights = Array.isArray(safeFaculty.ai_insights) ? safeFaculty.ai_insights : [];
+  const interventions = Array.isArray(safeFaculty.interventions) ? safeFaculty.interventions : [];
+  const results = Array.isArray(safeFaculty.category_results) ? safeFaculty.category_results : [];
   const [selfEvaluationSubmission, setSelfEvaluationSubmission] = useState(safeFaculty.self_evaluation_submission || null);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
+  const [categoryPage, setCategoryPage] = useState(0);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -501,6 +557,12 @@ function FacultyDetailModal({ faculty, onClose }) {
   }, [categoryRows, categoryFilter]);
 
   const selectedCategory = filteredCategoryResults[selectedCategoryIndex] || filteredCategoryResults[0] || null;
+  const categoryPageSize = 4;
+  const categoryPageCount = Math.max(1, Math.ceil(filteredCategoryResults.length / categoryPageSize));
+  const visibleCategoryResults = filteredCategoryResults.slice(
+    categoryPage * categoryPageSize,
+    (categoryPage + 1) * categoryPageSize,
+  );
   const visibleStrengths = useMemo(() => (
     filteredCategoryResults
       .filter((row) => Number(row.score || 0) >= 4)
@@ -527,6 +589,7 @@ function FacultyDetailModal({ faculty, onClose }) {
 
   useEffect(() => {
     setSelectedCategoryIndex(0);
+    setCategoryPage(0);
   }, [categoryFilter, faculty?.id]);
 
   useEffect(() => {
@@ -574,7 +637,7 @@ function FacultyDetailModal({ faculty, onClose }) {
               <div className="eval-monitor-section-head eval-monitor-category-toolbar">
                 <div>
                   <h4><BarChart3 size={16} /> Category Scores</h4>
-                  <span>Click a category to inspect details</span>
+                  <span>Four scores per page · select one to inspect details</span>
                 </div>
                 <label className="eval-monitor-category-filter">
                   <span>View by evaluator</span>
@@ -593,12 +656,14 @@ function FacultyDetailModal({ faculty, onClose }) {
                 </div>
               ) : (
                 <div className="eval-monitor-category-grid">
-                {filteredCategoryResults.map((r, i) => (
+                {visibleCategoryResults.map((r, i) => {
+                  const absoluteIndex = (categoryPage * categoryPageSize) + i;
+                  return (
                   <button
                     key={`${r.category}-${i}`}
                     type="button"
-                    className={`eval-monitor-category-card ${selectedCategoryIndex === i ? 'is-selected' : ''}`}
-                    onClick={() => setSelectedCategoryIndex(i)}
+                    className={`eval-monitor-category-card ${selectedCategoryIndex === absoluteIndex ? 'is-selected' : ''}`}
+                    onClick={() => setSelectedCategoryIndex(absoluteIndex)}
                   >
                     <div className="eval-monitor-category-head">
                       <strong>{r.category}</strong>
@@ -621,8 +686,36 @@ function FacultyDetailModal({ faculty, onClose }) {
                       <small className="eval-monitor-recommendation"><strong>Recommendation:</strong> {r.recommendation}</small>
                     )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
+              )}
+              {filteredCategoryResults.length > categoryPageSize && (
+                <div className="eval-monitor-category-pagination" aria-label="Category score pages">
+                  <button
+                    type="button"
+                    disabled={categoryPage === 0}
+                    onClick={() => {
+                      const nextPage = Math.max(0, categoryPage - 1);
+                      setCategoryPage(nextPage);
+                      setSelectedCategoryIndex(nextPage * categoryPageSize);
+                    }}
+                  >
+                    <ChevronLeft size={15} /> Previous
+                  </button>
+                  <span>Page {categoryPage + 1} of {categoryPageCount} · {filteredCategoryResults.length} scores</span>
+                  <button
+                    type="button"
+                    disabled={categoryPage >= categoryPageCount - 1}
+                    onClick={() => {
+                      const nextPage = Math.min(categoryPageCount - 1, categoryPage + 1);
+                      setCategoryPage(nextPage);
+                      setSelectedCategoryIndex(nextPage * categoryPageSize);
+                    }}
+                  >
+                    Next <ChevronRight size={15} />
+                  </button>
+                </div>
               )}
               {selectedCategory && (
                 <div className="eval-monitor-category-detail">
@@ -688,39 +781,60 @@ function FacultyDetailModal({ faculty, onClose }) {
             )}
           </div>
 
-          {/* Evaluator Assignments */}
-          {assignments.length > 0 && (
-            <div className="eval-monitor-section">
-              <h4><Users size={16} /> Evaluator Assignments</h4>
-              <table className="eval-monitor-table">
-                <thead>
-                  <tr>
-                    <th>Evaluator</th>
-                    <th>Role</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Submitted</th>
-                    <th>Deadline</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assignments.map((a, i) => (
-                    <tr key={i}>
-                      <td>{a.evaluator_name}</td>
-                      <td>{a.evaluator_role}</td>
-                      <td>{a.type}</td>
-                      <td>
-                        {statusBadge(a.status, undefined, a.status_note)}
-                        {a.status_note && <small className="eval-monitor-status-note">{a.status_note}</small>}
-                      </td>
-                      <td>{formatDate(a.submitted_at)}</td>
-                      <td>{formatDate(a.deadline)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Evaluator Assignments — directly below Strengths and Areas for Improvement. */}
+          <div className="eval-monitor-section eval-assignment-section" id="admin-evaluator-assignments">
+            <div className="eval-assignment-heading">
+              <div>
+                <span className="eval-assignment-heading-icon"><Users size={18} /></span>
+                <div>
+                  <h4>Evaluator Assignments</h4>
+                  <p>Track each required evaluation and its current submission status.</p>
+                </div>
+              </div>
+              <span className="eval-assignment-count">{assignments.length} assignment{assignments.length === 1 ? '' : 's'}</span>
             </div>
-          )}
+            <div className="eval-assignment-table-wrap">
+              {assignments.length > 0 ? (
+                <table className="eval-monitor-table eval-assignment-table">
+                  <thead>
+                    <tr>
+                      <th>Evaluator</th>
+                      <th>Role</th>
+                      <th>Evaluation Form</th>
+                      <th>Status</th>
+                      <th>Submitted</th>
+                      <th>Deadline</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assignments.map((a, i) => (
+                      <tr key={`${a.id || a.evaluator_name}-${i}`}>
+                        <td data-label="Evaluator"><strong className="eval-assignment-evaluator">{a.evaluator_name || 'To be assigned'}</strong></td>
+                        <td data-label="Role"><span className="eval-assignment-role">{a.type === 'self' ? 'Faculty Member (Self)' : assignmentRoleLabel(a.evaluator_role)}</span></td>
+                        <td data-label="Evaluation Form"><strong className="eval-assignment-form-name">{assignmentFormName(a)}</strong></td>
+                        <td data-label="Status">
+                          <div className="eval-assignment-status-cell">
+                            {statusBadge(a.status, undefined, a.status_note)}
+                            {a.status_note && <small className="eval-monitor-status-note">{a.status_note}</small>}
+                          </div>
+                        </td>
+                        <td data-label="Submitted">{formatDate(a.submitted_at)}</td>
+                        <td data-label="Deadline">{formatDate(a.deadline)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="eval-assignment-empty">
+                  <ClipboardCheck size={24} />
+                  <div>
+                    <strong>No assignments found for this period</strong>
+                    <span>Select another evaluation period or create the required evaluator assignments.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* AI Insights */}
           {insights.length > 0 && (
@@ -755,6 +869,7 @@ function FacultyDetailModal({ faculty, onClose }) {
               ))}
             </div>
           )}
+
         </div>
       </div>
     </div>
@@ -764,8 +879,20 @@ function FacultyDetailModal({ faculty, onClose }) {
 }
 
 // ─── Main Component ──────────────────────────────────────────────────
-export default function AdminEvaluationMonitor() {
+export default function AdminEvaluationMonitor({ initialView = 'groups' }) {
   const location = useLocation();
+  const [workspaceMode] = useState(initialView);
+  const [viewerRole, setViewerRole] = useState('');
+  const [rosterRows, setRosterRows] = useState([]);
+  const [rosterSummary, setRosterSummary] = useState(null);
+  const [rosterOptions, setRosterOptions] = useState({ departments: [], programs: [], groups: [], roles: [] });
+  const [rosterFilters, setRosterFilters] = useState({
+    departmentId: '', programId: '', groupKey: '', role: '', status: '', name: '',
+  });
+  const [nonProgramDepartmentViews, setNonProgramDepartmentViews] = useState({});
+  const [programFilterId, setProgramFilterId] = useState('');
+  const [departmentFacultyView, setDepartmentFacultyView] = useState(false);
+  const [departmentUnassignedFaculty, setDepartmentUnassignedFaculty] = useState([]);
   // Navigation state
   const [view, setView] = useState('departments'); // departments | programs | faculty
   const [selectedDept, setSelectedDept] = useState(null);
@@ -793,9 +920,37 @@ export default function AdminEvaluationMonitor() {
   const [manualRefreshing, setManualRefreshing] = useState(false);
   const [activeFaculty, setActiveFaculty] = useState(null);
   const { selectedPeriodId, selectedPeriod } = useEvaluationPeriod();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(location.search).get('department') || '');
   const consumedFocusRef = useRef('');
   const loadedPeriodRef = useRef(null);
+
+  const loadRoster = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ scope: 'monitor_roster' });
+      if (selectedPeriodId) params.set('period_id', selectedPeriodId);
+      if (rosterFilters.departmentId) params.set('department_id', rosterFilters.departmentId);
+      if (rosterFilters.programId) params.set('program_id', rosterFilters.programId);
+      if (rosterFilters.groupKey) params.set('group_key', rosterFilters.groupKey);
+      if (rosterFilters.role) params.set('role', rosterFilters.role);
+      if (rosterFilters.status) params.set('evaluation_status', rosterFilters.status);
+      if (rosterFilters.name.trim()) params.set('faculty_name', rosterFilters.name.trim());
+      const payload = await apiFetch(`${API_BASE}?${params.toString()}`);
+      if (payload.ok) {
+        setViewerRole(payload.viewer_role || '');
+        setRosterRows(Array.isArray(payload.data) ? payload.data : []);
+        setRosterSummary(payload.summary || null);
+        setRosterOptions(payload.filters || { departments: [], programs: [], groups: [], roles: [] });
+        return payload;
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      if (!background) setLoading(false);
+    }
+    return null;
+  }, [rosterFilters, selectedPeriodId]);
 
   // ─── Load departments ──────────────────────────────────────────────
   const loadDepartments = useCallback(async (background = false) => {
@@ -845,6 +1000,31 @@ export default function AdminEvaluationMonitor() {
     return null;
   }, [selectedPeriodId]);
 
+  const loadDepartmentUnassignedFaculty = useCallback(async (deptId, background = false) => {
+    if (!background) setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({
+        scope: 'monitor_roster',
+        department_id: String(deptId),
+        role: 'teacher',
+      });
+      if (selectedPeriodId) params.set('period_id', selectedPeriodId);
+      const payload = await apiFetch(`${API_BASE}?${params.toString()}`);
+      if (payload.ok) {
+        setDepartmentUnassignedFaculty((Array.isArray(payload.data) ? payload.data : []).filter(
+          (person) => person.group_type !== 'program',
+        ));
+        return payload;
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      if (!background) setLoading(false);
+    }
+    return null;
+  }, [selectedPeriodId]);
+
   // ─── Load faculty ──────────────────────────────────────────────────
   const loadFaculty = useCallback(async (progId, background = false) => {
     if (!background) setLoading(true);
@@ -873,17 +1053,19 @@ export default function AdminEvaluationMonitor() {
   }, [selectedPeriodId]);
 
   const refreshCurrentView = useCallback(async (background = true) => {
+    if (workspaceMode === 'roster') return loadRoster(background);
     if (view === 'faculty' && selectedProgram?.id) {
       return loadFaculty(selectedProgram.id, background);
     }
     if (view === 'programs' && selectedDept?.id) {
+      if (departmentFacultyView) return loadDepartmentUnassignedFaculty(selectedDept.id, background);
       return loadPrograms(selectedDept.id, background);
     }
     return loadDepartments(background);
-  }, [loadDepartments, loadFaculty, loadPrograms, selectedDept?.id, selectedProgram?.id, view]);
+  }, [departmentFacultyView, loadDepartmentUnassignedFaculty, loadDepartments, loadFaculty, loadPrograms, loadRoster, selectedDept?.id, selectedProgram?.id, view, workspaceMode]);
 
-  const { refreshing: liveRefreshing } = useLiveRefresh(refreshCurrentView, [selectedPeriodId, view, selectedDept?.id, selectedProgram?.id], {
-    intervalMs: 6000,
+  useLiveRefresh(refreshCurrentView, [selectedPeriodId, view, selectedDept?.id, selectedProgram?.id, workspaceMode, rosterFilters], {
+    intervalMs: 30000,
   });
 
   const handleManualRefresh = useCallback(async () => {
@@ -891,7 +1073,7 @@ export default function AdminEvaluationMonitor() {
     setRefreshMessage('');
     setRefreshError('');
     try {
-      const payload = await refreshCurrentView(false);
+      const payload = await refreshCurrentView(true);
       if (!payload) {
         throw new Error('Refresh failed');
       }
@@ -908,11 +1090,12 @@ export default function AdminEvaluationMonitor() {
 
   useEffect(() => {
     const periodKey = selectedPeriodId || '';
-    if (loadedPeriodRef.current === periodKey) return;
-    loadedPeriodRef.current = periodKey;
-    setSearchQuery('');
+    const loadKey = `${periodKey}|${workspaceMode}|${JSON.stringify(rosterFilters)}`;
+    if (loadedPeriodRef.current === loadKey) return;
+    loadedPeriodRef.current = loadKey;
+    if (workspaceMode !== 'roster') setSearchQuery('');
     refreshCurrentView(false);
-  }, [selectedPeriodId, refreshCurrentView]);
+  }, [selectedPeriodId, refreshCurrentView, rosterFilters, workspaceMode]);
 
   useEffect(() => {
     const focus = location.state?.source === 'department-profile' ? location.state : null;
@@ -1073,6 +1256,9 @@ export default function AdminEvaluationMonitor() {
     setSelectedDept(dept);
     setView('programs');
     setPrograms([]);
+    setProgramFilterId('');
+    setDepartmentFacultyView(false);
+    setDepartmentUnassignedFaculty([]);
     loadPrograms(dept.id);
   }
 
@@ -1109,15 +1295,18 @@ export default function AdminEvaluationMonitor() {
   }, [departments, searchQuery]);
 
   const filteredPrograms = useMemo(() => {
-    if (!searchQuery) return programs;
+    const programFiltered = programFilterId
+      ? programs.filter((program) => String(program.id) === String(programFilterId))
+      : programs;
+    if (!searchQuery) return programFiltered;
     const q = searchQuery.toLowerCase();
-    return programs.filter(
+    return programFiltered.filter(
       (p) =>
         (p.program_name || '').toLowerCase().includes(q) ||
         (p.program_code || '').toLowerCase().includes(q) ||
         (p.program_head_name || '').toLowerCase().includes(q)
     );
-  }, [programs, searchQuery]);
+  }, [programFilterId, programs, searchQuery]);
 
   const filteredFaculty = useMemo(() => {
     if (!searchQuery) return facultyMembers;
@@ -1132,23 +1321,23 @@ export default function AdminEvaluationMonitor() {
 
   // ─── Summary stats ─────────────────────────────────────────────────
   const deptStats = useMemo(() => {
-    if (departments.length === 0) return null;
+    if (filteredDepartments.length === 0) return null;
     return {
-      total: departments.length,
-      faculty: departments.reduce((s, d) => s + d.total_faculty, 0),
-      completed: departments.reduce((s, d) => s + d.completed, 0),
-      pending: departments.reduce((s, d) => s + d.pending, 0),
-      overdue: departments.reduce((s, d) => s + d.overdue, 0),
+      total: filteredDepartments.length,
+      faculty: filteredDepartments.reduce((s, d) => s + d.total_faculty, 0),
+      completed: filteredDepartments.reduce((s, d) => s + d.completed, 0),
+      pending: filteredDepartments.reduce((s, d) => s + d.pending, 0),
+      overdue: filteredDepartments.reduce((s, d) => s + d.overdue, 0),
       pct:
-        departments.reduce((s, d) => s + d.total_assignments, 0) > 0
+        filteredDepartments.reduce((s, d) => s + d.total_assignments, 0) > 0
           ? Math.round(
-              (departments.reduce((s, d) => s + d.completed, 0) /
-                departments.reduce((s, d) => s + d.total_assignments, 0)) *
+              (filteredDepartments.reduce((s, d) => s + d.completed, 0) /
+                filteredDepartments.reduce((s, d) => s + d.total_assignments, 0)) *
                 100
             )
           : 0,
     };
-  }, [departments]);
+  }, [filteredDepartments]);
 
   // ─── Department-level view ─────────────────────────────────────────
   function renderDepartments() {
@@ -1157,17 +1346,16 @@ export default function AdminEvaluationMonitor() {
         {/* Hero Section */}
         <div className="eval-monitor-hero">
           <div>
-            <p className="eyebrow">Admin Evaluation Monitor</p>
+            <p className="eyebrow">Academic Evaluation Monitor</p>
             <h2>Hierarchical Evaluation Monitoring</h2>
             <p>
-              Centralized overview of all departments. Drill down to view programs, faculty,
+              Review authorized departments, then drill down to programs, faculty,
               and detailed evaluation results.
             </p>
             {selectedPeriod && (
               <div className="eval-monitor-period-note">
                 Showing data for <strong>{selectedPeriod.period_name}</strong>
                 {selectedPeriod.school_year ? ` (${selectedPeriod.school_year})` : ''}
-                {selectedPeriod.semester ? ` - ${selectedPeriod.semester}` : ''}
               </div>
             )}
           </div>
@@ -1225,14 +1413,14 @@ export default function AdminEvaluationMonitor() {
             <div className="eval-monitor-search">
               <Search size={16} />
               <input
-                type="search"
+                type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search departments..."
               />
+              {searchQuery && <button type="button" className="eval-monitor-search-clear" onClick={() => setSearchQuery('')} aria-label="Clear department search"><X size={15} /></button>}
             </div>
             <div className="eval-monitor-toolbar-actions">
-              {liveRefreshing && <span className="live-refresh-indicator compact">Syncing...</span>}
               {refreshMessage && <span className="live-refresh-indicator compact success">{refreshMessage}</span>}
               {refreshError && <span className="live-refresh-indicator compact error">{refreshError}</span>}
               <PeriodSelector compact className="eval-monitor-period-filter" showRefresh={false} />
@@ -1342,6 +1530,12 @@ export default function AdminEvaluationMonitor() {
 
   // ─── Program-level view ────────────────────────────────────────────
   function renderPrograms() {
+    const facultySearch = searchQuery.trim().toLowerCase();
+    const visibleDepartmentUnassignedFaculty = facultySearch
+      ? departmentUnassignedFaculty.filter((person) => (
+        `${person.full_name || ''} ${person.email || ''} ${person.position_title || ''}`.toLowerCase().includes(facultySearch)
+      ))
+      : departmentUnassignedFaculty;
     return (
       <>
         <div className="eval-monitor-breadcrumb">
@@ -1380,22 +1574,107 @@ export default function AdminEvaluationMonitor() {
             <div className="eval-monitor-search">
               <Search size={16} />
               <input
-                type="search"
+                type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search programs..."
+                placeholder={departmentFacultyView ? 'Search faculty...' : 'Search programs...'}
               />
+              {searchQuery && <button type="button" className="eval-monitor-search-clear" onClick={() => setSearchQuery('')} aria-label="Clear program search"><X size={15} /></button>}
             </div>
             <div className="eval-monitor-toolbar-actions">
-              {liveRefreshing && <span className="live-refresh-indicator compact">Syncing...</span>}
-              <button type="button" className="eval-monitor-btn ghost" onClick={() => loadPrograms(selectedDept.id, false)}>
+              <label className="eval-monitor-inline-program-filter">
+                <span>Program</span>
+                <select
+                  value={programFilterId}
+                  disabled={departmentFacultyView}
+                  onChange={(event) => setProgramFilterId(event.target.value)}
+                >
+                  <option value="">All programs</option>
+                  {programs.map((program) => (
+                    <option key={program.id} value={program.id}>
+                      {program.program_code} — {program.program_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="eval-monitor-btn ghost" onClick={() => (
+                departmentFacultyView
+                  ? loadDepartmentUnassignedFaculty(selectedDept.id, true)
+                  : loadPrograms(selectedDept.id, true)
+              )}>
                 <RefreshCw size={16} /> Refresh
+              </button>
+              <button
+                type="button"
+                className={`eval-monitor-btn ${departmentFacultyView ? 'primary' : 'ghost'}`}
+                onClick={() => {
+                  const next = !departmentFacultyView;
+                  setDepartmentFacultyView(next);
+                  if (next) {
+                    setProgramFilterId('');
+                    loadDepartmentUnassignedFaculty(selectedDept.id);
+                  }
+                }}
+              >
+                <Users size={16} /> {departmentFacultyView ? 'Programs View' : 'Faculty View'}
               </button>
             </div>
           </div>
 
           {loading ? (
             <LoadingSkeleton />
+          ) : departmentFacultyView ? (
+            visibleDepartmentUnassignedFaculty.length === 0 ? (
+              <div className="eval-monitor-empty">
+                <Users size={22} />
+                <strong>No faculty without a program assignment.</strong>
+                <span>Every Faculty Member in this department currently belongs to an active program.</span>
+              </div>
+            ) : (
+              <>
+                <div className="eval-monitor-non-program-notice">
+                  Faculty View: showing {visibleDepartmentUnassignedFaculty.length} Faculty Member(s) assigned to this department without an active program assignment.
+                </div>
+                <div className="eval-monitor-roster-grid">
+                  {visibleDepartmentUnassignedFaculty.map((person) => (
+                    <article className={`eval-monitor-roster-card status-${person.evaluation_status}`} key={person.user_id}>
+                      <header>
+                        <div className="eval-monitor-faculty-avatar">{String(person.full_name || '?').charAt(0)}</div>
+                        <div><span>Faculty Member</span><h3>{person.full_name}</h3><small>{person.position_title}</small></div>
+                        <strong className={`eval-monitor-roster-status ${person.evaluation_status}`}>
+                          {({
+                            completed: 'Completed',
+                            in_progress: 'In Progress',
+                            not_evaluated: 'Not Yet Evaluated',
+                            no_assignments: 'No Assignments',
+                          })[person.evaluation_status] || person.evaluation_status}
+                        </strong>
+                      </header>
+                      <div className="eval-monitor-roster-scope"><Building2 size={14} /><span>{person.department}</span><b>{person.group_label}</b></div>
+                      <div className="eval-monitor-roster-metrics">
+                        <span><b>{person.average_score ?? '—'}</b><small>Average score</small></span>
+                        <span><b>{person.completed_evaluations}/{person.total_assignments}</b><small>Completed</small></span>
+                        <span><b>{person.pending_evaluations}</b><small>Pending</small></span>
+                        <span><b>{person.completion_percentage}%</b><small>Completion</small></span>
+                      </div>
+                      <div className="eval-monitor-roster-analysis">
+                        <div><strong><TrendingUp size={14} /> Strengths</strong><p>{(person.strengths || []).map((item) => item.name).join(', ') || 'Awaiting scores'}</p></div>
+                        <div><strong><TrendingDown size={14} /> Weaknesses</strong><p>{(person.weaknesses || []).map((item) => item.name).join(', ') || 'Awaiting scores'}</p></div>
+                      </div>
+                      <div className="eval-monitor-faculty-ai-recommendation">
+                        <div><Lightbulb size={15} /><span>AI Recommendation</span></div>
+                        <RecommendationStatusBanner status={person.recommendation_status} compact />
+                        <p>{person.ai_recommendation}</p>
+                      </div>
+                      <footer>
+                        <span>{person.pending_evaluators?.length ? `${person.pending_evaluators.length} evaluator(s) pending` : 'No pending evaluator'}</span>
+                        <button type="button" onClick={() => setActiveFaculty(person)}><Eye size={14} /> View details</button>
+                      </footer>
+                    </article>
+                  ))}
+                </div>
+              </>
+            )
           ) : filteredPrograms.length === 0 ? (
             <div className="eval-monitor-empty">No programs found under this department.</div>
           ) : (
@@ -1496,15 +1775,15 @@ export default function AdminEvaluationMonitor() {
             <div className="eval-monitor-search">
               <Search size={16} />
               <input
-                type="search"
+                type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search faculty..."
               />
+              {searchQuery && <button type="button" className="eval-monitor-search-clear" onClick={() => setSearchQuery('')} aria-label="Clear faculty search"><X size={15} /></button>}
             </div>
             <div className="eval-monitor-toolbar-actions">
-              {liveRefreshing && <span className="live-refresh-indicator compact">Syncing...</span>}
-              <button type="button" className="eval-monitor-btn ghost" onClick={() => loadFaculty(selectedProgram.id, false)}>
+              <button type="button" className="eval-monitor-btn ghost" onClick={() => loadFaculty(selectedProgram.id, true)}>
                 <RefreshCw size={16} /> Refresh
               </button>
             </div>
@@ -1618,11 +1897,161 @@ export default function AdminEvaluationMonitor() {
     );
   }
 
+  function renderRoster() {
+    const summary = rosterSummary || { total: 0, completed: 0, in_progress: 0, not_evaluated: 0, no_assignments: 0, pending_evaluations: 0 };
+    const programsForDepartment = (rosterOptions.programs || []).filter((program) => (
+      !rosterFilters.departmentId || String(program.department_id) === String(rosterFilters.departmentId)
+    ));
+    const statusLabels = {
+      completed: 'Completed',
+      in_progress: 'In Progress',
+      not_evaluated: 'Not Yet Evaluated',
+      no_assignments: 'No Assignments',
+    };
+    const updateRosterFilter = (key, value) => setRosterFilters((current) => {
+      const next = { ...current, [key]: value };
+      if (key === 'departmentId') {
+        next.programId = '';
+        next.groupKey = '';
+      }
+      return next;
+    });
+    const resetRosterFilters = () => setRosterFilters({
+      departmentId: '', programId: '', groupKey: '', role: '', status: '', name: '',
+    });
+    const departmentSections = Array.from(rosterRows.reduce((sections, person) => {
+      const key = String(person.department_id || 0);
+      if (!sections.has(key)) {
+        sections.set(key, {
+          id: key,
+          name: person.department || 'Unassigned Department',
+          people: [],
+        });
+      }
+      sections.get(key).people.push(person);
+      return sections;
+    }, new Map()).values()).sort((a, b) => a.name.localeCompare(b.name));
+    const isFacultyWithoutProgram = (person) => (
+      person.role === 'teacher' && person.group_type !== 'program'
+    );
+    const renderRosterCard = (person) => (
+      <article className={`eval-monitor-roster-card status-${person.evaluation_status}`} key={`${person.user_id}-${person.group_key}`}>
+        <header>
+          <div className="eval-monitor-faculty-avatar">{String(person.full_name || '?').charAt(0)}</div>
+          <div><span>{person.role_label}</span><h3>{person.full_name}</h3><small>{person.position_title}</small></div>
+          <strong className={`eval-monitor-roster-status ${person.evaluation_status}`}>{statusLabels[person.evaluation_status] || person.evaluation_status}</strong>
+        </header>
+        <div className="eval-monitor-roster-scope"><Building2 size={14} /><span>{person.department}</span><b>{person.group_label}</b></div>
+        <div className="eval-monitor-roster-metrics">
+          <span><b>{person.average_score ?? '—'}</b><small>Average score</small></span>
+          <span><b>{person.completed_evaluations}/{person.total_assignments}</b><small>Completed</small></span>
+          <span><b>{person.pending_evaluations}</b><small>Pending</small></span>
+          <span><b>{person.completion_percentage}%</b><small>Completion</small></span>
+        </div>
+        <div className="eval-monitor-roster-analysis">
+          <div><strong><TrendingUp size={14} /> Strengths</strong><p>{(person.strengths || []).map((item) => item.name).join(', ') || 'Awaiting scores'}</p></div>
+          <div><strong><TrendingDown size={14} /> Weaknesses</strong><p>{(person.weaknesses || []).map((item) => item.name).join(', ') || 'Awaiting scores'}</p></div>
+        </div>
+        <div className="eval-monitor-faculty-ai-recommendation">
+          <div><Lightbulb size={15} /><span>AI Recommendation</span></div>
+          <RecommendationStatusBanner status={person.recommendation_status} compact />
+          <p>{person.ai_recommendation}</p>
+        </div>
+        <footer>
+          <span>{person.pending_evaluators?.length ? `${person.pending_evaluators.length} evaluator(s) pending` : 'No pending evaluator'}</span>
+          <button type="button" onClick={() => setActiveFaculty(person)}><Eye size={14} /> View details</button>
+        </footer>
+      </article>
+    );
+
+    return (
+      <>
+        <section className="eval-monitor-overview eval-monitor-roster-overview">
+          <div className="eval-monitor-overview-copy">
+            <p className="eyebrow"><Brain size={14} /> AI Actions</p>
+            <h2>Complete Academic Monitoring Roster</h2>
+            <p>Monitor Faculty Members and academic leaders, including users without a current program assignment.</p>
+            {selectedPeriod && <div className="eval-monitor-period-note">Showing <strong>{selectedPeriod.period_name}</strong></div>}
+          </div>
+          <PeriodSelector compact className="eval-monitor-period-filter" showRefresh={false} />
+        </section>
+
+        <section className="eval-monitor-roster-summary" aria-label="Roster monitoring totals">
+          <article><Users size={18} /><span>People monitored</span><strong>{summary.total}</strong></article>
+          <article className="success"><CheckCircle2 size={18} /><span>Completed</span><strong>{summary.completed}</strong></article>
+          <article className="warning"><Clock size={18} /><span>In progress</span><strong>{summary.in_progress}</strong></article>
+          <article className="danger"><AlertTriangle size={18} /><span>Not evaluated</span><strong>{summary.not_evaluated}</strong></article>
+          <article><ClipboardCheck size={18} /><span>No assignments</span><strong>{summary.no_assignments}</strong></article>
+          <article className="warning"><Clock size={18} /><span>Pending evaluations</span><strong>{summary.pending_evaluations}</strong></article>
+        </section>
+
+        <section className="eval-monitor-roster-filters" aria-label="AI Actions roster filters">
+          <label className="search"><span>Faculty or leader name</span><div><Search size={15} /><input value={rosterFilters.name} onChange={(event) => updateRosterFilter('name', event.target.value)} placeholder="Search name or email..." /></div></label>
+          <label><span>Department</span><select value={rosterFilters.departmentId} onChange={(event) => updateRosterFilter('departmentId', event.target.value)}><option value="">All departments</option>{(rosterOptions.departments || []).map((department) => <option key={department.id} value={department.id}>{department.department_name || department.name}</option>)}</select></label>
+          <label><span>Program</span><select value={rosterFilters.programId} onChange={(event) => updateRosterFilter('programId', event.target.value)}><option value="">All programs</option>{programsForDepartment.map((program) => <option key={program.id} value={program.id}>{program.program_code || program.code} — {program.program_name || program.name}{program.is_empty ? ' (0 faculty)' : ''}</option>)}</select></label>
+          <label><span>Subject / Coordinator Group</span><select value={rosterFilters.groupKey} onChange={(event) => updateRosterFilter('groupKey', event.target.value)}><option value="">All groups</option>{(rosterOptions.groups || []).map((group) => <option key={group.key} value={group.key}>{group.label}</option>)}</select></label>
+          <label><span>Role</span><select value={rosterFilters.role} onChange={(event) => updateRosterFilter('role', event.target.value)}><option value="">All roles</option>{(rosterOptions.roles || []).map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></label>
+          <label><span>Evaluation Status</span><select value={rosterFilters.status} onChange={(event) => updateRosterFilter('status', event.target.value)}><option value="">All statuses</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <button type="button" onClick={resetRosterFilters}><RotateCcw size={15} /> Reset filters</button>
+        </section>
+
+        {loading ? (
+          <div className="eval-monitor-loading"><Loader2 size={24} className="animate-spin" /><span>Preparing complete monitoring roster...</span></div>
+        ) : error ? (
+          <div className="eval-monitor-empty"><AlertTriangle size={22} /><strong>Unable to load AI Actions roster</strong><span>{error}</span></div>
+        ) : rosterRows.length === 0 ? (
+          <div className="eval-monitor-empty"><Users size={22} /><strong>No people match the selected filters.</strong><span>Adjust the filters or choose another evaluation period.</span></div>
+        ) : (
+          <div className="eval-monitor-roster-departments">
+            {departmentSections.map((department) => {
+              const withoutProgram = department.people.filter(isFacultyWithoutProgram);
+              const showingWithoutProgram = Boolean(nonProgramDepartmentViews[department.id]);
+              const visiblePeople = showingWithoutProgram ? withoutProgram : department.people;
+              return (
+                <section className="eval-monitor-roster-department" key={department.id}>
+                  <header>
+                    <div>
+                      <span>Department</span>
+                      <h3>{department.name}</h3>
+                      <small>{department.people.length} monitored · {withoutProgram.length} faculty without program assignment</small>
+                    </div>
+                    <button
+                      type="button"
+                      className={showingWithoutProgram ? 'active' : ''}
+                      disabled={withoutProgram.length === 0}
+                      onClick={() => setNonProgramDepartmentViews((current) => ({
+                        ...current,
+                        [department.id]: !current[department.id],
+                      }))}
+                    >
+                      <Users size={15} />
+                      {showingWithoutProgram ? 'View All Department Members' : 'View Faculty Without Program Assignment'}
+                    </button>
+                  </header>
+                  {showingWithoutProgram && (
+                    <div className="eval-monitor-non-program-notice">
+                      Showing faculty organized under {department.name} through their subject, coordinator, or department assignment.
+                    </div>
+                  )}
+                  <div className="eval-monitor-roster-grid">
+                    {visiblePeople.map(renderRosterCard)}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
+      </>
+    );
+  }
+
   // ─── Scroll to top when navigating between views ─────────────
   const mainRef = useRef(null);
   useEffect(() => {
     if (mainRef.current) {
-      mainRef.current.scrollTo?.({ top: 0, behavior: 'smooth' });
+      // Rendering a large monitoring hierarchy while smooth-scrolling causes
+      // noticeable input delay on phones. Jump immediately between views.
+      mainRef.current.scrollTo?.({ top: 0, behavior: 'auto' });
       mainRef.current.scrollTop = 0;
     }
   }, [view]);
@@ -1631,12 +2060,13 @@ export default function AdminEvaluationMonitor() {
     <div className="eval-monitor-container module-wide page-enter">
       <div className="eval-monitor-main" ref={mainRef}>
         <div className="eval-monitor-header">
-          <h2><BarChart3 size={22} /> Evaluation Monitor</h2>
+          <h2><BarChart3 size={22} /> AI Actions Monitoring</h2>
         </div>
 
-        {view === 'departments' && renderDepartments()}
-        {view === 'programs' && renderPrograms()}
-        {view === 'faculty' && renderFaculty()}
+        {workspaceMode === 'roster' && renderRoster()}
+        {workspaceMode === 'groups' && view === 'departments' && renderDepartments()}
+        {workspaceMode === 'groups' && view === 'programs' && renderPrograms()}
+        {workspaceMode === 'groups' && view === 'faculty' && renderFaculty()}
       </div>
 
       {/* Faculty Detail Modal */}

@@ -1,0 +1,40 @@
+[req]
+distinguished_name = req_distinguished_name
+prompt = no
+
+[req_distinguished_name]
+CN = PMAS LAN Certificate Authority
+O = PMAS Local Network
+
+[server_req]
+distinguished_name = server_distinguished_name
+req_extensions = server_extensions
+prompt = no
+
+[server_distinguished_name]
+CN = 192.168.1.3
+O = PMAS Local Network
+
+[server_extensions]
+subjectAltName = @alt_names
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+
+[alt_names]
+IP.1 = 192.168.1.3
+IP.2 = 127.0.0.1
+DNS.1 = localhost
+
+[ca_extensions]
+basicConstraints = critical, CA:true
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+
+[leaf_extensions]
+basicConstraints = critical, CA:false
+subjectAltName = @alt_names
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer

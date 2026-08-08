@@ -170,20 +170,23 @@ function dipascaf_period_payload(?array $period = null): array
 {
     $period ??= dipascaf_current_evaluation_period();
     $isOpen = $period !== null && (string) ($period['status'] ?? '') === 'open';
-    $status = $period['status'] ?? 'locked';
+    $status = (string) ($period['status'] ?? 'draft');
+    $messages = [
+        'draft' => 'The evaluation period is still being prepared and has not been opened or locked.',
+        'open' => 'The evaluation period is open. Assigned evaluators may answer and submit forms.',
+        'locked' => 'The evaluation period is locked. Evaluators cannot answer, edit, or submit evaluations.',
+        'closed' => 'The evaluation period is closed. Evaluators cannot answer, edit, or submit evaluations.',
+    ];
 
     return [
         'id' => $period !== null ? (int) $period['id'] : null,
         'period_name' => (string) ($period['period_name'] ?? 'No active evaluation period'),
         'school_year' => (string) ($period['school_year'] ?? ''),
-        'semester' => (string) ($period['semester'] ?? ''),
         'date_start' => (string) ($period['date_start'] ?? ''),
         'date_end' => (string) ($period['date_end'] ?? ''),
-        'status' => $status === 'closed' ? 'locked' : (string) $status,
+        'status' => $status,
         'is_open' => $isOpen,
-        'message' => $isOpen
-            ? 'The evaluation period is open. Assigned evaluators may answer and submit forms.'
-            : 'The evaluation period is locked. Evaluators cannot answer, edit, or submit evaluations.',
+        'message' => $messages[$status] ?? $messages['draft'],
     ];
 }
 
@@ -229,11 +232,22 @@ function dipascaf_period_list_payload(): array
         return !dipascaf_is_smoke_period_name((string) ($period['period_name'] ?? ''));
     }));
 
-    return array_map(static function (array $period): array {
+    $payloads = array_map(static function (array $period): array {
         $payload = dipascaf_period_payload($period);
         $payload['year'] = dipascaf_period_year($period);
         return $payload;
     }, $periods);
+
+    usort($payloads, static function (array $left, array $right): int {
+        $leftYear = (int) preg_replace('/\D.*$/', '', (string)($left['school_year'] ?: $left['year']));
+        $rightYear = (int) preg_replace('/\D.*$/', '', (string)($right['school_year'] ?: $right['year']));
+        if ($leftYear !== $rightYear) return $rightYear <=> $leftYear;
+
+        $dateOrder = strcmp((string)$right['date_start'], (string)$left['date_start']);
+        return $dateOrder !== 0 ? $dateOrder : ((int)$right['id'] <=> (int)$left['id']);
+    });
+
+    return $payloads;
 }
 
 function dipascaf_selected_period_from_request(array $source, bool $defaultToCurrent = true): ?array
@@ -244,7 +258,7 @@ function dipascaf_selected_period_from_request(array $source, bool $defaultToCur
     if ($periodId > 0) {
         $period = admin_one('SELECT * FROM appraisal_periods WHERE id = :id LIMIT 1', ['id' => $periodId]);
         if ($period !== null) {
-            return $period;
+            return dipascaf_authorize_selected_period($period);
         }
     }
 
@@ -253,17 +267,30 @@ function dipascaf_selected_period_from_request(array $source, bool $defaultToCur
         if (ctype_digit($periodName)) {
             $period = admin_one('SELECT * FROM appraisal_periods WHERE id = :id LIMIT 1', ['id' => (int) $periodName]);
             if ($period !== null) {
-                return $period;
+                return dipascaf_authorize_selected_period($period);
             }
         }
 
         $period = admin_one('SELECT * FROM appraisal_periods WHERE period_name = :period_name LIMIT 1', ['period_name' => $periodName]);
         if ($period !== null) {
-            return $period;
+            return dipascaf_authorize_selected_period($period);
         }
     }
 
-    return $defaultToCurrent ? dipascaf_current_evaluation_period() : null;
+    $period = $defaultToCurrent ? dipascaf_current_evaluation_period() : null;
+    return $period !== null ? dipascaf_authorize_selected_period($period) : null;
+}
+
+function dipascaf_authorize_selected_period(array $period): array
+{
+    if (!function_exists('current_user')) return $period;
+    $user = current_user();
+    if ($user === null || !in_array((string)($user['role'] ?? ''), ['teacher','program_head','dean'], true)) {
+        return $period;
+    }
+    require_once __DIR__ . '/evaluation_participation.php';
+    dipascaf_require_user_period_access((int)$user['id'], (int)$period['id']);
+    return $period;
 }
 
 function dipascaf_require_open_evaluation_period(): array
@@ -316,12 +343,26 @@ function dipascaf_department_matches_scope(string $department, array $scope): bo
     return false;
 }
 
-function dipascaf_evaluator_scope(int $userId, string $role): array
+function dipascaf_evaluator_scope(int $userId, string $role, ?int $evaluationPeriodId = null): array
 {
     $user = admin_one(
         'SELECT id, role, department, program FROM users WHERE id = :id LIMIT 1',
         ['id' => $userId]
     ) ?? [];
+    if ($evaluationPeriodId !== null && $evaluationPeriodId > 0) {
+        require_once __DIR__ . '/evaluation_participation.php';
+        $periodContext = dipascaf_period_user_context($evaluationPeriodId, $userId);
+        if ($periodContext !== null) {
+            if (($periodContext['participation_status'] ?? 'included') !== 'included'
+                || ($periodContext['work_status'] ?? 'active') !== 'active') {
+                return ['departments'=>[],'programs'=>[],'role'=>(string)($periodContext['role'] ?? $role)];
+            }
+            $user['role'] = $periodContext['role'];
+            $user['department'] = $periodContext['department'];
+            $user['program'] = $periodContext['program'];
+            $role = (string)$periodContext['role'];
+        }
+    }
 
     $departments = [];
     $programCodes = dipascaf_normalized_program_codes($user['program'] ?? '');
@@ -339,25 +380,31 @@ function dipascaf_evaluator_scope(int $userId, string $role): array
     }
 
     if ($role === 'dean') {
-        $rows = admin_all(
-            'SELECT department_code, department_name
-             FROM departments
-             WHERE dean_user_id = :user_id AND is_active = 1',
-            ['user_id' => $userId]
-        );
+        $rows = $evaluationPeriodId !== null && $evaluationPeriodId > 0
+            ? dipascaf_period_dean_scope($evaluationPeriodId, $userId)
+            : admin_all(
+                'SELECT department_code, department_name FROM departments WHERE dean_user_id = :user_id AND is_active = 1',
+                ['user_id' => $userId]
+            );
         foreach ($rows as $row) {
             $departments = array_merge($departments, admin_department_aliases($row));
         }
     }
 
     if ($role === 'program_head') {
-        $rows = admin_all(
-            'SELECT p.program_code, d.department_code, d.department_name
-             FROM programs p
-             JOIN departments d ON d.id = p.department_id
-             WHERE p.program_head_user_id = :user_id AND p.is_active = 1',
-            ['user_id' => $userId]
-        );
+        if ($evaluationPeriodId !== null && $evaluationPeriodId > 0) {
+            require_once __DIR__ . '/evaluation_participation.php';
+            $periodScope = dipascaf_period_program_head_scope($evaluationPeriodId, $userId, true);
+            $rows = $periodScope['programs'];
+        } else {
+            $rows = admin_all(
+                'SELECT p.program_code, d.department_code, d.department_name
+                 FROM programs p
+                 JOIN departments d ON d.id = p.department_id
+                 WHERE p.program_head_user_id = :user_id AND p.is_active = 1',
+                ['user_id' => $userId]
+            );
+        }
         foreach ($rows as $row) {
             $programCodes[] = strtoupper(trim((string) ($row['program_code'] ?? '')));
             $departments = array_merge($departments, admin_department_aliases($row));
@@ -370,6 +417,17 @@ function dipascaf_evaluator_scope(int $userId, string $role): array
                 'SELECT department_code FROM vpaa_departments WHERE vpaa_user_id = :user_id',
                 ['user_id' => $userId]
             );
+
+            // A VPAA without explicit department mappings has institution-wide
+            // oversight. Keep this authorization scope consistent with
+            // vpaa_departments(), which uses the same active-department fallback
+            // when creating the VPAA's dean evaluation assignments.
+            if ($rows === [] && $userDepartment === '') {
+                $rows = admin_all(
+                    'SELECT department_code FROM departments WHERE is_active = 1 ORDER BY department_name'
+                );
+            }
+
             foreach ($rows as $row) {
                 $department = trim((string) ($row['department_code'] ?? ''));
                 if ($department !== '') {
@@ -388,7 +446,7 @@ function dipascaf_evaluator_scope(int $userId, string $role): array
     ];
 }
 
-function dipascaf_evaluatee_context(int $facultyId): ?array
+function dipascaf_evaluatee_context(int $facultyId, ?int $evaluationPeriodId = null): ?array
 {
     $evaluatee = admin_one(
         'SELECT f.id, f.department, f.program_code, f.position_title,
@@ -402,6 +460,22 @@ function dipascaf_evaluatee_context(int $facultyId): ?array
 
     if ($evaluatee === null) {
         return null;
+    }
+    if ($evaluationPeriodId !== null && $evaluationPeriodId > 0) {
+        $periodUser = admin_one(
+            'SELECT u.id FROM users u JOIN faculty f ON f.user_id=u.id OR (f.user_id IS NULL AND f.email=u.email) WHERE f.id=:id LIMIT 1',
+            ['id'=>$facultyId]
+        );
+        $userId = (int)($periodUser['id'] ?? 0);
+        if ($userId > 0) {
+            require_once __DIR__ . '/evaluation_participation.php';
+            $periodContext = dipascaf_period_user_context($evaluationPeriodId, $userId);
+            if ($periodContext !== null) {
+                $evaluatee['user_role'] = $periodContext['role'];
+                $evaluatee['department'] = $periodContext['department'];
+                $evaluatee['program_code'] = $periodContext['program'];
+            }
+        }
     }
 
     $position = strtolower((string) ($evaluatee['position_title'] ?? ''));
@@ -421,16 +495,21 @@ function dipascaf_evaluatee_context(int $facultyId): ?array
     return $evaluatee;
 }
 
-function dipascaf_assignment_relationship_allowed(array $assignment, int $evaluatorUserId, string $evaluatorRole): bool
+function dipascaf_assignment_relationship_allowed(
+    array $assignment,
+    int $evaluatorUserId,
+    string $evaluatorRole,
+    ?int $evaluationPeriodId = null
+): bool
 {
-    $evaluatee = dipascaf_evaluatee_context((int) ($assignment['evaluatee_faculty_id'] ?? 0));
+    $evaluatee = dipascaf_evaluatee_context((int) ($assignment['evaluatee_faculty_id'] ?? 0), $evaluationPeriodId);
     if ($evaluatee === null) {
         return false;
     }
 
     $assignmentType = (string) ($assignment['assignment_type'] ?? '');
     $evaluateeRole = (string) ($evaluatee['resolved_role'] ?? '');
-    $scope = dipascaf_evaluator_scope($evaluatorUserId, $evaluatorRole);
+    $scope = dipascaf_evaluator_scope($evaluatorUserId, $evaluatorRole, $evaluationPeriodId);
     $evaluateeDepartment = (string) ($evaluatee['department'] ?? '');
     $evaluateeProgram = (string) ($evaluatee['normalized_program_code'] ?? '');
 

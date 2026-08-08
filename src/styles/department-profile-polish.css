@@ -703,6 +703,57 @@
   flex-shrink: 0;
 }
 
+.department-people-directory-head {
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.department-people-directory-head>div {
+  min-width:0;
+}
+
+.department-people-add-account {
+  min-height:42px;
+  margin-left:auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:0 15px;
+  border:1px solid rgba(96,165,250,.42);
+  border-radius:12px;
+  background:linear-gradient(135deg,#347fd1,#2563b5);
+  color:#fff;
+  font-size:.76rem;
+  font-weight:850;
+  white-space:nowrap;
+  box-shadow:0 8px 20px rgba(37,99,181,.22);
+  transition:transform .2s ease,box-shadow .2s ease,filter .2s ease;
+}
+
+.department-people-add-account:hover {
+  transform:translateY(-2px);
+  filter:brightness(1.07);
+  box-shadow:0 12px 25px rgba(37,99,181,.3);
+}
+
+.department-people-add-account:focus-visible {
+  outline:3px solid rgba(96,165,250,.28);
+  outline-offset:3px;
+}
+
+:is(.admin-body,.admin-dashboard-body).dark-mode .department-people-add-account {
+  border-color:#4d8ac1;
+  background:linear-gradient(135deg,#2f78bd,#245a96);
+  box-shadow:0 9px 22px rgba(0,0,0,.28),0 0 18px rgba(56,189,248,.08);
+}
+
+@media(max-width:680px){
+  .department-people-directory-head{align-items:flex-start;flex-wrap:wrap}
+  .department-people-add-account{width:100%;margin-left:0}
+}
+
 /* ── Page-level section stagger entrance ────────────────── */
 .department-profile-page {
   --stagger-delay-base: 60ms;
@@ -842,5 +893,355 @@
   .stat-grid article:hover,
   .dept-dean-showcase:hover {
     transform: none !important;
+  }
+}
+
+/* Programs table header — keep sortable columns visually unified.
+   These component-scoped rules intentionally win over shared dashboard
+   table/button themes in both color modes. */
+.admin-dashboard-body .programs-table-container .programs-table-header,
+.admin-body .programs-table-container .programs-table-header {
+  min-height: 52px;
+  border: 1px solid rgba(22, 131, 88, 0.18) !important;
+  border-radius: 14px;
+  background: #f2f8f5 !important;
+  color: #21483a !important;
+  padding: 8px 13px;
+  box-shadow: 0 8px 22px rgba(20, 83, 60, 0.07);
+}
+
+.admin-dashboard-body .programs-table-header .programs-th,
+.admin-body .programs-table-header .programs-th {
+  min-width: 0;
+  min-height: 36px;
+  justify-content: flex-start;
+  border: 0 !important;
+  border-radius: 8px;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 8px !important;
+  color: #315e4e !important;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.2;
+  letter-spacing: 0.045em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.admin-dashboard-body .programs-table-header button.programs-th:hover,
+.admin-body .programs-table-header button.programs-th:hover {
+  background: rgba(22, 131, 88, 0.09) !important;
+  color: #0f6b46 !important;
+}
+
+.admin-dashboard-body .programs-table-header button.programs-th.is-sorted,
+.admin-body .programs-table-header button.programs-th.is-sorted {
+  background: rgba(22, 131, 88, 0.12) !important;
+  color: #0b6843 !important;
+}
+
+.programs-table-header .programs-th svg {
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.programs-table-header .programs-th[aria-label*="descending"] svg {
+  transform: rotate(180deg);
+}
+
+.admin-dashboard-body .programs-table-header .programs-th-actions,
+.admin-body .programs-table-header .programs-th-actions {
+  justify-self: stretch;
+  justify-content: flex-end;
+  cursor: default;
+}
+
+.admin-dashboard-body.dark-mode .programs-table-container .programs-table-header,
+.admin-body.dark-mode .programs-table-container .programs-table-header,
+body:has(.admin-dashboard-body.dark-mode) .programs-table-container .programs-table-header,
+body:has(.admin-body.dark-mode) .programs-table-container .programs-table-header {
+  border-color: rgba(96, 165, 250, 0.2) !important;
+  background: #14283a !important;
+  color: #dcecf7 !important;
+  box-shadow: 0 10px 26px rgba(2, 8, 23, 0.24);
+}
+
+.admin-dashboard-body.dark-mode .programs-table-header .programs-th,
+.admin-body.dark-mode .programs-table-header .programs-th,
+body:has(.admin-dashboard-body.dark-mode) .programs-table-header .programs-th,
+body:has(.admin-body.dark-mode) .programs-table-header .programs-th {
+  color: #bcd0de !important;
+}
+
+.admin-dashboard-body.dark-mode .programs-table-header button.programs-th:hover,
+.admin-body.dark-mode .programs-table-header button.programs-th:hover,
+body:has(.admin-dashboard-body.dark-mode) .programs-table-header button.programs-th:hover,
+body:has(.admin-body.dark-mode) .programs-table-header button.programs-th:hover {
+  background: rgba(96, 165, 250, 0.11) !important;
+  color: #eaf6ff !important;
+}
+
+.admin-dashboard-body.dark-mode .programs-table-header button.programs-th.is-sorted,
+.admin-body.dark-mode .programs-table-header button.programs-th.is-sorted,
+body:has(.admin-dashboard-body.dark-mode) .programs-table-header button.programs-th.is-sorted,
+body:has(.admin-body.dark-mode) .programs-table-header button.programs-th.is-sorted {
+  background: rgba(56, 189, 248, 0.14) !important;
+  color: #8edcff !important;
+}
+
+.admin-dashboard-body .programs-table-header button.programs-th:focus-visible,
+.admin-body .programs-table-header button.programs-th:focus-visible {
+  outline: 2px solid #2b8f68;
+  outline-offset: -2px;
+}
+
+.admin-dashboard-body.dark-mode .programs-table-header button.programs-th:focus-visible,
+.admin-body.dark-mode .programs-table-header button.programs-th:focus-visible {
+  outline-color: #60a5fa;
+}
+.academic-management-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #cfe2d8;
+  border-radius: 12px;
+  background: #f3f9f6;
+}
+
+.academic-management-tabs button {
+  min-height: 40px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #52675e;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.academic-management-tabs button.active {
+  background: #fff;
+  color: #08734d;
+  box-shadow: 0 3px 10px rgba(23, 91, 65, .12);
+}
+
+.subject-management-view {
+  display: grid;
+  gap: 18px;
+}
+
+.subject-management-view[hidden] {
+  display: none !important;
+}
+
+.subject-area-create-form .programs-filter-row {
+  grid-template-columns: minmax(150px, .7fr) minmax(240px, 1.5fr) auto auto;
+  align-items: end;
+}
+
+.subject-area-create-form label {
+  display: grid;
+  gap: 6px;
+  color: #36564a;
+  font-size: .75rem;
+  font-weight: 800;
+}
+
+.subject-area-create-form input {
+  width: 100%;
+  height: 46px;
+  padding: 0 12px;
+  border: 1px solid #cfe2d8;
+  border-radius: 11px;
+  background: #fff;
+  color: #173f31;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .academic-management-tabs {
+  border-color: #34556b;
+  background: #0d2133;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .academic-management-tabs button {
+  color: #a9bdca;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .academic-management-tabs button.active {
+  background: #19374f;
+  color: #e8f4fc;
+}
+
+@media (max-width: 900px) {
+  .programs-toolbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .subject-area-create-form .programs-filter-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .academic-management-tabs,
+  .academic-management-tabs button,
+  .programs-toolbar-actions .primary-button {
+    width: 100%;
+  }
+
+  .academic-management-tabs button {
+    flex: 1;
+  }
+
+  .subject-area-create-form .programs-filter-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Keep the Dean count legible when broad dark-mode typography rules recolor
+   nested strong elements. */
+:is(.admin-body.dark-mode, .admin-dashboard-body.dark-mode) .dept-dean-cover strong,
+body:has(.admin-dashboard-body.dark-mode) .dept-dean-cover strong {
+  background: linear-gradient(135deg, #bbf7d0, #86efac) !important;
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b;
+  text-shadow: none !important;
+  opacity: 1 !important;
+}
+
+/* Subject modal is portalled under <body>, so it needs explicit theme values
+   instead of relying on variables inherited from the dashboard container. */
+.subject-area-modal-panel {
+  --subject-modal-bg: #ffffff;
+  --subject-modal-surface: #f8fbf9;
+  --subject-modal-text: #10201b;
+  --subject-modal-muted: #64748b;
+  --subject-modal-border: #d7e4dd;
+  background: var(--subject-modal-bg) !important;
+  color: var(--subject-modal-text) !important;
+}
+
+.subject-area-modal-panel .box-title {
+  border-bottom: 1px solid var(--subject-modal-border) !important;
+  background: #fbfdfc !important;
+}
+
+.subject-area-modal-panel .box-title h2 {
+  color: var(--subject-modal-text) !important;
+}
+
+.subject-area-modal-panel .box-title span {
+  color: var(--subject-modal-muted) !important;
+}
+
+.subject-area-modal-panel .program-form-grid label {
+  color: #36564a !important;
+}
+
+.subject-area-modal-panel .program-form-grid input[type="text"] {
+  min-height: 48px;
+  border: 1px solid var(--subject-modal-border) !important;
+  background: var(--subject-modal-bg) !important;
+  color: var(--subject-modal-text) !important;
+  -webkit-text-fill-color: var(--subject-modal-text);
+  opacity: 1;
+}
+
+.subject-area-modal-panel .program-form-grid input[type="text"]::placeholder {
+  color: #8a9a92 !important;
+  opacity: 1;
+}
+
+.subject-area-modal-panel .program-form-grid input[type="text"]:focus {
+  border-color: #168358 !important;
+  box-shadow: 0 0 0 3px rgba(22, 131, 88, .14) !important;
+}
+
+.subject-area-modal-panel .program-form-grid input[type="text"]:disabled {
+  border-color: #d7e4dd !important;
+  background: #eef4f1 !important;
+  color: #52675e !important;
+  -webkit-text-fill-color: #52675e;
+  cursor: not-allowed;
+}
+
+.subject-area-modal-panel .program-form-actions {
+  border-top-color: var(--subject-modal-border) !important;
+}
+
+.subject-area-modal-panel .program-form-actions .ghost-button {
+  border-color: var(--subject-modal-border) !important;
+  background: #ffffff !important;
+  color: #173f31 !important;
+}
+
+.subject-area-modal-panel .program-form-actions .primary-button {
+  border-color: #168358 !important;
+  background: linear-gradient(135deg, #168358, #0f6f4a) !important;
+  color: #ffffff !important;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel {
+  --subject-modal-bg: #0b172a;
+  --subject-modal-surface: #101f35;
+  --subject-modal-text: #eef6ff;
+  --subject-modal-muted: #a8b9cf;
+  --subject-modal-border: #294461;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(59,130,246,.13), transparent 35%),
+    linear-gradient(145deg, #0e1b30, #081426) !important;
+  color: var(--subject-modal-text) !important;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel .box-title {
+  border-bottom-color: var(--subject-modal-border) !important;
+  background: rgba(8, 20, 38, .78) !important;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel .program-form-grid label {
+  color: #c7d7e9 !important;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel .program-form-grid input[type="text"] {
+  border-color: #31506e !important;
+  background: #101f35 !important;
+  color: #f4f8ff !important;
+  -webkit-text-fill-color: #f4f8ff;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel .program-form-grid input[type="text"]::placeholder {
+  color: #8397b1 !important;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel .program-form-grid input[type="text"]:disabled {
+  border-color: #273e58 !important;
+  background: #122239 !important;
+  color: #9fb4cd !important;
+  -webkit-text-fill-color: #9fb4cd;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel .program-form-actions {
+  border-top-color: #294461 !important;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel .program-form-actions .ghost-button {
+  border-color: #3a5571 !important;
+  background: #14243a !important;
+  color: #e8f1fb !important;
+}
+
+body:has(.admin-dashboard-body.dark-mode) .subject-area-modal-panel .program-form-actions .primary-button {
+  border-color: #3b82f6 !important;
+  background: linear-gradient(135deg, #2563c7, #3b82f6) !important;
+}
+
+@media (max-width: 720px) {
+  .subject-area-modal-panel .program-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .subject-area-modal-panel .program-form-actions button {
+    width: 100%;
   }
 }

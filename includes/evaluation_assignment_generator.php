@@ -18,20 +18,25 @@ function dipascaf_required_evaluation_assignments(?int $evaluationPeriodId = nul
     $participationSql = '';
     $participationParams = [];
     if ($evaluationPeriodId !== null && $evaluationPeriodId > 0) {
-        $participationSql = " AND NOT EXISTS (SELECT 1 FROM evaluation_period_participation epp WHERE epp.evaluation_period_id=:participation_period_id AND epp.user_id=u.id AND epp.participation_status='excluded')";
+        $participationSql = " AND NOT EXISTS (SELECT 1 FROM evaluation_period_participation epp WHERE epp.evaluation_period_id=:participation_period_id AND epp.user_id=u.id AND (epp.participation_status='excluded' OR epp.work_status='no_assignments'))";
         $participationParams['participation_period_id'] = $evaluationPeriodId;
     }
     $users = admin_all(
-        "SELECT u.id, u.full_name, u.role, u.email, u.is_active,
-                f.id AS faculty_id, f.department
+        "SELECT u.id, u.full_name,
+                COALESCE(epp.role_snapshot,u.role) AS role,
+                u.email,u.is_active,f.id AS faculty_id,
+                COALESCE(epp.department_snapshot,f.department,u.department) AS department,
+                COALESCE(epp.program_snapshot,f.program_code,u.program) AS program
          FROM users u
          JOIN faculty f ON f.user_id = u.id
+         LEFT JOIN evaluation_period_participation epp
+           ON epp.evaluation_period_id=:context_period_id AND epp.user_id=u.id
          WHERE u.is_active = 1
-           AND u.role IN ('vpaa', 'dean', 'program_head', 'teacher')
+           AND COALESCE(epp.role_snapshot,u.role) IN ('vpaa','dean','program_head','teacher')
            AND f.is_active = 1
            AND f.is_archived = 0{$participationSql}
          ORDER BY u.role, f.department, u.full_name"
-    , $participationParams);
+    , ['context_period_id'=>(int)($evaluationPeriodId ?? 0)] + $participationParams);
 
     if ($users === []) {
         return [];
@@ -77,7 +82,7 @@ function dipascaf_required_evaluation_assignments(?int $evaluationPeriodId = nul
                     if (!dipascaf_assignment_relationship_allowed([
                         'evaluatee_faculty_id' => $evaluateeFacultyId,
                         'assignment_type' => $assignmentType,
-                    ], (int) $evaluator['id'], $evaluatorRole)) {
+                    ], (int) $evaluator['id'], $evaluatorRole, $evaluationPeriodId)) {
                         continue;
                     }
                 }
@@ -103,6 +108,30 @@ function dipascaf_required_evaluation_assignments(?int $evaluationPeriodId = nul
         }
     }
 
+    // Every active participant must always have one period-specific self
+    // evaluation, even when an installation's evaluation_rules table only
+    // contains the legacy Faculty self rule.
+    foreach ($users as $participant) {
+        $userId = (int)($participant['id'] ?? 0);
+        $facultyId = (int)($participant['faculty_id'] ?? 0);
+        $role = (string)($participant['role'] ?? '');
+        if ($userId <= 0 || $facultyId <= 0 || $role === '') {
+            continue;
+        }
+        $key = implode('|', [(string)$userId, (string)$facultyId, 'self']);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $assignments[] = [
+            'evaluator_user_id' => $userId,
+            'evaluatee_faculty_id' => $facultyId,
+            'evaluator_role' => $role,
+            'assignment_type' => 'self',
+            'questionnaire_type' => dipascaf_assignment_questionnaire_type($role),
+        ];
+    }
+
     return $assignments;
 }
 
@@ -119,6 +148,234 @@ function dipascaf_assignment_same_department(array $evaluator, array $evaluatee)
 function dipascaf_assignment_questionnaire_type(string $evaluateeRole): string
 {
     return $evaluateeRole === 'teacher' ? 'faculty' : 'admin';
+}
+
+/**
+ * Synchronize only the newly created/updated participant's evaluatee-side
+ * requirements. This avoids rebuilding every evaluator/evaluatee pair in the
+ * institution after a single account save.
+ */
+function dipascaf_upsert_user_requirements_for_period(
+    int $userId,
+    int $evaluationPeriodId,
+    string $periodName,
+    string $deadline
+): array {
+    if ($userId <= 0 || $evaluationPeriodId <= 0 || $periodName === '' || $deadline === '') {
+        return ['expected' => 0, 'inserted' => 0, 'updated' => 0];
+    }
+
+    $participant = admin_one(
+        "SELECT u.id user_id,COALESCE(epp.role_snapshot,u.role) role,
+                f.id faculty_id,
+                COALESCE(epp.department_id,d.id) department_id,
+                COALESCE(epp.program_id,p.id) program_id
+         FROM users u
+         JOIN faculty f ON f.user_id=u.id
+         LEFT JOIN evaluation_period_participation epp
+           ON epp.evaluation_period_id=:period_id AND epp.user_id=u.id
+         LEFT JOIN departments d
+           ON d.department_name=COALESCE(NULLIF(epp.department_snapshot,''),f.department,u.department)
+           OR d.department_code=COALESCE(NULLIF(epp.department_snapshot,''),f.department,u.department)
+         LEFT JOIN programs p
+           ON UPPER(p.program_code)=UPPER(COALESCE(NULLIF(epp.program_snapshot,''),f.program_code,u.program))
+         WHERE u.id=:user_id AND u.is_active=1
+           AND f.is_active=1 AND COALESCE(f.is_archived,0)=0
+           AND (epp.id IS NULL OR (epp.participation_status='included' AND COALESCE(epp.work_status,'active')<>'no_assignments'))
+         LIMIT 1",
+        ['period_id'=>$evaluationPeriodId,'user_id'=>$userId]
+    );
+    if ($participant === null) {
+        return ['expected' => 0, 'inserted' => 0, 'updated' => 0];
+    }
+
+    $role = (string)$participant['role'];
+    $facultyId = (int)$participant['faculty_id'];
+    $requirements = [[
+        'evaluator_user_id'=>$userId,
+        'evaluator_role'=>$role,
+        'assignment_type'=>'self',
+    ]];
+
+    if (in_array($role, ['teacher','program_head'], true)) {
+        $departmentId = (int)($participant['department_id'] ?? 0);
+        $dean = $departmentId > 0 ? admin_one(
+            "SELECT COALESCE(epd.user_id,d.dean_user_id) user_id
+             FROM departments d
+             LEFT JOIN evaluation_period_deans epd
+               ON epd.evaluation_period_id=:period_id AND epd.department_id=d.id
+             JOIN users du ON du.id=COALESCE(epd.user_id,d.dean_user_id)
+             WHERE d.id=:department_id AND d.is_active=1 AND du.is_active=1
+             LIMIT 1",
+            ['period_id'=>$evaluationPeriodId,'department_id'=>$departmentId]
+        ) : null;
+        if ((int)($dean['user_id'] ?? 0) > 0 && (int)$dean['user_id'] !== $userId) {
+            $requirements[] = [
+                'evaluator_user_id'=>(int)$dean['user_id'],
+                'evaluator_role'=>'dean',
+                'assignment_type'=>'dean',
+            ];
+        }
+    }
+
+    if ($role === 'teacher') {
+        $programId = (int)($participant['program_id'] ?? 0);
+        $programHead = $programId > 0 ? admin_one(
+            "SELECT COALESCE(
+                    (SELECT epph.user_id FROM evaluation_period_program_heads epph
+                     WHERE epph.evaluation_period_id=:period_id AND epph.program_id=p.id
+                     ORDER BY epph.is_lead_evaluator DESC,epph.is_primary DESC,epph.id LIMIT 1),
+                    p.program_head_user_id
+                ) user_id
+             FROM programs p
+             WHERE p.id=:program_id AND p.is_active=1
+             LIMIT 1",
+            ['period_id'=>$evaluationPeriodId,'program_id'=>$programId]
+        ) : null;
+        if ((int)($programHead['user_id'] ?? 0) > 0 && (int)$programHead['user_id'] !== $userId) {
+            $requirements[] = [
+                'evaluator_user_id'=>(int)$programHead['user_id'],
+                'evaluator_role'=>'program_head',
+                'assignment_type'=>'program_head',
+            ];
+        }
+    }
+
+    $statement = db()->prepare(
+        "INSERT INTO peer_assignments
+         (cycle_name,evaluator_user_id,evaluatee_faculty_id,evaluator_role,assignment_type,
+          questionnaire_type,status,assigned_at,deadline)
+         VALUES (:cycle,:evaluator,:faculty,:evaluator_role,:assignment_type,:questionnaire,'pending',NOW(),:deadline)
+         ON DUPLICATE KEY UPDATE evaluator_role=VALUES(evaluator_role),
+          questionnaire_type=VALUES(questionnaire_type),deadline=VALUES(deadline),
+          status=IF(status='submitted',status,'pending'),is_archived=0,archived_at=NULL,archived_by=NULL"
+    );
+    $inserted = $updated = 0;
+    foreach ($requirements as $requirement) {
+        $statement->execute([
+            'cycle'=>$periodName,
+            'evaluator'=>$requirement['evaluator_user_id'],
+            'faculty'=>$facultyId,
+            'evaluator_role'=>$requirement['evaluator_role'],
+            'assignment_type'=>$requirement['assignment_type'],
+            'questionnaire'=>dipascaf_assignment_questionnaire_type($role),
+            'deadline'=>$deadline,
+        ]);
+        if ($statement->rowCount() === 1) $inserted++;
+        elseif ($statement->rowCount() === 2) $updated++;
+    }
+    return ['expected'=>count($requirements),'inserted'=>$inserted,'updated'=>$updated];
+}
+
+/**
+ * Synchronize an account with every actionable evaluation period at or after
+ * its configured start period. The reconciliation is intentionally additive:
+ * completed work is never removed or reassigned, while missing evaluator- and
+ * evaluatee-side requirements are inserted through the existing idempotent
+ * upsert path.
+ */
+function dipascaf_sync_account_evaluation_periods(int $userId, int $actorId = 0): array
+{
+    if ($userId <= 0) {
+        return ['periods' => 0, 'assignments' => 0, 'peer_assignments' => 0, 'peer_review_required' => 0];
+    }
+
+    $account = admin_one(
+        'SELECT id,role,is_active,start_evaluation_period_id FROM users WHERE id=:id LIMIT 1',
+        ['id' => $userId]
+    );
+    if ($account === null || (int)$account['is_active'] !== 1
+        || !in_array((string)$account['role'], ['dean','program_head','teacher'], true)
+        || (int)($account['start_evaluation_period_id'] ?? 0) <= 0) {
+        return ['periods' => 0, 'assignments' => 0, 'peer_assignments' => 0, 'peer_review_required' => 0];
+    }
+
+    dipascaf_sync_user_start_period($userId, $actorId);
+    $periods = admin_all(
+        "SELECT ap.id,ap.period_name,ap.date_end
+         FROM appraisal_periods ap
+         JOIN evaluation_period_participation epp
+           ON epp.evaluation_period_id=ap.id AND epp.user_id=:user_id
+         WHERE ap.status IN ('draft','open')
+           AND epp.participation_status='included'
+           AND COALESCE(epp.work_status,'active')='active'
+           AND epp.employment_status IN ('active','newly_added')
+         ORDER BY ap.id",
+        ['user_id' => $userId]
+    );
+
+    $summary = ['periods' => 0, 'assignments' => 0, 'peer_assignments' => 0, 'peer_review_required' => 0];
+    foreach ($periods as $period) {
+        $periodId = (int)$period['id'];
+        $periodName = (string)$period['period_name'];
+        $deadline = (string)($period['date_end'] ?: date('Y-m-d', strtotime('+30 days')));
+        $result = dipascaf_upsert_required_assignments_for_period($periodName, $deadline);
+        $summary['periods']++;
+        $summary['assignments'] += (int)$result['inserted'] + (int)$result['updated'];
+
+        // Peer synchronization is optional at this layer so the core helper can
+        // also be reused by maintenance scripts that do not load the algorithm.
+        if (function_exists('dipascaf_sync_incremental_peers_for_account')) {
+            $peer = dipascaf_sync_incremental_peers_for_account($userId, $periodId, $periodName, $deadline);
+            $summary['peer_assignments'] += (int)($peer['created'] ?? 0);
+            if (!empty($peer['review_required'])) {
+                $summary['peer_review_required']++;
+                db()->prepare(
+                    'UPDATE appraisal_periods SET peer_assignments_validated_at=NULL,peer_assignments_validated_by=NULL WHERE id=?'
+                )->execute([$periodId]);
+            }
+        }
+    }
+
+    return $summary;
+}
+
+/** Repair missing active/draft-period snapshots and requirements safely. */
+function dipascaf_repair_actionable_period_account_sync(int $actorId = 0): array
+{
+    $users = admin_all(
+        "SELECT DISTINCT u.id
+         FROM users u
+         JOIN appraisal_periods start_period ON start_period.id=u.start_evaluation_period_id
+         WHERE u.is_active=1 AND u.role IN ('dean','program_head','teacher')
+           AND EXISTS (SELECT 1 FROM appraisal_periods ap WHERE ap.status IN ('draft','open'))
+         ORDER BY u.id"
+    );
+    $summary = ['users' => 0, 'periods' => 0, 'assignments' => 0, 'peer_assignments' => 0, 'peer_review_required' => 0];
+    foreach ($users as $user) {
+        dipascaf_sync_user_start_period((int)$user['id'], $actorId);
+        $summary['users']++;
+    }
+
+    $periods = admin_all("SELECT id,period_name,date_end FROM appraisal_periods WHERE status IN ('draft','open') ORDER BY id");
+    foreach ($periods as $period) {
+        $periodId = (int)$period['id'];
+        $periodName = (string)$period['period_name'];
+        $deadline = (string)($period['date_end'] ?: date('Y-m-d', strtotime('+30 days')));
+        $result = dipascaf_upsert_required_assignments_for_period($periodName, $deadline);
+        $summary['periods']++;
+        $summary['assignments'] += (int)$result['inserted'] + (int)$result['updated'];
+
+        if (!function_exists('dipascaf_generate_peer_evaluation_assignments')) continue;
+        $requiresReview = false;
+        foreach (['department','dean'] as $peerGroup) {
+            try {
+                $peer = dipascaf_generate_peer_evaluation_assignments(
+                    $periodId, $periodName, $deadline, true, false, [], $peerGroup
+                );
+                $summary['peer_assignments'] += (int)($peer['created'] ?? 0);
+                $requiresReview = $requiresReview || !empty($peer['invalidGroups']);
+            } catch (RuntimeException) {
+                $requiresReview = true;
+            }
+        }
+        if ($requiresReview) {
+            $summary['peer_review_required']++;
+            db()->prepare('UPDATE appraisal_periods SET peer_assignments_validated_at=NULL,peer_assignments_validated_by=NULL WHERE id=?')
+                ->execute([$periodId]);
+        }
+    }
+    return $summary;
 }
 
 function dipascaf_program_head_transition_policy(array $rows, int $currentEvaluatorId): string
@@ -144,21 +401,28 @@ function dipascaf_upsert_required_assignments_for_period(string $periodName, str
     }
 
     $db = db();
+    $hasReplacementReason = admin_one("SHOW COLUMNS FROM peer_assignments LIKE 'replacement_reason'") !== null;
     $stmt = $db->prepare(
         "INSERT INTO peer_assignments
             (cycle_name, evaluator_user_id, evaluatee_faculty_id, evaluator_role, assignment_type, questionnaire_type, status, assigned_at, deadline)
          VALUES
             (:cycle_name, :evaluator_user_id, :evaluatee_faculty_id, :evaluator_role, :assignment_type, :questionnaire_type, 'pending', NOW(), :deadline)
          ON DUPLICATE KEY UPDATE
+            evaluator_role = VALUES(evaluator_role),
             questionnaire_type = VALUES(questionnaire_type),
             deadline = VALUES(deadline),
-            status = IF(status = 'submitted', status, 'pending')"
+            status = IF(status = 'submitted', status, 'pending'),
+            is_archived = 0,
+            archived_at = NULL,
+            archived_by = NULL"
+            . ($hasReplacementReason ? ", replacement_reason = IF(status = 'submitted', replacement_reason, NULL)" : '')
     );
 
     $inserted = 0;
     $updated = 0;
     foreach ($assignments as $assignment) {
-        if ($assignment['assignment_type'] === 'program_head') {
+        if ($assignment['assignment_type'] === 'program_head'
+            && $assignment['evaluator_role'] === 'program_head') {
             $resolution = dipascaf_reconcile_program_head_assignment($assignment, $periodName, $deadline);
             if ($resolution !== 'create') {
                 $updated++;
@@ -187,9 +451,9 @@ function dipascaf_upsert_required_assignments_for_period(string $periodName, str
 
 /**
  * Enforce one normal Program Head requirement per faculty and cycle.
- * Submitted work is immutable and remains official. A new Program Head is
- * recorded as current but not required until the next cycle. Pending work is
- * reassigned instead of duplicated.
+ * Submitted work is immutable and remains historical. The Program Head assigned
+ * by the administrator for this period still receives a current requirement;
+ * pending work is reassigned instead of silently hiding the current head.
  */
 function dipascaf_reconcile_program_head_assignment(array $assignment, string $periodName, string $deadline): string
 {
@@ -218,22 +482,16 @@ function dipascaf_reconcile_program_head_assignment(array $assignment, string $p
 
     $policy = dipascaf_program_head_transition_policy($rows, $evaluatorId);
     if ($policy === 'official_submitted' && $submitted !== null) {
-        $reason = 'Current Program Head starts with the next evaluation cycle because this cycle already has an official submitted Program Head evaluation.';
-        $db->prepare(
-            "UPDATE peer_assignments SET is_current = 0, effective_to = COALESCE(effective_to, NOW()),
-             evaluator_name_snapshot = COALESCE(evaluator_name_snapshot, (SELECT full_name FROM users WHERE id = evaluator_user_id)),
-             evaluator_role_snapshot = COALESCE(evaluator_role_snapshot, evaluator_role)
-             WHERE id = :id"
-        )->execute(['id' => (int) $submitted['id']]);
+        $reason = 'Current Program Head assigned by Admin for this evaluation period; the earlier submitted evaluation remains unchanged.';
 
         if ($currentRow === null) {
             $db->prepare(
                 "INSERT INTO peer_assignments
                  (cycle_name, evaluator_user_id, evaluatee_faculty_id, evaluator_role, assignment_type,
                   questionnaire_type, status, assigned_at, effective_from, is_current, replacement_reason,
-                  evaluator_name_snapshot, evaluator_role_snapshot, deadline)
+                 evaluator_name_snapshot, evaluator_role_snapshot, deadline)
                  VALUES (:cycle, :evaluator, :faculty, 'program_head', 'program_head', 'faculty',
-                         'not_required', NOW(), NOW(), 1, :reason, :name, 'program_head', :deadline)"
+                         'pending', NOW(), NOW(), 1, :reason, :name, 'program_head', :deadline)"
             )->execute(['cycle' => $periodName, 'evaluator' => $evaluatorId, 'faculty' => $facultyId,
                 'reason' => $reason, 'name' => $evaluatorName, 'deadline' => $deadline]);
             $currentId = (int) $db->lastInsertId();
@@ -241,16 +499,17 @@ function dipascaf_reconcile_program_head_assignment(array $assignment, string $p
             $currentId = (int) $currentRow['id'];
             if ((string) $currentRow['status'] !== 'submitted') {
                 $db->prepare(
-                    "UPDATE peer_assignments SET status = 'not_required', is_current = 1,
+                    "UPDATE peer_assignments SET status = 'pending', is_current = 1,
                      effective_from = COALESCE(effective_from, NOW()), replacement_reason = :reason,
-                     evaluator_name_snapshot = :name, evaluator_role_snapshot = 'program_head'
+                     evaluator_name_snapshot = :name, evaluator_role_snapshot = 'program_head',
+                     is_archived = 0, archived_at = NULL, archived_by = NULL, deadline = :deadline
                      WHERE id = :id"
-                )->execute(['reason' => $reason, 'name' => $evaluatorName, 'id' => $currentId]);
+                )->execute(['reason' => $reason, 'name' => $evaluatorName, 'deadline' => $deadline, 'id' => $currentId]);
             }
         }
         dipascaf_log_assignment_history($currentId, $facultyId, $evaluatorId, $evaluatorName,
-            'program_head', $periodName, 'not_required', (int) $submitted['id'], $reason, $actorId);
-        return 'not_required';
+            'program_head', $periodName, 'pending', (int) $submitted['id'], $reason, $actorId);
+        return 'current_added';
     }
 
     $activeOld = null;

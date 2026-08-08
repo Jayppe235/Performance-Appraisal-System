@@ -1,0 +1,95 @@
+/* Evaluator assignment table: keep one coherent palette inside portal modals. */
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-section {
+  border-color:#d4e5dc!important;
+  background:#fff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-heading {
+  border-color:#d4e5dc!important;
+  background:linear-gradient(135deg,#f1faf5,#fbfdfc)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table {
+  border-color:#d4e5dc!important;
+  background:#fff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table th {
+  border-color:#d4e5dc!important;
+  background:#edf7f2!important;
+  color:#345e4e!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table td {
+  border-color:#deebe4!important;
+  background:#fff!important;
+  color:#405e52!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table :is(.eval-assignment-evaluator,.eval-assignment-form-name) {
+  color:#183f31!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table .eval-monitor-status-note {
+  color:#657a71!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table .eval-assignment-role {
+  border-color:#c9dfd5!important;
+  background:#f3f8f6!important;
+  color:#4e6c60!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table tbody tr:has(.badge-success) td {
+  background:#eef9f3!important;
+  color:#355b4b!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table tbody tr:hover td {
+  background:#e8f6ef!important;
+  color:#244f3e!important;
+}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-section {
+  border-color:#294965!important;
+  background:#0d2032!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-heading {
+  border-color:#294965!important;
+  background:linear-gradient(135deg,#132b42,#102338)!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-heading :is(h4,p) {
+  color:#eef6ff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-heading p {
+  color:#a4b6c7!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table {
+  border-color:#2d4d68!important;
+  background:#0e2134!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table th {
+  border-color:#31516c!important;
+  background:#162f49!important;
+  color:#bad9f2!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table td {
+  border-color:#29465f!important;
+  background:#10253a!important;
+  color:#c7d6e4!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table :is(.eval-assignment-evaluator,.eval-assignment-form-name) {
+  color:#edf6ff!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table .eval-monitor-status-note {
+  color:#9fb2c3!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table .eval-assignment-role {
+  border-color:#385d7b!important;
+  background:#172f46!important;
+  color:#bdd8ee!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table tbody tr:has(.badge-success) td {
+  background:#12392f!important;
+  color:#d5ece3!important;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table tbody tr:hover td {
+  background:#193a54!important;
+  color:#f2f7fc!important;
+}
+
+@media(max-width:640px){
+  body:has(:is(.admin-body,.admin-dashboard-body):not(.dark-mode)) .eval-assignment-table tr{border-color:#d4e5dc!important;background:#fff!important}
+  body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .eval-assignment-table tr{border-color:#2d4d68!important;background:#10253a!important}
+}

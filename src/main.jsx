@@ -15,10 +15,19 @@ import './styles/assignment-workbench-fixes.css';
 import './styles/department-profile-polish.css';
 import './styles/department-ai-layout.css';
 import './styles/responsive-final.css';
+import './styles/period-participant-assignment.css';
+import './styles/goals-record-review.css';
+import './styles/evaluation-period-filter.css';
+import './styles/self-questionnaire-builder.css';
+import './styles/evaluation-card-pagination.css';
+import './styles/evaluation-assignment-theme.css';
+
+const routerBase = String(import.meta.env.BASE_URL || '/')
+  .replace(/\/+$/, '') || '/';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={routerBase}>
       <ConnectivityGate>
         <App />
       </ConnectivityGate>

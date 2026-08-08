@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { WifiOff } from 'lucide-react';
+import { ServerOff, WifiOff } from 'lucide-react';
 import { apiUrl } from '../../data/apiBase.js';
 
 const RETRY_DELAY_MS = 5000;
@@ -22,12 +22,16 @@ export default function ConnectivityGate({ children }) {
         headers: { Accept: 'application/json' },
         signal: controller.signal,
       });
-      const payload = await response.json();
-      if (!response.ok || payload?.ok !== true) throw new Error('Unavailable');
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok !== true) {
+        setStatus('server-unavailable');
+        timerRef.current = setTimeout(checkConnection, RETRY_DELAY_MS);
+        return;
+      }
       setStatus('online');
       timerRef.current = setTimeout(checkConnection, ONLINE_CHECK_INTERVAL_MS);
     } catch {
-      setStatus('offline');
+      setStatus(navigator.onLine ? 'server-unavailable' : 'offline');
       timerRef.current = setTimeout(checkConnection, RETRY_DELAY_MS);
     } finally {
       clearTimeout(timeout);
@@ -47,17 +51,30 @@ export default function ConnectivityGate({ children }) {
 
   if (status === 'online') return children;
 
+  const isChecking = status === 'checking';
+  const isOffline = status === 'offline';
+
   return (
     <main className="connectivity-gate" role="alert" aria-live="assertive">
       <section className="connectivity-card">
-        <span className="connectivity-icon" aria-hidden="true"><WifiOff size={34} /></span>
-        <h1>{status === 'checking' ? 'Connecting to PMAS' : 'Internet connection required'}</h1>
+        <span className="connectivity-icon" aria-hidden="true">
+          {isOffline ? <WifiOff size={34} /> : <ServerOff size={34} />}
+        </span>
+        <h1>
+          {isChecking
+            ? 'Connecting to PMAS'
+            : isOffline
+              ? 'Internet connection required'
+              : 'PMAS is temporarily unavailable'}
+        </h1>
         <p>
-          {status === 'checking'
+          {isChecking
             ? 'Checking the application server and database…'
-            : 'PMAS cannot reach its server. Check your internet connection; this page will reconnect automatically.'}
+            : isOffline
+              ? 'Your device appears to be offline. Check your internet connection; this page will reconnect automatically.'
+              : 'Your internet connection is working, but the PMAS server or database is unavailable. This page will reconnect automatically.'}
         </p>
-        {status === 'offline' && <button type="button" onClick={checkConnection}>Try again</button>}
+        {!isChecking && <button type="button" onClick={checkConnection}>Try again</button>}
       </section>
     </main>
   );

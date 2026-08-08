@@ -52,7 +52,6 @@ try {
  * Expects JSON body:
  * {
  *   "school_year": string,
- *   "semester": string,
  *   "period_name": string,
  *   "date_start": "YYYY-MM-DD",
  *   "due_date": "YYYY-MM-DD"
@@ -65,7 +64,7 @@ function handleCreateSchedule(): void
 
     $periodName = trim((string) ($input['period_name'] ?? ''));
     $schoolYear = trim((string) ($input['school_year'] ?? ''));
-    $semester = trim((string) ($input['semester'] ?? ''));
+    $semester = null;
     $dateStart = trim((string) ($input['date_start'] ?? $input['start_date'] ?? ''));
     $periodId = (int) ($input['period_id'] ?? 0);
     $dueDate = trim((string) ($input['due_date'] ?? $input['date_end'] ?? ''));
@@ -74,14 +73,13 @@ function handleCreateSchedule(): void
         $currentPeriod = dipascaf_current_evaluation_period();
         $periodName = trim((string) ($currentPeriod['period_name'] ?? ''));
         $schoolYear = trim((string) ($currentPeriod['school_year'] ?? ''));
-        $semester = trim((string) ($currentPeriod['semester'] ?? ''));
         $dateStart = trim((string) ($currentPeriod['date_start'] ?? ''));
         $periodId = (int) ($currentPeriod['id'] ?? 0);
     }
 
-    if ((!$periodName && $periodId <= 0) || $schoolYear === '' || $semester === '' || $dateStart === '' || $dueDate === '') {
+    if ((!$periodName && $periodId <= 0) || $schoolYear === '' || $dateStart === '' || $dueDate === '') {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'School year, semester, period name, start date, and due date are required.']);
+        echo json_encode(['ok' => false, 'error' => 'Academic year, period name, start date, and due date are required.']);
         return;
     }
 
@@ -146,6 +144,10 @@ function handleCreateSchedule(): void
     // are generated separately by each Dean from the Dean dashboard.
     $assignments = dipascaf_required_evaluation_assignments($evaluationPeriodId);
 
+    // Complete schema checks before beginning the data transaction; MariaDB
+    // DDL would otherwise implicitly end the transaction.
+    admin_ensure_faculty_program_schema();
+    dipascaf_ensure_period_participation_schema();
     $db->beginTransaction();
     try {
         // Save the evaluation schedule
@@ -456,18 +458,24 @@ function handleDeleteSchedule(): void
         return;
     }
 
+    // Run compatibility DDL before the transaction. MariaDB implicitly
+    // commits when CREATE/ALTER TABLE executes.
+    dipascaf_ensure_peer_evaluation_schema();
     $db->beginTransaction();
     try {
-        dipascaf_ensure_peer_evaluation_schema();
         // Keep historical assignments/results intact. Only cancel the schedule record.
         $db->prepare("UPDATE evaluation_schedules SET status = 'cancelled' WHERE id = ?")
            ->execute([$scheduleId]);
 
-        $db->commit();
+        if ($db->inTransaction()) {
+            $db->commit();
+        }
 
         echo json_encode(['ok' => true, 'message' => 'Schedule cancelled. Historical assignments and submitted results were preserved.']);
     } catch (Throwable $e) {
-        $db->rollBack();
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
         throw $e;
     }
 }
@@ -481,7 +489,7 @@ function handleUpdateSchedule(?array $input = null): void
     $scheduleId = (int) ($input['id'] ?? $_GET['id'] ?? 0);
     $periodName = trim((string) ($input['period_name'] ?? ''));
     $schoolYear = trim((string) ($input['school_year'] ?? ''));
-    $semester = trim((string) ($input['semester'] ?? ''));
+    $semester = null;
     $dateStart = trim((string) ($input['date_start'] ?? $input['start_date'] ?? ''));
     $dueDate = trim((string) ($input['due_date'] ?? $input['date_end'] ?? ''));
 
@@ -491,9 +499,9 @@ function handleUpdateSchedule(?array $input = null): void
         return;
     }
 
-    if ($periodName === '' || $schoolYear === '' || $semester === '' || $dateStart === '' || $dueDate === '') {
+    if ($periodName === '' || $schoolYear === '' || $dateStart === '' || $dueDate === '') {
         http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'School year, semester, period name, start date, and due date are required.']);
+        echo json_encode(['ok' => false, 'error' => 'Academic year, period name, start date, and due date are required.']);
         return;
     }
 
@@ -561,10 +569,11 @@ function handleUpdateSchedule(?array $input = null): void
         return;
     }
 
+    // Finish schema compatibility checks before starting the update
+    // transaction so DDL cannot implicitly close it.
+    dipascaf_ensure_peer_evaluation_schema();
     $db->beginTransaction();
     try {
-        dipascaf_ensure_peer_evaluation_schema();
-
         $db->prepare("
             UPDATE appraisal_periods
             SET period_name = ?, school_year = ?, semester = ?, date_start = ?, date_end = ?
@@ -581,7 +590,9 @@ function handleUpdateSchedule(?array $input = null): void
             (int) $schedule['period_id']
         );
 
-        $db->commit();
+        if ($db->inTransaction()) {
+            $db->commit();
+        }
 
         $notificationCount = 0;
         if ($dateChanged) {

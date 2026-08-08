@@ -3,8 +3,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/admin_data.php';
 
-function program_head_programs(int $programHeadUserId): array
+function program_head_programs(int $programHeadUserId, ?int $evaluationPeriodId = null): array
 {
+    if ($evaluationPeriodId !== null && $evaluationPeriodId > 0) {
+        require_once __DIR__ . '/evaluation_participation.php';
+        $periodPrograms = dipascaf_period_program_head_programs($evaluationPeriodId, $programHeadUserId, false);
+        if ($periodPrograms !== []) return $periodPrograms;
+    }
     return admin_all(
         'SELECT p.*, d.department_code, d.department_name
          FROM programs p
@@ -15,9 +20,9 @@ function program_head_programs(int $programHeadUserId): array
     );
 }
 
-function program_head_departments(int $programHeadUserId): array
+function program_head_departments(int $programHeadUserId, ?int $evaluationPeriodId = null): array
 {
-    $programs = program_head_programs($programHeadUserId);
+    $programs = program_head_programs($programHeadUserId, $evaluationPeriodId);
 
     if ($programs === []) {
         // Fallback to the user's department field when no programs are mapped

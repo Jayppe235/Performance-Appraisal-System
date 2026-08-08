@@ -103,7 +103,11 @@ export default async function apiFetch(url, options = {}) {
   // 401/403 checks above are sufficient for detecting real session expiry.
   if (!response.ok || payload.ok === false) {
     const errorMessage = payload.message || payload.error || 'Request failed';
-    throw new Error(errorMessage);
+    const requestError = new Error(errorMessage);
+    requestError.status = response.status;
+    requestError.code = payload.code || '';
+    requestError.payload = payload;
+    throw requestError;
   }
 
   if (method !== 'GET' && method !== 'HEAD') {

@@ -245,7 +245,6 @@ function dipascaf_peer_eligible_deans(array $departmentScope = []): array
 {
     $scopeWhere = '';
     $params = [];
-    $departmentScope = [];
     $departmentIds = array_values(array_filter(array_map('intval', $departmentScope['department_ids'] ?? [])));
     $departments = array_values(array_unique(array_filter(array_map(
         static fn ($value): string => trim((string) $value),
@@ -632,25 +631,38 @@ function dipascaf_sync_peer_leadership_faculty_records(array $departmentScope = 
     }
 }
 
-function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, string $periodName, string $dueDate, bool $includeProgramHeads = true, bool $regenerate = false, array $departmentScope = []): array
+function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, string $periodName, string $dueDate, bool $includeProgramHeads = true, bool $regenerate = false, array $departmentScope = [], string $peerGroup = 'department'): array
 {
     dipascaf_ensure_peer_evaluation_schema();
-    if ($includeProgramHeads) {
+    $deanOnly = $peerGroup === 'dean';
+    if ($deanOnly) {
+        $deanUsers = admin_all("SELECT id FROM users WHERE role='dean' AND is_active=1");
+        foreach ($deanUsers as $deanUser) {
+            dipascaf_ensure_leadership_faculty_record((int)$deanUser['id'], 'Dean');
+        }
+    } elseif ($includeProgramHeads) {
         dipascaf_sync_peer_leadership_faculty_records($departmentScope);
     }
 
     $db = db();
-    $eligible = dipascaf_peer_eligible_users($includeProgramHeads, $departmentScope, $evaluationPeriodId);
+    $eligible = $deanOnly
+        ? array_values(array_filter(
+            dipascaf_peer_eligible_deans(),
+            static fn(array $row): bool => !dipascaf_period_user_is_excluded($evaluationPeriodId, (int)$row['user_id'])
+        ))
+        : dipascaf_peer_eligible_users($includeProgramHeads, $departmentScope, $evaluationPeriodId);
     if ($eligible === []) {
         throw new RuntimeException(
-            'No eligible Faculty or Program Heads were found in the selected department. '
+            $deanOnly
+            ? 'No eligible Deans were found. Add active Dean accounts with department assignments before generating Dean-to-Dean peers.'
+            : 'No eligible Faculty or Program Heads were found in the selected department. '
             . 'Add active users with linked faculty records before generating peer assignments.'
         );
     }
     $deans = [];
     $departmentGroups = [];
     foreach ($eligible as $user) {
-        $key = dipascaf_peer_department_key($user);
+        $key = $deanOnly ? 'institution-deans' : dipascaf_peer_department_key($user);
         $departmentGroups[$key]['evaluators'][] = $user;
         if ((string) $user['role'] === 'teacher') {
             $departmentGroups[$key]['faculty'][] = $user;
@@ -658,17 +670,22 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
         if ((string) $user['role'] === 'program_head') {
             $departmentGroups[$key]['program_heads'][] = $user;
         }
+        if ((string) $user['role'] === 'dean') {
+            $departmentGroups[$key]['deans'][] = $user;
+        }
     }
     $hasGeneratableGroup = false;
     foreach ($departmentGroups as $group) {
-        if (count($group['faculty'] ?? []) >= 2 || count($group['program_heads'] ?? []) >= 2) {
+        if (count($group['faculty'] ?? []) >= 2 || count($group['program_heads'] ?? []) >= 2 || count($group['deans'] ?? []) >= 2) {
             $hasGeneratableGroup = true;
             break;
         }
     }
     if (!$hasGeneratableGroup) {
         throw new RuntimeException(
-            'At least two eligible people of the same evaluator type are required in the selected department.'
+            $deanOnly
+                ? 'At least two eligible Deans from different departments are required for Dean-to-Dean peer assignments.'
+                : 'At least two eligible people of the same evaluator type are required in the selected department.'
         );
     }
 
@@ -677,11 +694,13 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
         $previousRows = admin_all(
             "SELECT pea.evaluator_id, pea.evaluatee_id
              FROM peer_evaluation_assignments pea
+             JOIN users generation_evaluator ON generation_evaluator.id = pea.evaluator_id
              LEFT JOIN faculty ef ON ef.id = pea.evaluatee_faculty_id
              WHERE pea.evaluation_period_id = :period_id
                AND pea.locked_at IS NULL
                AND pea.status <> 'completed'
                AND COALESCE(pea.is_archived, 0) = 0
+               AND " . ($deanOnly ? "generation_evaluator.role = 'dean'" : "generation_evaluator.role <> 'dean'") . "
                AND " . dipascaf_peer_scope_condition($departmentScope, 'pea', 'ef')['sql'],
             ['period_id' => $evaluationPeriodId] + dipascaf_peer_scope_condition($departmentScope, 'pea', 'ef')['params']
         );
@@ -690,12 +709,13 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
         }
     }
 
-    // Pending assignments remain provisional until the period is locked. Refresh
-    // them on each generation pass, while preserving completed/submitted/locked rows.
+    // Pending assignments are only refreshed during an explicit regeneration.
     $scopeCondition = dipascaf_peer_scope_condition($departmentScope, 'pea', 'ef');
-    $db->prepare("
+    if ($regenerate) {
+        $db->prepare("
         DELETE pea, pa
         FROM peer_evaluation_assignments pea
+        JOIN users generation_evaluator ON generation_evaluator.id = pea.evaluator_id
         LEFT JOIN peer_assignments pa ON pa.id = pea.peer_assignment_id
         LEFT JOIN faculty ef ON ef.id = pea.evaluatee_faculty_id
         WHERE pea.evaluation_period_id = :period_id
@@ -703,8 +723,10 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
           AND pea.status <> 'completed'
           AND (pa.status IS NULL OR pa.status <> 'submitted')
           AND COALESCE(pea.is_archived, 0) = 0
+          AND " . ($deanOnly ? "generation_evaluator.role = 'dean'" : "generation_evaluator.role <> 'dean'") . "
           AND {$scopeCondition['sql']}
-    ")->execute(['period_id' => $evaluationPeriodId] + $scopeCondition['params']);
+        ")->execute(['period_id' => $evaluationPeriodId] + $scopeCondition['params']);
+    }
 
     $currentState = dipascaf_current_peer_state($evaluationPeriodId);
     $generated = [];
@@ -714,6 +736,7 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
         $evaluators = array_values($group['evaluators'] ?? []);
         $facultyCandidates = array_values($group['faculty'] ?? []);
         $programHeadCandidates = array_values($group['program_heads'] ?? []);
+        $deanCandidates = array_values($group['deans'] ?? []);
         if (count($facultyCandidates) < 2 && count(array_filter($evaluators, static fn (array $user): bool => (string) $user['role'] === 'teacher')) > 0) {
             $invalidGroups[] = ['scope' => $scopeKey . '_faculty', 'eligible' => count($facultyCandidates)];
         }
@@ -732,12 +755,15 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
         $assignments = [];
         shuffle($missingMembers);
         foreach ($missingMembers as $evaluator) {
-            $candidatePool = (string) ($evaluator['role'] ?? '') === 'program_head'
-                ? $programHeadCandidates
-                : dipascaf_prefer_cross_program_faculty($evaluator, $facultyCandidates);
+            $candidatePool = match ((string)($evaluator['role'] ?? '')) {
+                'dean' => $deanCandidates,
+                'program_head' => $programHeadCandidates,
+                default => dipascaf_prefer_cross_program_faculty($evaluator, $facultyCandidates),
+            };
             $candidatePool = array_values(array_filter(
                 $candidatePool,
-                static fn (array $candidate): bool => dipascaf_peer_pair_allowed($evaluator, $candidate)
+                static fn (array $candidate): bool =>
+                    dipascaf_peer_pair_allowed($evaluator, $candidate)
             ));
             $evaluatee = dipascaf_select_random_peer(
                 $evaluator,
@@ -770,7 +796,8 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
         }
     }
 
-    $db->beginTransaction();
+    $ownsTransaction = !$db->inTransaction();
+    if ($ownsTransaction) $db->beginTransaction();
     try {
         $insertPeer = $db->prepare("
             INSERT INTO peer_assignments
@@ -842,12 +869,12 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
             }
         }
 
-        if ($db->inTransaction()) {
+        if ($ownsTransaction && $db->inTransaction()) {
             $db->commit();
         }
         dipascaf_prune_pending_peer_duplicates($periodName, $evaluationPeriodId);
     } catch (Throwable $exception) {
-        if ($db->inTransaction()) {
+        if ($ownsTransaction && $db->inTransaction()) {
             $db->rollBack();
         }
         throw $exception;
@@ -859,6 +886,47 @@ function dipascaf_generate_peer_evaluation_assignments(int $evaluationPeriodId, 
         'groups' => count($departmentGroups) + 1,
         'invalidGroups' => $invalidGroups,
     ];
+}
+
+/** Add only the missing peer assignment for a newly synchronized account. */
+function dipascaf_sync_incremental_peers_for_account(
+    int $userId,
+    int $evaluationPeriodId,
+    string $periodName,
+    string $deadline
+): array {
+    $context = dipascaf_period_user_context($evaluationPeriodId, $userId);
+    if ($context === null || !in_array((string)$context['role'], ['teacher','program_head','dean'], true)
+        || (string)$context['participation_status'] !== 'included'
+        || (string)$context['work_status'] !== 'active') {
+        return ['created' => 0, 'review_required' => false];
+    }
+
+    $existing = admin_one(
+        'SELECT id FROM peer_evaluation_assignments WHERE evaluation_period_id=:period AND evaluator_id=:user AND COALESCE(is_archived,0)=0 LIMIT 1',
+        ['period' => $evaluationPeriodId, 'user' => $userId]
+    );
+    if ($existing !== null) return ['created' => 0, 'review_required' => false];
+
+    $role = (string)$context['role'];
+    $scope = $role === 'dean' ? [] : [
+        'department_ids' => !empty($context['department_id']) ? [(int)$context['department_id']] : [],
+        'departments' => !empty($context['department']) ? [(string)$context['department']] : [],
+    ];
+    try {
+        $result = dipascaf_generate_peer_evaluation_assignments(
+            $evaluationPeriodId,
+            $periodName,
+            $deadline,
+            true,
+            false,
+            $scope,
+            $role === 'dean' ? 'dean' : 'department'
+        );
+        return ['created' => (int)($result['created'] ?? 0), 'review_required' => !empty($result['invalidGroups'])];
+    } catch (RuntimeException) {
+        return ['created' => 0, 'review_required' => true];
+    }
 }
 
 function dipascaf_prune_pending_peer_duplicates(string $periodName, ?int $evaluationPeriodId = null): array

@@ -67,7 +67,7 @@ header('Content-Type: application/json');
 
 if ($action === 'periods') {
     $periodsData = admin_all(
-        "SELECT id, period_name, school_year, semester, status,
+        "SELECT id, period_name, school_year, status,
                 date_start, date_end,
                 CASE WHEN status = 'open' THEN 1 ELSE 0 END AS is_open
          FROM appraisal_periods

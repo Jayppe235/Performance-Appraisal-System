@@ -1,11 +1,18 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   AlertCircle, BookOpenCheck, ClipboardCheck, Clock, Lightbulb,
-  Search, Star, Target, TrendingDown, TrendingUp, BarChart3, LineChart,
+  Star, Target, TrendingDown, TrendingUp, BarChart3, LineChart,
 } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
 import useLiveRefresh from '../../hooks/useLiveRefresh.js';
+
+function scoreTone(score) {
+  const value = Number(score || 0);
+  if (value < 3) return 'score-low';
+  if (value >= 4) return 'score-high';
+  return 'score-satisfactory';
+}
 
 // ─── Pure SVG Trend Line Chart ─────────────────────────────────────────
 function ScoreTrendChart({ rows }) {
@@ -297,8 +304,6 @@ export default function PersonalPerformanceSummary({ receivedCount = 0 }) {
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState({ latestScore: null, latestPeriod: '', canRevealResults: true, completion: null, message: '' });
   const [insights, setInsights] = useState({ strengths: [], weaknesses: [], recommendations: [] });
-  const [categoryEvaluatorResults, setCategoryEvaluatorResults] = useState([]);
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -314,7 +319,6 @@ export default function PersonalPerformanceSummary({ receivedCount = 0 }) {
       setRows(Array.isArray(payload.data) ? payload.data : []);
       setSummary(payload.summary || {});
       setInsights(payload.insights || { strengths: [], weaknesses: [], recommendations: [] });
-      setCategoryEvaluatorResults(Array.isArray(payload.categoryEvaluatorResults) ? payload.categoryEvaluatorResults : []);
     } catch (err) {
       setError(err.message || 'Unable to load evaluation results.');
     } finally {
@@ -325,12 +329,6 @@ export default function PersonalPerformanceSummary({ receivedCount = 0 }) {
   const { refreshing: liveRefreshing } = useLiveRefresh(loadResults, [selectedPeriodId], {
     intervalMs: 6000,
   });
-
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => `${row.period} ${row.year} ${row.performanceLevel} ${row.status}`.toLowerCase().includes(q));
-  }, [rows, search]);
 
   const latestScore = summary.latestScore ? Number(summary.latestScore).toFixed(2) : null;
   const latestPeriod = summary.latestPeriod || 'No period yet';
@@ -425,11 +423,35 @@ export default function PersonalPerformanceSummary({ receivedCount = 0 }) {
                 strengths={insights.strengths}
                 weaknesses={insights.weaknesses}
               />
+              {rows.length < 2 && (
+                <aside className="personal-performance-snapshot" aria-label="Performance snapshot">
+                  <header>
+                    <span><Star size={17} /></span>
+                    <div>
+                      <small>Selected-period overview</small>
+                      <h3>Performance Snapshot</h3>
+                    </div>
+                  </header>
+                  <div className="personal-snapshot-score">
+                    <div className="personal-snapshot-ring" style={{ '--snapshot-pct': `${scorePct}%` }}>
+                      <strong>{latestScore || '--'}</strong>
+                      <span>out of 5</span>
+                    </div>
+                    <div>
+                      <small>Performance level</small>
+                      <strong>{rows[0]?.performanceLevel || 'Awaiting result'}</strong>
+                      <span>{latestPeriod}</span>
+                    </div>
+                  </div>
+                  <div className="personal-snapshot-grid">
+                    <article><ClipboardCheck size={16} /><span>Evaluations</span><strong>{completion.submitted || 0}/{completion.total || 0}</strong></article>
+                    <article><TrendingUp size={16} /><span>Strengths</span><strong>{insights.strengths?.length || 0}</strong></article>
+                    <article><Target size={16} /><span>Focus areas</span><strong>{insights.weaknesses?.length || 0}</strong></article>
+                  </div>
+                  <p>Scores are consolidated across completed evaluations to protect evaluator confidentiality.</p>
+                </aside>
+              )}
             </div>
-          )}
-
-          {canRevealResults && (
-            <CategoryScorePerEvaluator rows={categoryEvaluatorResults} />
           )}
 
           {!canRevealResults && (
@@ -453,7 +475,7 @@ export default function PersonalPerformanceSummary({ receivedCount = 0 }) {
                   </div>
                 </div>
                 {insights.strengths?.length > 0 ? insights.strengths.map((item) => (
-                  <div className="faculty-insight-row" key={`strength-${item.category}`}>
+                  <div className={`faculty-insight-row ${scoreTone(item.score)}`} key={`strength-${item.category}`}>
                     <span>{item.category}</span>
                     <strong>{Number(item.score || 0).toFixed(2)}/5</strong>
                   </div>
@@ -469,7 +491,7 @@ export default function PersonalPerformanceSummary({ receivedCount = 0 }) {
                   </div>
                 </div>
                 {insights.weaknesses?.length > 0 ? insights.weaknesses.map((item) => (
-                  <div className="faculty-insight-row" key={`weakness-${item.category}`}>
+                  <div className={`faculty-insight-row ${scoreTone(item.score)}`} key={`weakness-${item.category}`}>
                     <span>{item.category}</span>
                     <strong>{Number(item.score || 0).toFixed(2)}/5</strong>
                   </div>
@@ -497,55 +519,6 @@ export default function PersonalPerformanceSummary({ receivedCount = 0 }) {
             </div>
           )}
 
-          {/* Search / Filter */}
-          {canRevealResults && <div className="eval-monitor-table-container">
-            <div className="eval-monitor-toolbar">
-              <div className="eval-monitor-search">
-                <Search size={16} />
-                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search period, year, level, status..." />
-              </div>
-              <div className="eval-monitor-toolbar-actions">
-                <small>{filteredRows.length} result{filteredRows.length !== 1 ? 's' : ''}</small>
-              </div>
-            </div>
-
-            {filteredRows.length === 0 && (
-              <div className="eval-monitor-empty">
-                <ClipboardCheck size={28} />
-                <strong>No evaluation results found</strong>
-                <p>{search ? 'No results match your search criteria.' : 'Completed evaluations will appear here once your peers submit their ratings.'}</p>
-              </div>
-            )}
-
-            {filteredRows.length > 0 && (
-              <div className="eval-monitor-dept-grid">
-                {filteredRows.map((row) => (
-                    <div className="eval-monitor-dept-card" key={row.periodKey || row.period}>
-                    <div className="eval-monitor-dept-card-header">
-                      <div className="eval-monitor-dept-card-icon">
-                        <ClipboardCheck size={20} />
-                      </div>
-                      <div>
-                        <h3>Evaluation Period</h3>
-                        <span className="eval-monitor-dept-code">{row.period}</span>
-                      </div>
-                    </div>
-                    <div className="eval-monitor-dept-card-body">
-                      <div className="eval-monitor-dept-card-meta">
-                        <span>Performance Level: {row.performanceLevel || 'Pending'}</span>
-                        <span>Status: {row.status || 'Completed'}</span>
-                        {row.totalAssignments ? <span>Evaluators: {row.completedAssignments}/{row.totalAssignments}</span> : null}
-                      </div>
-                      <div className="eval-monitor-dept-card-score">
-                        <span>Overall Score</span>
-                        <strong>{row.overallScore ? Number(row.overallScore).toFixed(2) : '--'}<small>/5</small></strong>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>}
         </>
       )}
     </div>

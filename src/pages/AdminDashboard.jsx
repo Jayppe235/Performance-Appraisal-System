@@ -5,15 +5,16 @@ import { addToast } from '../components/common/Toast.jsx';
 import { confirmDeleteData, confirmProceed, confirmSaveChanges } from '../components/common/ConfirmationModal.jsx';
 import ErrorBoundary from '../components/common/ErrorBoundary.jsx';
 import Hero from '../components/common/Hero.jsx';
-import MetricGrid from '../components/common/MetricGrid.jsx';
 import ReportGrid from '../components/common/ReportGrid.jsx';
 import EvaluationAssignmentWorkbench from '../components/evaluations/EvaluationAssignmentWorkbench.jsx';
 import PeopleManagementPage from '../components/people/PeopleManagementPage.jsx';
 import DataTable from '../components/common/DataTable.jsx';
 import AdminEvaluationMonitor from '../components/evaluations/AdminEvaluationMonitor.jsx';
+import AdminDashboardOverview from '../components/dashboard/AdminDashboardOverview.jsx';
 import PeriodSelector from '../components/evaluations/PeriodSelector.jsx';
 import { useEvaluationPeriod } from '../contexts/EvaluationPeriodContext.jsx';
 import useRealtimeMetrics from '../hooks/useRealtimeMetrics.js';
+import useLiveRefresh from '../hooks/useLiveRefresh.js';
 import apiFetch from '../data/api.js';
 import { assetUrl } from '../data/apiBase.js';
 
@@ -60,7 +61,7 @@ function mapApiUser(apiUser) {
     role: apiUser.role === 'admin_hr' ? 'Admin/HR' : apiUser.role === 'vpaa' ? 'VPAA' : apiUser.role === 'dean' ? 'Dean' : apiUser.role === 'program_head' ? 'Program Head' : 'Faculty',
     department: apiUser.department || '',
     program: apiUser.program || '',
-    email: apiUser.email || '',
+    email: String(apiUser.email || '').toLowerCase().endsWith('@pmas.local') ? '' : (apiUser.email || ''),
     status: apiUser.is_active == 1 ? 'Active' : 'Inactive',
     avatar: assetUrl(apiUser.profile_image || ''),
     archivedAt: apiUser.archived_at || 'Inactive in database',
@@ -86,7 +87,6 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   const [adminSettings, setAdminSettings] = useState(readAdminSettings);
   const [profileForm, setProfileForm] = useState({
     fullName: role.user.name || '',
-    email: role.user.email || '',
   });
   const [securityForm, setSecurityForm] = useState({
     currentPassword: '',
@@ -95,6 +95,7 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState(null);
+  const [dashboardFilters, setDashboardFilters] = useState({ department: '', program: '', trendDays: 1 });
 
   // ── Archived questionnaire categories state ─────────────────────
   const [archivedFormACategories, setArchivedFormACategories] = useState([]);
@@ -134,9 +135,8 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   useEffect(() => {
     setProfileForm({
       fullName: role.user.name || '',
-      email: role.user.email || '',
     });
-  }, [role.user.email, role.user.name]);
+  }, [role.user.name]);
 
   function updateAdminSetting(name, value) {
     setAdminSettings((prev) => ({ ...prev, [name]: value }));
@@ -266,6 +266,7 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+  useLiveRefresh(loadData, [], { immediate: false, intervalMs: 0 });
 
   // ── Load archived questionnaire categories ─────────────────────
   const loadArchivedCategories = useCallback(async () => {
@@ -403,89 +404,11 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   const dashboardRefreshMs = Math.max(5, Number(adminSettings.dashboardRefreshSeconds) || 10) * 1000;
 
   // Real-time metrics from backend API - auto-refreshes using the saved dashboard setting
-  const { metrics: liveMetrics, actionCenter: apiActionCenter, loading, error, timestamp } = useRealtimeMetrics(
+  const { overview, loading, error, timestamp } = useRealtimeMetrics(
     'admin',
-    { periodId: selectedPeriodId },
+    { periodId: selectedPeriodId, department: dashboardFilters.department, program: dashboardFilters.program, trendDays: dashboardFilters.trendDays },
     dashboardRefreshMs
   );
-
-  // Action Center uses only backend values so the priority counts stay live across sessions.
-  const actionCenter = useMemo(() => {
-    if (!apiActionCenter) {
-      return { items: [], total: null, ready: null };
-    }
-    const priorityLabels = new Set(['overdue evaluations', 'departments need dean', 'programs need head', 'faculty below 50%']);
-    const items = apiActionCenter
-      .filter((item) => priorityLabels.has(String(item.label || '').toLowerCase()))
-      .map((item) => ({
-        ...item,
-        count: Number(item.count) || 0,
-      }));
-    return {
-      items,
-      total: items.reduce((total, item) => total + item.count, 0),
-      ready: items.filter((item) => item.count === 0).length,
-    };
-  }, [apiActionCenter]);
-
-  const dashboardCards = useMemo(() => {
-    const metricByLabel = new Map(liveMetrics.map((item) => [String(item.label || '').toLowerCase(), item]));
-    const actionByLabel = new Map(actionCenter.items.map((item) => [String(item.label || '').toLowerCase(), item]));
-    const missingValue = loading ? '...' : '—';
-    const metric = (label) => metricByLabel.has(label.toLowerCase()) ? metricByLabel.get(label.toLowerCase()).value : missingValue;
-    const action = (label) => actionByLabel.has(label.toLowerCase()) ? actionByLabel.get(label.toLowerCase()).count : missingValue;
-
-    return [
-      {
-        label: 'Pending Evaluations',
-        value: metric('Pending Evaluations'),
-        help: 'Assignments awaiting evaluator submission',
-        href: '/admin/assignments?status=pending',
-        cta: 'Open pending',
-        tone: 'warning',
-      },
-      {
-        label: 'Completed Evaluations',
-        value: metric('Completed Evaluations'),
-        help: 'Submitted evaluation records',
-        href: '/admin/assignments?status=completed',
-        cta: 'View completed',
-        tone: 'success',
-      },
-      {
-        label: 'Overdue Evaluations',
-        value: action('Overdue evaluations'),
-        help: 'Past deadline and still open',
-        href: '/admin/assignments?status=overdue',
-        cta: 'Review overdue',
-        tone: 'warning',
-      },
-      {
-        label: 'Departments Need Dean',
-        value: action('Departments need dean'),
-        help: 'Departments without assigned deans',
-        href: '/admin/people?view=departments&needs=dean',
-        cta: 'Assign dean',
-        tone: 'warning',
-      },
-      {
-        label: 'Programs Need Head',
-        value: action('Programs need head'),
-        help: 'Programs without assigned heads',
-        href: '/admin/people?view=programs&needs=head',
-        cta: 'Assign head',
-        tone: 'info',
-      },
-      {
-        label: 'Faculty Below 50%',
-        value: action('Faculty below 50%'),
-        help: 'Faculty progress records needing attention',
-        href: '/admin/people?view=users&role=Faculty&filter=low-progress',
-        cta: 'Review faculty',
-        tone: 'warning',
-      },
-    ];
-  }, [actionCenter.items, liveMetrics, loading]);
 
   async function restoreDepartment(id) {
     const target = archivedDepartments.find((department) => department.id === id);
@@ -551,19 +474,14 @@ export default function AdminDashboard({ role, onUserUpdate }) {
             Monitor faculty appraisal progress, user records, AI insights, evaluation assignments, reports, and system settings in one organized workspace.
           </Hero>
           <section className="admin-dashboard-unified module-wide page-enter" aria-labelledby="admin-dashboard-unified-title">
-            <div className="action-center-head">
+            <div className="action-center-head admin-overview-title">
               <div>
                 <p className="eyebrow">Dashboard</p>
                 <h2 id="admin-dashboard-unified-title">Dashboard Summary</h2>
                 <p>{error ? `Live refresh paused: ${error}` : `Review evaluation progress and urgent staffing assignments${timestamp ? `, updated ${new Date(timestamp * 1000).toLocaleTimeString()}` : ''}.`}</p>
               </div>
-              <div className={`action-center-summary ${actionCenter.total > 0 ? 'has-alerts' : 'is-clear'}`}>
-                <strong>{actionCenter.total ?? (loading ? '...' : '—')}</strong>
-                <span>{loading ? 'refreshing' : error ? 'live data unavailable' : actionCenter.total > 0 ? 'items need attention' : 'all clear'}</span>
-                <small>{actionCenter.ready ?? '—'} checks clear</small>
-              </div>
             </div>
-            <MetricGrid items={dashboardCards} compact />
+            <AdminDashboardOverview overview={overview} loading={loading} error={error} filters={dashboardFilters} onFiltersChange={setDashboardFilters} />
           </section>
         </>
       )}
@@ -626,9 +544,6 @@ export default function AdminDashboard({ role, onUserUpdate }) {
                   <div className="settings-field-grid">
                     <label>Full Name
                       <input value={profileForm.fullName} onChange={(event) => setProfileForm((prev) => ({ ...prev, fullName: event.target.value }))} />
-                    </label>
-                    <label>Email
-                      <input type="email" value={profileForm.email} readOnly />
                     </label>
                   </div>
                 </section>

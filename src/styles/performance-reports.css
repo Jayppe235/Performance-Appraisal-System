@@ -172,6 +172,35 @@ body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-level.in
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-signatory>span { border-top-color:#8295ac; }
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-signatory strong { color:#edf4fd; }
 body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-signatory small { color:#9eb0c6; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend {
+  border-color:#304965;
+  background:
+    radial-gradient(circle at 96% 18%,rgba(59,130,246,.09),transparent 26%),
+    linear-gradient(145deg,#14243a,#101d30);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 10px 24px rgba(0,0,0,.13);
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>strong {
+  color:#dce9f8;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>div>span {
+  border-left-color:#304965;
+  color:#c6d4e5;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>div>span b {
+  color:#91a5bd;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>small {
+  border-top-color:#304965;
+  color:#94a9c1;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>div>span i {
+  box-shadow:0 0 0 4px rgba(255,255,255,.045),0 0 10px currentColor;
+}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend .excellent i { background:#34d399; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend .very-satisfactory i { background:#60a5fa; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend .satisfactory i { background:#fbbf24; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend .needs-improvement i { background:#fb923c; }
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend .incomplete i { background:#94a3b8; }
 
 /* Printed and downloaded documents remain conventional white paper. */
 @media print {
@@ -185,6 +214,15 @@ body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-s
   body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-paper th { background:#246b49!important;color:#fff!important; }
   body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-paper td { background:#fff!important;color:#17231f!important; }
   body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-paper tbody tr:nth-child(even) td { background:#f5f9f7!important; }
+  body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend {
+    border-color:#cfe3d8!important;
+    background:#f7fbf9!important;
+    box-shadow:none!important;
+  }
+  body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>strong { color:#174f38!important; }
+  body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>div>span { border-left-color:#dce9e2!important;color:#344c42!important; }
+  body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>div>span b,
+  body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .performance-report-legend>small { color:#63776f!important; }
 }
 
 /* Program Head: compact, role-aware reporting workspace. */
@@ -214,6 +252,74 @@ body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.program-report-s
 .performance-report-paper table.single-department th:last-child{width:25%}
 .performance-report-paper td:not(:first-child){font-variant-numeric:tabular-nums}
 .performance-report-paper tbody tr{break-inside:avoid;page-break-inside:avoid}
+
+/* Keep report legend aligned to the report paper and its status columns. */
+.performance-report-paper .performance-report-legend{
+  box-sizing:border-box;
+  width:100%;
+  margin:14px 0 4px;
+  padding:14px 16px;
+}
+.performance-report-paper .performance-report-legend>strong{
+  margin-bottom:10px;
+}
+.performance-report-paper .performance-report-legend>div{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  align-items:stretch;
+  gap:0;
+}
+.performance-report-paper .performance-report-legend>div>span{
+  display:grid;
+  grid-template-columns:10px minmax(0,1fr);
+  grid-template-rows:auto auto;
+  align-content:center;
+  column-gap:7px;
+  row-gap:2px;
+  min-width:0;
+  padding:4px 12px;
+  border-left:1px solid #dce9e2;
+  line-height:1.25;
+}
+.performance-report-paper .performance-report-legend>div>span:first-child{
+  padding-left:0;
+  border-left:0;
+}
+.performance-report-paper .performance-report-legend>div>span:last-child{
+  padding-right:0;
+}
+.performance-report-paper .performance-report-legend>div>span i{
+  grid-column:1;
+  grid-row:1 / span 2;
+  align-self:center;
+}
+.performance-report-paper .performance-report-legend>div>span b{
+  grid-column:2;
+  display:block;
+  white-space:normal;
+}
+.performance-report-paper .performance-report-legend>small{
+  display:flex;
+  align-items:center;
+  min-height:28px;
+  margin-top:11px;
+  padding-top:9px;
+}
+@media(max-width:1050px){
+  .performance-report-paper .performance-report-legend>div{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .performance-report-paper .performance-report-legend>div>span{border:0;padding:5px 0}
+}
+@media(max-width:650px){
+  .performance-report-paper .performance-report-legend>div{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:420px){
+  .performance-report-paper .performance-report-legend>div{grid-template-columns:1fr}
+}
+@media print{
+  .performance-report-paper .performance-report-legend>div{grid-template-columns:repeat(5,minmax(0,1fr));gap:0}
+  .performance-report-paper .performance-report-legend>div>span{padding:3px 7px;border-left:1px solid #dce9e2}
+  .performance-report-paper .performance-report-legend>div>span:first-child{padding-left:0;border-left:0}
+}
 .performance-report-signatory{display:grid;justify-items:center;text-align:center;break-inside:avoid;page-break-inside:avoid}
 .performance-report-signatory .signature-space{height:28px}
 .performance-report-signatory .signature-line{display:block;width:100%;border-top:1px solid #263b31}

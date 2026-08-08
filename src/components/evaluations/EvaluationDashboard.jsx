@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AlertTriangle, ChevronLeft, ChevronRight, Clock3, X } from 'lucide-react';
 import EvaluationCard from './EvaluationCard.jsx';
 import EvaluationModal from './EvaluationModal.jsx';
 import PeriodSelector from './PeriodSelector.jsx';
 import SelfEvaluationModule from './SelfEvaluationModule.jsx';
+import GoalsRecordSheet from './GoalsRecordSheet.jsx';
 import { isSelfEvaluationAssignment, normalizeRoleForSelfEvaluation } from './selfEvaluationUtils.js';
 import apiFetch from '../../data/api.js';
 import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
@@ -102,6 +104,8 @@ function applyDraftProgress(item) {
 }
 
 export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPanel = null, viewOnly = false, evaluatorRole = '', role = null }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const isVpaaEvaluation = evaluatorRole === 'vpaa';
   const isDeanEvaluation = evaluatorRole === 'dean';
   const isProgramHeadEvaluation = evaluatorRole === 'programHead' || evaluatorRole === 'program_head';
@@ -110,7 +114,7 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
   const [evaluations, setEvaluations] = useState([]);
   const [period, setPeriod] = useState(null);
   const [peerLifecycle, setPeerLifecycle] = useState({ status: 'unlocked', isLocked: false });
-  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [loadingAssignments, setLoadingAssignments] = useState(true);
   const [assignmentError, setAssignmentError] = useState('');
   const [section, setSection] = useState('all');
   const [filters, setFilters] = useState({ search: '', role: '', department: '', status: '' });
@@ -119,6 +123,9 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
   const [initializingSelf, setInitializingSelf] = useState(false);
   const [openingEvaluationId, setOpeningEvaluationId] = useState(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [goalsOpen, setGoalsOpen] = useState(false);
+  const [cardPage, setCardPage] = useState(1);
+  const [cardsPerPage, setCardsPerPage] = useState(5);
 
   useEffect(() => {
     if (section === 'peer' && filters.role) {
@@ -137,6 +144,7 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
   const loadAssignments = useCallback(async (background = false) => {
       if (!evaluatorRole || evaluatorRole === 'admin') {
         setEvaluations([]);
+        setLoadingAssignments(false);
         return;
       }
       if (!background) {
@@ -159,11 +167,13 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
         setPeerLifecycle(nextPeerLifecycle);
         setActive((current) => {
           if (!current) return current;
-          const stillAvailable = nextEvaluations.some((item) => Number(item.id) === Number(current.id));
-          if (!stillAvailable || (current.section === 'peer' && !nextPeerLifecycle.isLocked)) {
+          const refreshedEvaluation = nextEvaluations.find((item) => Number(item.id) === Number(current.id));
+          if (!refreshedEvaluation || (current.section === 'peer' && !nextPeerLifecycle.isLocked)) {
             return null;
           }
-          return current;
+          // Keep an open result modal synchronized with server-side status,
+          // scores, and category results refreshed in the background.
+          return { ...current, ...refreshedEvaluation };
         });
         if (payload.message && payload.period && !payload.period.is_open) {
           setAssignmentError(payload.message);
@@ -190,6 +200,21 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
     ? evaluations.filter((item) => item.status === 'submitted')
     : evaluations;
   const lockedHiddenCount = isLocked ? Math.max(0, evaluations.length - accessibleEvaluations.length) : 0;
+
+  useEffect(() => {
+    const assignmentId = Number(new URLSearchParams(location.search).get('assignment_id') || 0);
+    if (!assignmentId || loadingAssignments) return;
+    const target = accessibleEvaluations.find((item) => Number(item.id || item.assignmentId) === assignmentId);
+    if (!target) {
+      setAssignmentError('The selected evaluation assignment is not available for this account and period.');
+      navigate(location.pathname, { replace: true });
+      return;
+    }
+    openEvaluation(target);
+    navigate(location.pathname, { replace: true });
+  // The query is consumed once after assignments have loaded.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingAssignments, location.pathname, location.search]);
   // Compute deadline urgency alerts
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -242,6 +267,23 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
 
     return filtered;
   }, [accessibleEvaluations, filters, section]);
+
+  const totalCardPages = Math.max(1, Math.ceil(visible.length / cardsPerPage));
+  const currentCardPage = Math.min(cardPage, totalCardPages);
+  const pagedVisible = useMemo(
+    () => visible.slice((currentCardPage - 1) * cardsPerPage, currentCardPage * cardsPerPage),
+    [cardsPerPage, currentCardPage, visible],
+  );
+  const firstVisibleCard = visible.length === 0 ? 0 : ((currentCardPage - 1) * cardsPerPage) + 1;
+  const lastVisibleCard = Math.min(currentCardPage * cardsPerPage, visible.length);
+
+  useEffect(() => {
+    setCardPage(1);
+  }, [filters, section, selectedPeriodId]);
+
+  useEffect(() => {
+    setCardPage((page) => Math.min(page, totalCardPages));
+  }, [totalCardPages]);
 
   function updateFilter(name, value) {
     setFilters((current) => ({ ...current, [name]: value }));
@@ -391,9 +433,11 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
             <p>{subtitle}</p>
             {period && (
               <div className="evaluation-access-banner">
-                <span className={`peer-status-badge ${period.is_open ? 'success' : 'danger'}`}>{period.is_open ? 'Open' : 'Locked'}</span>
+                <span className={`peer-status-badge ${period.is_open ? 'success' : String(period.status || '').toLowerCase() === 'draft' ? 'warning' : 'danger'}`}>
+                  {period.is_open ? 'Open' : String(period.status || '').toLowerCase() === 'closed' ? 'Closed' : String(period.status || '').toLowerCase() === 'locked' ? 'Locked' : 'Draft'}
+                </span>
                 <strong>{period.period_name}</strong>
-                <small>{period.school_year || 'School year not set'} • {period.semester || 'Semester not set'} • {period.date_start || 'Start date'} to {period.date_end || 'Due date'}</small>
+                <small>{period.school_year ? `Academic Year ${period.school_year}` : 'Academic year not set'} • {period.date_start || 'Start date'} to {period.date_end || 'Due date'}</small>
               </div>
             )}
             <div className={`evaluation-page-period-selector evaluation-page-period-selector-bottom ${evaluatorRole === 'vpaa' ? 'vpaa-period-selector' : ''}`}>
@@ -449,17 +493,17 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
         <>
         {/* Deadline alert banner */}
         {!isLocked && (overdueCount > 0 || dueTodayCount > 0 || dueSoonCount > 0) && (
-          <div className={`deadline-alert-banner ${overdueCount > 0 ? 'alert-overdue' : dueTodayCount > 0 ? 'alert-today' : 'alert-soon'}`}>
-            {overdueCount > 0 && (
-              <span><strong>{overdueCount}</strong> evaluation{overdueCount > 1 ? 's' : ''} overdue! </span>
-            )}
-            {dueTodayCount > 0 && (
-              <span><strong>{dueTodayCount}</strong> evaluation{dueTodayCount > 1 ? 's' : ''} due today! </span>
-            )}
-            {dueSoonCount > 0 && overdueCount === 0 && dueTodayCount === 0 && (
-              <span><strong>{dueSoonCount}</strong> evaluation{dueSoonCount > 1 ? 's' : ''} due within 3 days </span>
-            )}
-            Complete pending items to avoid late submissions.
+          <div className={`deadline-alert-banner ${overdueCount > 0 ? 'alert-overdue' : dueTodayCount > 0 ? 'alert-today' : 'alert-soon'}`} role="status" aria-live="polite">
+            <span className="deadline-alert-icon" aria-hidden="true">{overdueCount > 0 || dueTodayCount > 0 ? <AlertTriangle size={21} /> : <Clock3 size={21} />}</span>
+            <span className="deadline-alert-copy">
+              <strong>
+                {overdueCount > 0 && `${overdueCount} evaluation${overdueCount > 1 ? 's' : ''} overdue`}
+                {dueTodayCount > 0 && `${dueTodayCount} evaluation${dueTodayCount > 1 ? 's' : ''} due today`}
+                {dueSoonCount > 0 && overdueCount === 0 && dueTodayCount === 0 && `${dueSoonCount} evaluation${dueSoonCount > 1 ? 's' : ''} due within 3 days`}
+              </strong>
+              <small>Complete pending items now to avoid late submissions.</small>
+            </span>
+            <span className="deadline-alert-badge">Action required</span>
           </div>
         )}
 
@@ -474,8 +518,10 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
           {!isVpaaEvaluation && (
             <nav className="dipascaf-eval-menu" aria-label="Evaluation sections">
               {visibleSections.map(([key, label]) => <button key={key} type="button" className={section === key ? 'active' : ''} onClick={() => setSection(key)}>{label}</button>)}
+              <button type="button" onClick={() => setGoalsOpen(true)}>Goals Record Sheet</button>
             </nav>
           )}
+          {isVpaaEvaluation && <nav className="dipascaf-eval-menu" aria-label="Evaluation forms"><button type="button" onClick={() => setGoalsOpen(true)}>Goals Record Sheet</button></nav>}
           <div className="dipascaf-filters">
             <label>Search<input type="search" value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} placeholder={isVpaaEvaluation ? 'Search dean or department' : 'Search name or program'} /></label>
             {!isVpaaEvaluation && !isDeanEvaluation && section !== 'peer' && (
@@ -489,9 +535,30 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
             )}
             <label>Sort by<select value={filters.sort || ''} onChange={(event) => updateFilter('sort', event.target.value)}><option value="">Default</option><option value="deadline">Closest deadline</option><option value="name">Name A-Z</option></select></label>
           </div>
+          {visible.length > 0 && (
+            <div className="evaluation-card-pagebar">
+              <div>
+                <strong>{firstVisibleCard}–{lastVisibleCard}</strong>
+                <span>of {visible.length} evaluations</span>
+              </div>
+              <label>
+                Cards per page
+                <select value={cardsPerPage} onChange={(event) => { setCardsPerPage(Number(event.target.value)); setCardPage(1); }}>
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="15">15</option>
+                </select>
+              </label>
+              <nav aria-label="Evaluation card pages">
+                <button type="button" onClick={() => setCardPage((page) => Math.max(1, page - 1))} disabled={currentCardPage === 1} aria-label="Previous evaluation page"><ChevronLeft size={17} /></button>
+                <span>Page <strong>{currentCardPage}</strong> of {totalCardPages}</span>
+                <button type="button" onClick={() => setCardPage((page) => Math.min(totalCardPages, page + 1))} disabled={currentCardPage === totalCardPages} aria-label="Next evaluation page"><ChevronRight size={17} /></button>
+              </nav>
+            </div>
+          )}
           <div className="dipascaf-card-grid eval-card-grid">
             {canOpenSelfEvaluation && !isLocked && !hasSelfEvaluationCard && (section === 'all' || section === 'self') && (
-              <article className="dipascaf-eval-card eval-assignment-card pending card-pop self-eval-init-card">
+              <article className="dipascaf-eval-card pending card-pop self-eval-init-card">
                 <div className="dipascaf-card-cover" aria-hidden="true" />
                 <div className="dipascaf-card-top">
                   <div className="dipascaf-avatar">S</div>
@@ -517,7 +584,7 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
                 </div>
               </article>
             )}
-            {visible.map((evaluation) => (
+            {pagedVisible.map((evaluation) => (
               <EvaluationCard
                 key={evaluation.id}
                 evaluation={evaluation}
@@ -528,6 +595,17 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
               />
             ))}
           </div>
+          {visible.length > cardsPerPage && (
+            <div className="evaluation-card-pagination">
+              <button type="button" onClick={() => setCardPage((page) => Math.max(1, page - 1))} disabled={currentCardPage === 1}><ChevronLeft size={17} /> Previous</button>
+              <div>
+                {Array.from({ length: totalCardPages }, (_, index) => index + 1).slice(Math.max(0, currentCardPage - 3), Math.min(totalCardPages, currentCardPage + 2)).map((page) => (
+                  <button key={page} type="button" className={page === currentCardPage ? 'active' : ''} onClick={() => setCardPage(page)} aria-current={page === currentCardPage ? 'page' : undefined}>{page}</button>
+                ))}
+              </div>
+              <button type="button" onClick={() => setCardPage((page) => Math.min(totalCardPages, page + 1))} disabled={currentCardPage === totalCardPages}>Next <ChevronRight size={17} /></button>
+            </div>
+          )}
           {!loadingAssignments && visible.length === 0 && (
             <div className="dipascaf-empty">
               {section === 'peer' && !peerLifecycle.isLocked
@@ -573,6 +651,14 @@ export default function EvaluationDashboard({ eyebrow, title, subtitle, setupPan
               }}
               onFinish={() => setSelfEvaluationTask(null)}
             />
+          </div>
+        </div>
+      ), document.body)}
+      {goalsOpen && createPortal((
+        <div className="dipascaf-modal-backdrop self-eval-task-backdrop" onClick={(event) => event.target === event.currentTarget && setGoalsOpen(false)}>
+          <div className="dipascaf-modal-panel eval-form-panel self-eval-task-panel" role="dialog" aria-modal="true" aria-label="Goals Record Sheet">
+            <button type="button" className="dipascaf-modal-close modal-icon-close" onClick={() => setGoalsOpen(false)} aria-label="Close Goals Record Sheet"><X size={18} /></button>
+            <GoalsRecordSheet role={role || { key: userSelfEvaluationRole, user: {} }} />
           </div>
         </div>
       ), document.body)}

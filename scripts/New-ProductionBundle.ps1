@@ -29,6 +29,9 @@ try {
     foreach ($file in @('.htaccess', 'index.php', 'login.php', 'logout.php')) {
         if (Test-Path $file) { Copy-Item $file $site -Force }
     }
+    $cliDirectory = Join-Path $site 'bin'
+    New-Item -ItemType Directory -Force -Path $cliDirectory | Out-Null
+    Copy-Item 'scripts/Check-Database.php', 'scripts/Bootstrap-TestAccounts.php' $cliDirectory -Force
 
     Get-ChildItem $site -Recurse -File -Include '*.bak','*.log','*.sql','*.dump' | Remove-Item -Force
     $uploads = Join-Path $site 'assets/uploads'

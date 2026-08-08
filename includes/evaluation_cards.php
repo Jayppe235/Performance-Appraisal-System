@@ -397,6 +397,14 @@ function dipascaf_form_b_records(array $assignments): array
 
 function dipascaf_submit_category_results(array $assignment, int $evaluatorUserId, string $form, array $payload, string $periodName): array
 {
+    $expectedForm = (string) ($assignment['questionnaire_type'] ?? '') === 'admin' ? 'a' : 'b';
+    if ($form !== $expectedForm) {
+        throw new RuntimeException(sprintf(
+            'This evaluation requires Form %s. Refresh the assignment and submit the correct questionnaire.',
+            strtoupper($expectedForm)
+        ));
+    }
+
     $table = $form === 'a' ? 'pmas_form_a_category_results' : 'pmas_form_b_category_results';
     $categories = $form === 'a' ? dipascaf_form_a_categories() : dipascaf_form_b_categories();
     $byId = [];
@@ -2397,10 +2405,24 @@ function dipascaf_ensure_teacher_leadership_assignments(int $teacherUserId): voi
     }
 
     $cycleName = dipascaf_current_cycle_name();
+    $hasReplacementReason = admin_one("SHOW COLUMNS FROM peer_assignments LIKE 'replacement_reason'") !== null;
+    $hasIsCurrent = admin_one("SHOW COLUMNS FROM peer_assignments LIKE 'is_current'") !== null;
     $insertAssignment = db()->prepare(
-        "INSERT IGNORE INTO peer_assignments
+        "INSERT INTO peer_assignments
             (cycle_name, evaluator_user_id, evaluatee_faculty_id, evaluator_role, assignment_type, questionnaire_type, status, assigned_at, deadline)
-         VALUES (?, ?, ?, 'teacher', ?, 'admin', 'pending', NOW(), ?)"
+         VALUES (?, ?, ?, 'teacher', ?, 'admin', 'pending', NOW(), ?)
+         ON DUPLICATE KEY UPDATE
+            deadline = VALUES(deadline),
+            evaluator_role = 'teacher',
+            questionnaire_type = 'admin',
+            status = IF(status = 'submitted', status, 'pending'),
+            is_archived = 0,
+            archived_at = NULL,
+            archived_by = NULL"
+            . ($hasReplacementReason
+                ? ", replacement_reason = IF(status = 'submitted', replacement_reason, NULL)"
+                : '')
+            . ($hasIsCurrent ? ', is_current = 1' : '')
     );
 
     foreach ($leaders as $leader) {

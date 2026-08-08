@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/admin_data.php';
 require_once __DIR__ . '/../includes/evaluation_assignment_generator.php';
 require_once __DIR__ . '/../includes/evaluation_period.php';
+require_once __DIR__ . '/../includes/evaluation_participation.php';
 require_once __DIR__ . '/../includes/notifications.php';
 
 notify_ensure_schema();
@@ -47,9 +48,16 @@ try {
 
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
         if ((string) ($_GET['action'] ?? '') === 'periods') {
+            $periods = dipascaf_period_list_payload();
+            if (in_array((string)($user['role'] ?? ''), ['teacher','program_head','dean'], true)) {
+                $periods = array_values(array_filter(
+                    $periods,
+                    static fn(array $period): bool => dipascaf_user_can_access_period((int)$user['id'], (int)$period['id'])
+                ));
+            }
             echo json_encode([
                 'ok' => true,
-                'data' => dipascaf_period_list_payload(),
+                'data' => $periods,
                 'current' => dipascaf_period_payload(),
             ]);
             exit;
@@ -83,13 +91,13 @@ try {
         $periodId = (int) ($input['period_id'] ?? 0);
         $periodName = trim((string) ($input['period_name'] ?? ''));
         $schoolYear = trim((string) ($input['school_year'] ?? ''));
-        $semester = trim((string) ($input['semester'] ?? ''));
+        $semester = null;
         $dateStart = trim((string) ($input['date_start'] ?? ''));
         $dateEnd = trim((string) ($input['date_end'] ?? ''));
 
-        if ($periodName === '' || $schoolYear === '' || $semester === '' || $dateStart === '' || $dateEnd === '') {
+        if ($periodName === '' || $schoolYear === '' || $dateStart === '' || $dateEnd === '') {
             http_response_code(400);
-            echo json_encode(['ok' => false, 'message' => 'Period name, school year, semester, start date, and due date are required.']);
+            echo json_encode(['ok' => false, 'message' => 'Period name, academic year, start date, and due date are required.']);
             exit;
         }
 
@@ -105,6 +113,42 @@ try {
             exit;
         }
 
+        // Schema DDL must run before the transaction because MariaDB
+        // implicitly commits active transactions around CREATE/ALTER TABLE.
+        admin_ensure_faculty_program_schema();
+        dipascaf_ensure_period_participation_schema();
+        if ($periodId <= 0) {
+            $stmt = $db->prepare(
+                'INSERT INTO appraisal_periods (period_name,school_year,semester,date_start,date_end,status)
+                 VALUES (:period_name,:school_year,NULL,:date_start,:date_end,"draft")
+                 ON DUPLICATE KEY UPDATE school_year=VALUES(school_year),date_start=VALUES(date_start),
+                   date_end=VALUES(date_end),status=IF(status="open",status,"draft")'
+            );
+            $stmt->execute([
+                'period_name'=>$periodName,'school_year'=>$schoolYear,
+                'date_start'=>$dateStart,'date_end'=>$dateEnd,
+            ]);
+            $draft = admin_one('SELECT id FROM appraisal_periods WHERE period_name=:name ORDER BY id DESC LIMIT 1', ['name'=>$periodName]);
+            $draftId = (int)($draft['id'] ?? 0);
+            dipascaf_seed_period_participants($draftId, (int)$user['id']);
+            echo json_encode([
+                'ok'=>true,
+                'message'=>'Draft period created. Finalize participants, assign and validate peers, then activate it.',
+                'data'=>dipascaf_period_payload(admin_one('SELECT * FROM appraisal_periods WHERE id=:id', ['id'=>$draftId])),
+                'workflow_step'=>'participants',
+            ]);
+            exit;
+        }
+        $readiness = admin_one(
+            'SELECT participants_finalized_at,peer_assignments_validated_at FROM appraisal_periods WHERE id=:id',
+            ['id'=>$periodId]
+        );
+        if (empty($readiness['participants_finalized_at'])) {
+            throw new DomainException('Finalize Evaluation Period Participants before activation.');
+        }
+        if (empty($readiness['peer_assignments_validated_at'])) {
+            throw new DomainException('Assign and validate Peer Assignments before activation.');
+        }
         $db->beginTransaction();
         try {
             $db->exec("UPDATE appraisal_periods SET status = 'locked', locked_at = NOW() WHERE status = 'open'");
@@ -195,9 +239,13 @@ try {
                     $openedPeriodId
                 );
             }
-            $db->commit();
+            if ($db->inTransaction()) {
+                $db->commit();
+            }
         } catch (Throwable $exception) {
-            $db->rollBack();
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
             throw $exception;
         }
 

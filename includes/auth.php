@@ -158,9 +158,6 @@ function require_role(string $role): void
         redirect('/login.php');
     }
 
-    if (!empty($user['must_change_password'])) {
-        header('Location: ' . PMAS_REACT_URL . '/change-password'); exit;
-    }
     if ($user['role'] !== $role) {
         redirect(role_dashboard_path($user['role']));
     }
@@ -172,7 +169,7 @@ function attempt_login(string $userCode, string $password): array
 
     try {
         $stmt = db()->prepare(
-            'SELECT id, user_code, full_name, email, email_verified_at, birth_date, password_hash, must_change_password, role, is_active, department, program, profile_image
+            'SELECT id, user_code, full_name, email, email_verified_at, password_hash, must_change_password, role, is_active, department, program, profile_image
              FROM users
              WHERE user_code = :user_code
              LIMIT 1'
@@ -198,7 +195,6 @@ function attempt_login(string $userCode, string $password): array
         'user_code' => (string) $user['user_code'],
         'full_name' => $user['full_name'],
         'email' => $user['email'],
-        'birth_date' => $user['birth_date'] ?? null,
         'role' => $user['role'],
         'department' => $user['department'] ?? '',
         'program' => $user['program'] ?? '',

@@ -13,14 +13,32 @@ function parseDate(value) {
     && date.getDate() === Number(match[3]) ? date : undefined;
 }
 
-export default function ModernDatePicker({ value, onChange, onBlur, label = 'Birth date', required = false }) {
+export default function ModernDatePicker({
+  value,
+  onChange,
+  onBlur,
+  label = 'Birth date',
+  required = false,
+  className = '',
+  minYear = 1940,
+  maxYear = new Date().getFullYear(),
+  minDate,
+  maxDate,
+  disableFuture = true,
+}) {
   const [open, setOpen] = useState(false);
   const [yearPickerOpen, setYearPickerOpen] = useState(false);
   const rootRef = useRef(null);
   const selected = parseDate(value);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const [displayMonth, setDisplayMonth] = useState(selected || new Date(1990, 0, 1));
+  const earliestDate = parseDate(minDate) || new Date(minYear, 0, 1);
+  const latestDate = parseDate(maxDate) || (disableFuture ? today : new Date(maxYear, 11, 31));
+  const initialMonth = selected || (disableFuture ? new Date(1990, 0, 1) : today);
+  const [displayMonth, setDisplayMonth] = useState(initialMonth);
+  const yearStart = Math.min(minYear, earliestDate.getFullYear());
+  const yearEnd = Math.max(yearStart, Math.min(maxYear, latestDate.getFullYear()));
+  const todayAllowed = today >= earliestDate && today <= latestDate;
 
   useEffect(() => {
     if (open && selected) setDisplayMonth(selected);
@@ -66,7 +84,7 @@ export default function ModernDatePicker({ value, onChange, onBlur, label = 'Bir
   };
 
   return (
-    <div className={`people-date-picker shared-modern-date-picker ${open ? 'is-open' : ''}`} ref={rootRef}>
+    <div className={`people-date-picker shared-modern-date-picker ${open ? 'is-open' : ''} ${className}`} ref={rootRef}>
       <button type="button" className="people-date-trigger" aria-label={`${label}: ${selected ? format(selected, 'MMMM d, yyyy') : 'not selected'}`} aria-haspopup="dialog" aria-expanded={open} aria-required={required} onClick={(event) => { event.preventDefault(); setYearPickerOpen(false); setOpen((current) => !current); }}>
         <CalendarDays size={19} aria-hidden="true" />
         <span className={selected ? '' : 'is-placeholder'}>{selected ? format(selected, 'MMMM d, yyyy') : `Select ${label.toLowerCase()}`}</span>
@@ -82,14 +100,14 @@ export default function ModernDatePicker({ value, onChange, onBlur, label = 'Bir
             <div className={`people-year-picker ${yearPickerOpen ? 'is-open' : ''}`}>
               <button type="button" className="people-year-trigger" aria-label={`Calendar year ${displayMonth.getFullYear()}`} aria-haspopup="listbox" aria-expanded={yearPickerOpen} onClick={() => setYearPickerOpen((current) => !current)}>{displayMonth.getFullYear()} <ChevronDown size={15} /></button>
               {yearPickerOpen && <div className="people-year-options" role="listbox" aria-label="Select year">
-                {Array.from({ length: today.getFullYear() - 1939 }, (_, index) => today.getFullYear() - index).map((year) => <button type="button" role="option" aria-selected={year === displayMonth.getFullYear()} className={year === displayMonth.getFullYear() ? 'is-selected' : ''} key={year} onClick={() => { setDisplayMonth(new Date(year, displayMonth.getMonth(), 1)); setYearPickerOpen(false); }}>{year}</button>)}
+                {Array.from({ length: yearEnd - yearStart + 1 }, (_, index) => yearEnd - index).map((year) => <button type="button" role="option" aria-selected={year === displayMonth.getFullYear()} className={year === displayMonth.getFullYear() ? 'is-selected' : ''} key={year} onClick={() => { setDisplayMonth(new Date(year, displayMonth.getMonth(), 1)); setYearPickerOpen(false); }}>{year}</button>)}
               </div>}
             </div>
           </div>
-          <DayPicker mode="single" selected={selected} month={displayMonth} onMonthChange={setDisplayMonth} onSelect={selectDate} disabled={{ after: today }} startMonth={new Date(1940, 0, 1)} endMonth={today} captionLayout="label" navLayout="after" showOutsideDays fixedWeeks />
+          <DayPicker mode="single" selected={selected} month={displayMonth} onMonthChange={setDisplayMonth} onSelect={selectDate} disabled={[{ before: earliestDate }, { after: latestDate }]} startMonth={earliestDate} endMonth={latestDate} captionLayout="label" navLayout="after" showOutsideDays fixedWeeks />
           <div className="people-date-actions">
             <button type="button" onClick={() => { onChange(''); onBlur?.(); }}>Clear</button>
-            <button type="button" onClick={() => selectDate(today)}>Today</button>
+            <button type="button" onClick={() => selectDate(today)} disabled={!todayAllowed}>Today</button>
           </div>
         </div>
       )}

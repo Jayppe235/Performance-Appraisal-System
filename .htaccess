@@ -4,9 +4,13 @@ DirectoryIndex index.html index.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # Enforce HTTPS outside local development. X-Forwarded-Proto supports
-  # shared hosts that terminate TLS before forwarding to Apache.
+  # Enforce HTTPS outside local development. Keep private LAN addresses on
+  # HTTP so phones can access XAMPP without a certificate issued for the
+  # computer's local IP. X-Forwarded-Proto supports production proxies.
   RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$ [NC]
+  RewriteCond %{HTTP_HOST} !^10\.(?:\d{1,3}\.){2}\d{1,3}(?::\d+)?$ [NC]
+  RewriteCond %{HTTP_HOST} !^192\.168\.(?:\d{1,3})\.(?:\d{1,3})(?::\d+)?$ [NC]
+  RewriteCond %{HTTP_HOST} !^172\.(?:1[6-9]|2\d|3[01])\.(?:\d{1,3})\.(?:\d{1,3})(?::\d+)?$ [NC]
   RewriteCond %{HTTPS} !=on
   RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
@@ -26,6 +30,13 @@ DirectoryIndex index.html index.php
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
   Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+
+  # Always revalidate the React application shell after a deployment.
+  <Files "index.html">
+    Header always set Cache-Control "no-cache, no-store, must-revalidate"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+  </Files>
 </IfModule>
 
 <FilesMatch "(^\.env|^_|^setup\.php$|^composer\.(json|lock)$|^phpunit|^package(-lock)?\.json$)">

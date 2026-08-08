@@ -98,15 +98,24 @@ try {
 
     $placeholders = implode(',', array_fill(0, count($programCodes), '?'));
     $facultyRows = admin_all(
-        "SELECT f.id, f.full_name, f.department, COALESCE(NULLIF(f.program_code, ''), NULLIF(u.program, ''), '') AS program_code
+        "SELECT f.id, f.full_name,
+                COALESCE(NULLIF(epp.department_snapshot, ''), f.department) AS department,
+                COALESCE(NULLIF(epp.program_snapshot, ''), NULLIF(f.program_code, ''), NULLIF(u.program, ''), '') AS program_code
          FROM faculty f
-         LEFT JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         JOIN users u ON u.id = f.user_id OR (f.user_id IS NULL AND u.email = f.email)
+         JOIN evaluation_period_participation epp
+           ON epp.evaluation_period_id = ? AND epp.user_id = u.id
          WHERE f.is_active = 1
            AND f.is_archived = 0
-           AND (f.program_code IN ($placeholders) OR u.program IN ($placeholders))
-           AND COALESCE(LOWER(u.role), 'teacher') = 'teacher'
+           AND u.is_active = 1
+           AND epp.participation_status = 'included'
+           AND epp.work_status = 'active'
+           AND epp.employment_status IN ('active','newly_added')
+           AND (COALESCE(NULLIF(epp.program_snapshot,''),f.program_code) IN ($placeholders)
+                OR COALESCE(NULLIF(epp.program_snapshot,''),u.program) IN ($placeholders))
+           AND COALESCE(LOWER(epp.role_snapshot),LOWER(u.role),'teacher') = 'teacher'
          ORDER BY program_code, f.full_name",
-        array_merge($programCodes, $programCodes)
+        array_merge([(int)($selectedPeriod['id'] ?? 0)], $programCodes, $programCodes)
     );
 
     $facultyById = [];

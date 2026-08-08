@@ -41,6 +41,7 @@ release/
 # Temporary files
 tmp/
 temp/
+tmp-self-evaluation-reference/
 *.tmp
 nul
 

@@ -1,25 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { AlertTriangle, BookOpenCheck, ClipboardList, GraduationCap, Target, TrendingUp, Users, Building2, Search, Clock, Filter, CheckCircle2, Calendar, ChevronDown } from 'lucide-react';
+import { Pie } from 'react-chartjs-2';
+import { ArcElement, Chart as ChartJS, Legend, Tooltip } from 'chart.js';
 import Hero from '../components/common/Hero.jsx';
 import MetricGrid from '../components/common/MetricGrid.jsx';
 import ReportGrid from '../components/common/ReportGrid.jsx';
 import EvaluationDashboard from '../components/evaluations/EvaluationDashboard.jsx';
 import DeanSelfEvaluationReview from '../components/evaluations/DeanSelfEvaluationReview.jsx';
 import PeriodSelector from '../components/evaluations/PeriodSelector.jsx';
-import DepartmentAiInsights from '../components/ai/DepartmentAiInsights.jsx';
+import AdminEvaluationMonitor from '../components/evaluations/AdminEvaluationMonitor.jsx';
+import PersonalPerformanceSummary from '../components/evaluations/PersonalPerformanceSummary.jsx';
 import useRealtimeMetrics from '../hooks/useRealtimeMetrics.js';
 import useLiveRefresh from '../hooks/useLiveRefresh.js';
 import { useEvaluationPeriod } from '../contexts/EvaluationPeriodContext.jsx';
 import apiFetch from '../data/api.js';
 
+ChartJS.register(ArcElement, Tooltip, Legend);
+
 export default function DeanDashboard({ role }) {
   const { section = 'overview' } = useParams();
   const activeSection = section === 'training' ? 'summary' : section;
   const { selectedPeriodId } = useEvaluationPeriod();
-
   // Real-time metrics from backend API - auto-refreshes every 5 seconds
-  const { metrics: liveMetrics, actionCenter: apiActionCenter, loading, error, timestamp } = useRealtimeMetrics('dean', {
+  const { metrics: liveMetrics, actionCenter: apiActionCenter, loading: dashboardLoading, error: dashboardError, timestamp } = useRealtimeMetrics('dean', {
     department: role?.user?.department || '',
     periodId: selectedPeriodId,
   });
@@ -48,11 +52,50 @@ export default function DeanDashboard({ role }) {
       { label: 'AI Insights', value: metric('AI Insights'), help: 'Department weak-area analysis', href: '/dean/summary', cta: 'Analyze', tone: 'info' },
       { label: 'Training Plans', value: metric('Training Plans'), help: 'Recommended development actions', href: '/dean/summary', cta: 'View plans', tone: 'success' },
       { label: 'Overdue Reviews', value: action('Overdue reviews'), help: 'Past deadline and still pending', href: '/dean/evaluate', cta: 'Review overdue', tone: 'warning' },
+      { label: 'Priority Items', value: actionCenter.total, help: 'Department actions currently requiring attention', href: '/dean/summary', cta: 'Open priorities', tone: 'danger' },
     ];
+  }, [actionCenter.items, actionCenter.total, liveMetrics]);
+
+  const evaluationChart = useMemo(() => {
+    const metrics = new Map(liveMetrics.map((item) => [String(item.label || '').toLowerCase(), Number.parseFloat(item.value) || 0]));
+    const completed = metrics.get('submitted reviews') || 0;
+    const pendingTotal = metrics.get('pending reviews') || 0;
+    const overdue = Number(actionCenter.items.find((item) => String(item.label).toLowerCase() === 'overdue reviews')?.count || 0);
+    return { completed, pending: Math.max(0, pendingTotal - overdue), overdue, total: completed + pendingTotal };
   }, [actionCenter.items, liveMetrics]);
 
+  const evaluationChartData = useMemo(() => ({
+    labels: ['Completed', 'Pending', 'Overdue'],
+    datasets: [{
+      data: [evaluationChart.completed, evaluationChart.pending, evaluationChart.overdue],
+      backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
+      borderColor: ['#fff', '#fff', '#fff'],
+      borderWidth: 3,
+      hoverOffset: 7,
+    }],
+  }), [evaluationChart.completed, evaluationChart.pending, evaluationChart.overdue]);
+
+  const evaluationChartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: {
+      duration: 1400,
+      easing: 'easeOutQuart',
+      animateRotate: true,
+      animateScale: true,
+    },
+    transitions: {
+      active: { animation: { duration: 300 } },
+      resize: { animation: { duration: 450, easing: 'easeOutCubic' } },
+    },
+    plugins: {
+      legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 10, padding: 18 } },
+      tooltip: { callbacks: { label: (context) => `${context.label}: ${context.raw}` } },
+    },
+  }), []);
+
   return (
-    <section className={`admin-content admin-module dean-content ${activeSection === 'report' ? 'reports-analytics-content' : ''}`}>
+    <section className={`admin-content admin-module dean-content ${activeSection === 'overview' ? 'dean-overview-content' : ''} ${activeSection === 'report' ? 'reports-analytics-content' : ''}`}>
       {activeSection === 'overview' && (
         <>
           <Hero
@@ -63,8 +106,23 @@ export default function DeanDashboard({ role }) {
           >
             Track appraisal progress, faculty performance, and department-level insights automatically for {role.user.department}.
           </Hero>
-          <section className="admin-dashboard-unified module-wide page-enter dean-dashboard-metrics-only" aria-label="Department appraisal overview">
-            <MetricGrid items={dashboardCards.length > 0 ? dashboardCards : [{ label: 'Loading...', value: '...' }]} compact />
+          <section className="admin-dashboard-unified dean-role-dashboard module-wide page-enter" aria-label="Department appraisal dashboard">
+            <div className="action-center-head dean-role-dashboard-head">
+              <div><p className="eyebrow">Department Leadership Dashboard</p><h2>Dean Dashboard</h2><p>{dashboardError ? `Live refresh paused: ${dashboardError}` : `Live appraisal results limited to ${role.user.department || 'your assigned department'}${timestamp ? `, updated ${new Date(timestamp * 1000).toLocaleTimeString()}` : ''}.`}</p></div>
+              <div className={`dean-live-status ${dashboardError ? 'is-error' : ''}`}><span />{dashboardLoading ? 'Loading live data' : dashboardError ? 'Reconnecting' : 'Live department data'}</div>
+            </div>
+            <MetricGrid items={dashboardCards} compact className="dean-role-metrics" />
+            <section className="dean-evaluation-chart-panel" aria-labelledby="dean-evaluation-chart-title">
+              <div className="dean-chart-copy"><p className="eyebrow">Evaluation Progress</p><h3 id="dean-evaluation-chart-title">Department appraisal status</h3><p>A live distribution of faculty and program-head evaluations within the Dean’s assigned department.</p><div className="dean-chart-total"><strong>{evaluationChart.total}</strong><span>Total evaluation assignments</span></div></div>
+              <div className="dean-pie-wrap">
+                {evaluationChart.total > 0 ? <Pie aria-label={`Department evaluations: ${evaluationChart.completed} completed, ${evaluationChart.pending} pending, ${evaluationChart.overdue} overdue`} data={evaluationChartData} options={evaluationChartOptions}/>:<div className="dean-chart-empty">No department assignments for this period.</div>}
+              </div>
+              <div className="dean-chart-breakdown"><span className="completed"><i/>Completed<strong>{evaluationChart.completed}</strong></span><span className="pending"><i/>Pending<strong>{evaluationChart.pending}</strong></span><span className="overdue"><i/>Overdue<strong>{evaluationChart.overdue}</strong></span></div>
+            </section>
+            <div className="dean-role-dashboard-lower">
+              <section className="dean-priority-panel" aria-labelledby="dean-priority-title"><div className="dean-panel-heading"><div><p className="eyebrow">Priority Queue</p><h3 id="dean-priority-title">Items requiring Dean review</h3></div><strong>{actionCenter.total}</strong></div><div className="dean-priority-list">{actionCenter.items.length ? actionCenter.items.map((item)=><Link key={item.label} to={item.href} className={`dean-priority-item tone-${item.tone || 'info'}`}><span className="dean-priority-count">{item.count}</span><span><strong>{item.label}</strong><small>{item.detail}</small></span><b>{item.cta}</b></Link>):<p className="dipascaf-empty">No department action items for this period.</p>}</div></section>
+              <section className="dean-workspace-panel" aria-labelledby="dean-workspace-title"><div className="dean-panel-heading"><div><p className="eyebrow">Dean Modules</p><h3 id="dean-workspace-title">Continue your work</h3></div></div><div className="dean-workspace-links"><Link to="/dean/evaluate"><ClipboardList/><span><strong>Faculty Evaluations</strong><small>Evaluate faculty and program heads in your department</small></span></Link><Link to="/dean/self-evaluation-review"><CheckCircle2/><span><strong>Self-Evaluation Reviews</strong><small>Review department leadership and faculty submissions</small></span></Link><Link to="/dean/results"><TrendingUp/><span><strong>My Evaluation Results</strong><small>View your personal overall score and category results</small></span></Link><Link to="/dean/summary"><TrendingUp/><span><strong>Department Analytics</strong><small>Review performance, weak areas, and development plans</small></span></Link><Link to="/dean/report"><BookOpenCheck/><span><strong>Department Reports</strong><small>Generate reports within your authorized scope</small></span></Link></div></section>
+            </div>
           </section>
         </>
       )}
@@ -73,8 +131,8 @@ export default function DeanDashboard({ role }) {
       )}
       {activeSection === 'self-evaluation-review' && <DeanSelfEvaluationReview role={role} />}
       {activeSection === 'self-evaluation' && <Navigate to="/dean/evaluate" replace />}
-      {activeSection === 'summary' && <DepartmentAiInsights scope={role.user.department || 'all'} />}
-      {activeSection === 'results' && <Navigate to="/dean/summary" replace />}
+      {activeSection === 'summary' && <AdminEvaluationMonitor initialView="groups" />}
+      {activeSection === 'results' && <PersonalPerformanceSummary />}
       {activeSection === 'insights' && <Navigate to="/dean/summary" replace />}
       {activeSection === 'report' && <ReportGrid role={role} />}
     </section>

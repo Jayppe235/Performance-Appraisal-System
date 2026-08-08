@@ -32,9 +32,13 @@ export default function EvaluationCard({ evaluation, onOpen, readOnly = false, p
   const initial = fullName.charAt(0).toUpperCase();
   const isPeer = evaluation.section === 'peer';
   const isSelf = isSelfEvaluationAssignment(evaluation);
-  const progressPercent = Number.isFinite(Number(evaluation.progressPercent))
-    ? Math.max(0, Math.min(100, Number(evaluation.progressPercent)))
-    : (done ? 100 : 0);
+  // A submitted evaluation is complete even when its last saved draft
+  // progress was lower or the questionnaire changed after submission.
+  const progressPercent = done
+    ? 100
+    : Number.isFinite(Number(evaluation.progressPercent))
+      ? Math.max(0, Math.min(100, Number(evaluation.progressPercent)))
+      : 0;
   const deadlineLabel = evaluation.deadline || 'Not set';
   const actionLabel = periodLocked && !done
     ? 'Evaluation Locked'
@@ -61,7 +65,7 @@ export default function EvaluationCard({ evaluation, onOpen, readOnly = false, p
   const statusLabel = done ? 'Completed' : overdue ? 'Overdue' : inProgress ? 'In Progress' : 'Pending';
 
   return (
-    <article className={`dipascaf-eval-card eval-assignment-card ${statusClass} card-pop`}>
+    <article className={`dipascaf-eval-card ${statusClass} card-pop`}>
       <div className="dipascaf-card-cover" aria-hidden="true" />
       <div className="dipascaf-card-top">
         <div className="dipascaf-avatar">

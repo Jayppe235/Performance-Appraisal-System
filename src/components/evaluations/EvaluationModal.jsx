@@ -2,6 +2,13 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { X, CheckCircle2, AlertTriangle, AlertCircle, ClipboardCheck, Printer, PartyPopper, Sparkles, ArrowRight, Trophy } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { confirmSubmitEvaluation } from '../common/ConfirmationModal.jsx';
+import casLogo from '../../../assets/images/CAS LOGO.png';
+import cbaLogo from '../../../assets/images/CBA LOGO.png';
+import ccjeLogo from '../../../assets/images/CCJE LOGO.png';
+import cedLogo from '../../../assets/images/CED LOGO.png';
+import citeLogo from '../../../assets/images/CITE LOGO.png';
+import cnLogo from '../../../assets/images/CN LOGO.png';
+import ndmcSeal from '../../../assets/images/ndmc-seal.png';
 
 const RATING_LABELS = {
   5: 'Exceptional Performance',
@@ -101,6 +108,20 @@ function reportValue(value, fallback = 'N/A') {
   return escapeReportHtml(text || fallback);
 }
 
+function departmentReportBrand(department) {
+  const value = String(department || '').trim().toLowerCase();
+  const brands = [
+    { matches: ['arts and sciences', 'cas'], code: 'CAS', logo: casLogo },
+    { matches: ['business and accountancy', 'cba'], code: 'CBA', logo: cbaLogo },
+    { matches: ['criminal justice', 'ccje'], code: 'CCJE', logo: ccjeLogo },
+    { matches: ['college of education', 'ced'], code: 'CED', logo: cedLogo },
+    { matches: ['information technology and engineering', 'cite'], code: 'CITE', logo: citeLogo },
+    { matches: ['college of nursing', 'nursing', 'cn'], code: 'CN', logo: cnLogo },
+  ];
+  return brands.find((brand) => brand.matches.some((match) => value.includes(match)))
+    || { code: 'NDMC', logo: ndmcSeal };
+}
+
 function formatReportDate(value) {
   if (!value) return 'N/A';
   const date = new Date(value);
@@ -150,6 +171,7 @@ function transformFormBCategories(apiData) {
 
 export default function EvaluationModal({
   evaluation, onClose, onSubmit, readOnly = false, evaluatorRole = '', period = null, assignments = [], onEvaluateNext = null, onProgress = null,
+  embeddedPreview = false, categoriesOverride = null,
 }) {
   const [formData, setFormData] = useState({});
   const [categoryEvidence, setCategoryEvidence] = useState({});
@@ -200,7 +222,23 @@ export default function EvaluationModal({
             ? 'form_b'
             : 'none';
 
-  const submittedAverage = typeof evaluation?.score === 'number' ? evaluation.score : null;
+  const explicitSubmittedScore = evaluation?.score;
+  const parsedSubmittedScore = explicitSubmittedScore === null
+    || explicitSubmittedScore === undefined
+    || explicitSubmittedScore === ''
+    ? null
+    : Number(explicitSubmittedScore);
+  const categoryResultScore = Array.isArray(evaluation?.categoryResults) && evaluation.categoryResults.length > 0
+    ? evaluation.categoryResults.reduce(
+      (total, result) => total + normalizeNumber(result?.weightedScore ?? result?.weighted_score, 0),
+      0
+    )
+    : null;
+  const submittedAverage = Number.isFinite(parsedSubmittedScore)
+    ? parsedSubmittedScore
+    : Number.isFinite(categoryResultScore) && categoryResultScore > 0
+      ? categoryResultScore
+      : null;
   const viewOnly = readOnly || evaluation?.status === 'submitted';
   const isSubmittedEvaluation = evaluation?.status === 'submitted';
   const isLockedPeriod = !!(period && !period.is_open);
@@ -282,9 +320,21 @@ export default function EvaluationModal({
   }, [evaluation?.id]);
 
   useEffect(() => {
+    if (embeddedPreview && Array.isArray(categoriesOverride)) {
+      const normalized = categoriesOverride.map((category) => ({
+        ...category,
+        id: category.id,
+        weight: Number(category.weight || 0),
+        questions: (category.questions || []).map((question) => ({ ...question, id: question.id })),
+      }));
+      if (formType === 'form_a') setFormACategories(normalized);
+      if (formType === 'form_b') setFormBCategories(normalized);
+      setActiveCategory((current) => normalized.some((category) => String(category.id) === String(current)) ? current : normalized[0]?.id ?? null);
+      return;
+    }
     fetchFormA();
     fetchFormB();
-  }, [fetchFormA, fetchFormB]);
+  }, [categoriesOverride, embeddedPreview, evaluation?.id, fetchFormA, fetchFormB, formType]);
 
   const categories = formType === 'form_a' ? formACategories : formBCategories;
   const loading = formType === 'form_a' ? formALoading : formBLoading;
@@ -783,7 +833,9 @@ export default function EvaluationModal({
       const nextFormData = { ...formDataRef.current, [String(questionId)]: value };
       formDataRef.current = nextFormData;
       setFormData(nextFormData);
-      saveDraftSnapshot({ formData: nextFormData });
+      // Do not synchronously serialize the whole questionnaire on every tap.
+      // The debounced auto-save effect persists this updated state after the
+      // selection has painted, which keeps rating taps responsive on phones.
     };
   }
 
@@ -1468,6 +1520,7 @@ export default function EvaluationModal({
       || evaluation.updated_at;
     const reportNumber = evaluation.referenceNumber || evaluation.reference_number || evaluation.id || 'N/A';
     const categoryResults = Array.isArray(evaluation.categoryResults) ? evaluation.categoryResults : [];
+    const departmentBrand = departmentReportBrand(evaluation.department);
 
     const categorySummaryHtml = submittedCategoryRows.map((cat, index) => `
       <tr>
@@ -1540,44 +1593,46 @@ export default function EvaluationModal({
           * { box-sizing: border-box; }
           body { margin: 0; color: #17211d; font: 11px/1.45 Arial, Helvetica, sans-serif; background: #fff; }
           .report { max-width: 900px; margin: 0 auto; }
-          .report-header { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: start; padding-bottom: 14px; border-bottom: 3px solid #137a52; }
-          .institution { color: #137a52; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-          h1 { margin: 4px 0 2px; font-size: 24px; line-height: 1.15; }
-          .report-subtitle { margin: 0; color: #53645e; font-size: 12px; }
-          .report-ref { min-width: 170px; border: 1px solid #cfe2d8; border-radius: 8px; padding: 9px 11px; background: #f3faf6; }
+          .report-header { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: end; padding-bottom: 10px; border-bottom: 2px solid #27332e; }
+          .department-brand { display: none; width: 52px; height: 52px; place-items: center; }
+          .department-brand img { display: block; width: 48px; height: 48px; object-fit: contain; }
+          .institution { color: #27332e; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+          h1 { margin: 3px 0 0; font-size: 20px; line-height: 1.15; }
+          .report-subtitle { display: none; }
+          .report-ref { min-width: 145px; padding-left: 12px; border-left: 1px solid #aebbb5; }
           .report-ref span, .meta span, .summary-card span, .category-heading > div > span { display: block; color: #63736c; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
           .report-ref strong { display: block; margin-top: 2px; color: #173b2e; }
-          .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 16px 0; border: 1px solid #d8e4de; border-radius: 9px; overflow: hidden; }
-          .meta { min-height: 55px; padding: 9px 11px; border-right: 1px solid #d8e4de; border-bottom: 1px solid #d8e4de; }
+          .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 12px 0; border: 1px solid #aebbb5; }
+          .meta { min-height: 43px; padding: 6px 8px; border-right: 1px solid #d8e4de; border-bottom: 1px solid #d8e4de; }
           .meta:nth-child(2n) { border-right: 0; }
           .meta strong { display: block; margin-top: 3px; font-size: 12px; }
-          .summary-band { display: grid; grid-template-columns: 150px 1fr; gap: 12px; margin: 14px 0 18px; }
-          .summary-card { display: grid; align-content: center; min-height: 105px; border-radius: 10px; padding: 14px; background: #137a52; color: #fff; }
-          .summary-card span { color: #d9f5e8; }
-          .summary-card strong { margin: 3px 0; font-size: 28px; }
+          .summary-band { margin: 10px 0 14px; }
+          .summary-card { display: flex; align-items: baseline; gap: 12px; border: 1px solid #aebbb5; padding: 8px 10px; background: #f7f9f8; color: #17211d; }
+          .summary-card span { color: #53645e; }
+          .summary-card strong { margin: 0; color: #106c49; font-size: 20px; }
           .summary-card p { margin: 0; font-weight: 700; }
-          .report-note { border: 1px solid #d8e4de; border-radius: 10px; padding: 12px 14px; background: #f8fbf9; }
+          .report-note { display: none; }
           .report-note h2, .section-title { margin: 0 0 5px; color: #173b2e; font-size: 14px; }
           .report-note p { margin: 0; color: #53645e; }
           table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-          th, td { border: 1px solid #cedbd4; padding: 7px 8px; text-align: left; vertical-align: top; }
-          th { background: #e9f6ef; color: #173b2e; font-size: 9px; letter-spacing: .035em; text-transform: uppercase; }
+          th, td { border: 1px solid #bfcac5; padding: 6px 7px; text-align: left; vertical-align: top; }
+          th { background: #edf1ef; color: #17211d; font-size: 9px; letter-spacing: .025em; text-transform: uppercase; }
           td.center, th.number, th.rating { text-align: center; }
           .score { color: #106c49; font-weight: 800; }
-          .category-detail { break-inside: avoid; margin-top: 20px; padding-top: 4px; }
-          .category-heading { display: flex; justify-content: space-between; gap: 14px; align-items: end; border-left: 4px solid #137a52; padding: 5px 0 5px 10px; }
+          .category-detail { break-inside: avoid; margin-top: 15px; padding-top: 3px; }
+          .category-heading { display: flex; justify-content: space-between; gap: 14px; align-items: end; border-bottom: 1px solid #aebbb5; padding: 4px 0; }
           .category-heading h2 { margin: 2px 0 0; font-size: 14px; }
           .category-result { text-align: right; }
           .category-result strong, .category-result span { display: block; }
           .category-result strong { color: #106c49; font-size: 14px; }
           .category-description { margin: 7px 0; color: #586861; font-style: italic; }
-          .evidence { margin-top: 8px; border: 1px solid #d8e4de; border-radius: 7px; padding: 8px 10px; background: #fafcfb; }
+          .evidence { margin-top: 6px; border: 1px solid #d8e4de; padding: 6px 8px; background: #fafcfb; }
           .evidence p { margin: 3px 0 0; white-space: pre-wrap; }
-          .rating-scale { break-inside: avoid; margin-top: 22px; border-top: 2px solid #d8e4de; padding-top: 12px; }
+          .rating-scale { display: none; }
           .rating-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
           .rating-list div { border: 1px solid #d8e4de; border-radius: 6px; padding: 6px; text-align: center; }
           .rating-list strong { display: block; color: #106c49; font-size: 14px; }
-          .signatures { display: grid; grid-template-columns: repeat(2, 1fr); gap: 45px; margin-top: 45px; break-inside: avoid; }
+          .signatures { display: grid; grid-template-columns: repeat(2, 1fr); gap: 45px; margin-top: 38px; break-inside: avoid; }
           .signature { border-top: 1px solid #27332e; padding-top: 5px; text-align: center; }
           .signature strong, .signature span { display: block; }
           .signature span { color: #66736e; font-size: 9px; }
@@ -1585,14 +1640,20 @@ export default function EvaluationModal({
           .print-actions { position: sticky; top: 0; display: flex; justify-content: flex-end; gap: 8px; margin: 0 0 14px; padding: 10px; background: rgba(255,255,255,.96); border-bottom: 1px solid #d8e4de; }
           .print-actions button { border: 1px solid #137a52; border-radius: 7px; padding: 8px 13px; background: #137a52; color: #fff; font-weight: 700; cursor: pointer; }
           .print-actions button.secondary { background: #fff; color: #137a52; }
-          @media print { .print-actions { display: none; } .report { max-width: none; } }
+          @media print {
+            .print-actions { display: none; }
+            .report { max-width: none; }
+            .report-header { grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+            .department-brand { display: grid; }
+          }
         </style>
       </head>
       <body>
         <div class="print-actions"><button id="close-report" class="secondary" type="button">Close</button><button id="print-report" type="button">Print Report</button></div>
         <main class="report">
           <header class="report-header">
-            <div><div class="institution">APPRAISIA • Performance Management and Appraisal System</div><h1>Individual Evaluation Report</h1><p class="report-subtitle">Official detailed record of a completed performance evaluation</p></div>
+            <div class="department-brand"><img src="${reportValue(departmentBrand.logo)}" alt="${reportValue(departmentBrand.code)} department logo" /></div>
+            <div><div class="institution">Notre Dame of Midsayap College • APPRAISIA</div><h1>Individual Evaluation Report</h1></div>
             <div class="report-ref"><span>Report Reference</span><strong>${reportValue(reportNumber)}</strong><span style="margin-top:7px">Generated</span><strong>${formatReportDate(new Date())}</strong></div>
           </header>
           <section class="meta-grid">
@@ -1607,13 +1668,8 @@ export default function EvaluationModal({
           </section>
           <section class="summary-band">
             <div class="summary-card"><span>Overall Result</span><strong>${finalScore.toFixed(2)} / 5.00</strong><p>${reportValue(getScoreInterpretation(finalScore))}</p></div>
-            <div class="report-note"><h2>Report Scope</h2><p>This report contains the official evaluation profile, category results, individual criterion ratings, rating descriptions, and submitted behavioral evidence. Scores reflect the recorded responses for the selected appraisal period.</p></div>
           </section>
           <section><h2 class="section-title">Category Performance Summary</h2><table><thead><tr><th class="number">No.</th><th>Category</th><th class="rating">Weight</th><th class="rating">Answered</th><th class="rating">Average</th><th>Interpretation</th></tr></thead><tbody>${categorySummaryHtml}</tbody></table></section>
-          ${detailedResultsHtml}
-          <section class="rating-scale"><h2 class="section-title">Rating Scale</h2><div class="rating-list">${Object.entries(RATING_LABELS).reverse().map(([score, label]) => `<div><strong>${score}</strong><span>${reportValue(label)}</span></div>`).join('')}</div></section>
-          <section class="signatures"><div class="signature"><strong>${reportValue(employeeName)}</strong><span>Employee / Evaluatee Signature and Date</span></div><div class="signature"><strong>${reportValue(evaluatorName, 'Evaluator / Reviewer')}</strong><span>Evaluator / Reviewer Signature and Date</span></div></section>
-          <footer class="footer">APPRAISIA Individual Evaluation Report • Generated from the submitted evaluation record • Page printed on ${formatReportDate(new Date())}</footer>
         </main>
       </body>
       </html>`);
@@ -1650,14 +1706,14 @@ export default function EvaluationModal({
   }
 
   return (
-    <div className="dipascaf-modal">
-      <div className="dipascaf-modal-panel evaluation-form-modal">
+    <div className={embeddedPreview ? 'evaluation-embedded-preview' : 'dipascaf-modal'}>
+      <div className={`${embeddedPreview ? 'evaluation-embedded-preview-panel' : 'dipascaf-modal-panel'} evaluation-form-modal`}>
         <div className="dipascaf-modal-header">
           <div className="dipascaf-modal-header-text">
             <h2>{formTitle}</h2>
             <p>{formSubtitle}</p>
           </div>
-          <button type="button" className="dipascaf-modal-close modal-icon-close" onClick={closeWithDraftSave} aria-label="Close evaluation form"><X size={18} /></button>
+          {!embeddedPreview && <button type="button" className="dipascaf-modal-close modal-icon-close" onClick={closeWithDraftSave} aria-label="Close evaluation form"><X size={18} /></button>}
         </div>
         {!(viewOnly && submittedAverage !== null && !submittedResults) && (
           <div className="evaluation-form-meta">
@@ -1695,7 +1751,7 @@ export default function EvaluationModal({
         )}
 
         {!loading && categories.length > 0 && (!viewOnly || submittedResults) && (
-          <form className="admin-form evaluation-form" onSubmit={handleSubmit} ref={formRef}>
+          <form className="admin-form evaluation-form" onSubmit={embeddedPreview ? (event) => event.preventDefault() : handleSubmit} ref={formRef}>
             {!submittedResults && (
               <>
                 <div className="form-category-header">
@@ -1801,13 +1857,13 @@ export default function EvaluationModal({
                       <CheckCircle2 size={16} /> Review &amp; Submit
                     </button>
                   )}
-                  <button
+                  {!embeddedPreview && <button
                     type="submit"
                     className="dipascaf-evaluate-btn evaluation-submit-btn"
                     disabled={submitting}
                   >
                     {submitting ? 'Submitting...' : 'Submit Evaluation'}
-                  </button>
+                  </button>}
                 </div>
               </div>
             )}

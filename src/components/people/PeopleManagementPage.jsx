@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { DayPicker } from 'react-day-picker';
-import { format } from 'date-fns';
-import 'react-day-picker/style.css';
-import { Archive, BadgeCheck, Building2, CalendarDays, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Edit3, Eye, EyeOff, GraduationCap, Image as ImageIcon, Info, Layers3, Loader2, Lock, Mail, Plus, RefreshCw, RotateCcw, Save, Search, Shield, ShieldCheck, Sparkles, Trash2, Upload, User, UserPlus, Users, X } from 'lucide-react';
+import { Archive, BadgeCheck, Building2, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Edit3, Eye, EyeOff, FileSpreadsheet, FileText, GraduationCap, Image as ImageIcon, Layers3, Loader2, Lock, Mail, Plus, RefreshCw, RotateCcw, Save, Search, Shield, ShieldCheck, Sparkles, Trash2, Upload, User, UserPlus, Users, X } from 'lucide-react';
 import { addToast } from '../common/Toast.jsx';
 import { confirmDeleteData, confirmProceed, confirmSaveChanges } from '../common/ConfirmationModal.jsx';
 import apiFetch from '../../data/api.js';
 import { apiUrl, assetUrl } from '../../data/apiBase.js';
+import { notifyLiveDataChanged } from '../../hooks/useLiveRefresh.js';
 
 const API_BASE = '/api/people.php';
 const DEFAULT_DEPARTMENT_LOGO = assetUrl('assets/images/ndmc-seal.png');
+const VPAA_ASSIGNMENT_ERROR = 'Only one VPAA account is allowed in the system.';
+const DEAN_ASSIGNMENT_ERROR = 'There is already a Dean assigned to this department.';
+const PROGRAM_HEAD_ASSIGNMENT_ERROR = 'There is already a Program Head assigned to this program/course.';
+const DUPLICATE_NAME_ERROR = 'This name already has an account.';
+const ASSIGNMENT_FIELD_ERRORS = [VPAA_ASSIGNMENT_ERROR, DEAN_ASSIGNMENT_ERROR, PROGRAM_HEAD_ASSIGNMENT_ERROR, DUPLICATE_NAME_ERROR];
 
 const emptyDepartment = {
   id: null,
@@ -27,13 +30,14 @@ const emptyDepartment = {
 const emptyUser = {
   id: null,
   userCode: '',
-  birthDate: '',
   fullName: '',
   role: '',
+  facultyDesignation: '',
   department: '',
   program: '',
+  programIds: [],
+  startEvaluationPeriodId: '',
   email: '',
-  emailVerified: false,
   password: '',
   status: 'Active',
   avatar: '',
@@ -103,6 +107,31 @@ function programsMatch(left, right) {
   return Boolean(leftKey && rightKey && leftKey === rightKey);
 }
 
+function assignedProgramCodes(user) {
+  const codes = user?.programIds?.length ? user.programIds : [user?.program];
+  return [...new Set(codes.map((code) => String(code || '').trim()).filter(Boolean))];
+}
+
+function UserAssignment({ user }) {
+  const programs = assignedProgramCodes(user);
+
+  return (
+    <span className="people-user-assignment">
+      <span className="people-user-assignment-department">{user.department || 'Unassigned'}</span>
+      {programs.length > 0 && (
+        <span className="people-user-program-list" aria-label={`Assigned programs: ${programs.join(', ')}`}>
+          {programs.map((program) => <span className="people-user-program-chip" key={program}>{program}</span>)}
+        </span>
+      )}
+      {user.subjectAssignments?.length > 0 && (
+        <span className="people-user-program-list" aria-label="Assigned subject areas">
+          {user.subjectAssignments.map((subject) => <span className="people-user-program-chip" key={subject.id}>{subject.subject_code}{subject.is_primary ? ' • Primary' : ''}{subject.is_coordinator ? ' • Coordinator' : ''}</span>)}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function userSearchText(user, departments = []) {
   const matchingDepartment = departments.find((department) => departmentsMatch(user.department, department, departments));
   return [
@@ -111,7 +140,10 @@ function userSearchText(user, departments = []) {
     user.email,
     user.department,
     user.role,
+    user.facultyDesignation,
     user.program,
+    ...assignedProgramCodes(user),
+    ...(user.subjectAssignments || []).flatMap((subject) => [subject.subject_code, subject.subject_name, subject.is_coordinator ? 'Subject Coordinator' : '']),
     ...(matchingDepartment ? departmentAliases(matchingDepartment) : departmentAliases(user.department)),
   ].join(' ').toLowerCase();
 }
@@ -166,15 +198,18 @@ function apiUserToFormUser(apiUser) {
   return {
     id: Number(apiUser.id),
     userCode: String(apiUser.user_code || ''),
-    birthDate: apiUser.birth_date || '',
-    emailVerified: Boolean(apiUser.email_verified_at),
     mustChangePassword: apiUser.must_change_password == 1,
     fullName: apiUser.full_name || '',
-    email: apiUser.email || '',
+    email: String(apiUser.email || '').toLowerCase().endsWith('@pmas.local') ? '' : (apiUser.email || ''),
     password: '',
     role: apiRoleToRole(apiUser.role),
+    facultyDesignation: apiUser.faculty_designation || '',
     department: normalizeDepartmentName(apiUser.department || ''),
     program: apiUser.program || '',
+    programIds: (apiUser.assigned_programs || []).map((program) => String(program.program_code || '')).filter(Boolean),
+    subjectAssignments: apiUser.subject_assignments || [],
+    assignmentNeedsReview: Boolean(apiUser.assignment_needs_review),
+    startEvaluationPeriodId: apiUser.start_evaluation_period_id ? String(apiUser.start_evaluation_period_id) : '',
     status: apiUser.is_active == 1 ? 'Active' : 'Inactive',
     avatar: assetUrl(apiUser.profile_image || ''),
     createdAt: apiUser.created_at || '',
@@ -205,7 +240,7 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   const [usersError, setUsersError] = useState('');
   const [archivedDepartments, setArchivedDepartments] = useState([]);
   const [archivedUsers, setArchivedUsers] = useState([]);
-  const [filters, setFilters] = useState({ search: '', department: '', program: '', role: '', status: '' });
+  const [filters, setFilters] = useState({ search: '', periodId: '', department: '', program: '', role: '', status: '' });
   const [modal, setModal] = useState(null);
   const [departmentForm, setDepartmentForm] = useState(emptyDepartment);
   const [userForm, setUserForm] = useState(emptyUser);
@@ -216,9 +251,12 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   const [departmentLogoFile, setDepartmentLogoFile] = useState(null);
   const [departmentTouched, setDepartmentTouched] = useState({});
   const [showPassword, setShowPassword] = useState(false);
+  const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
   const [passwordExpanded, setPasswordExpanded] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
   const originalUserFormRef = useRef(emptyUser);
+  const userFormRef = useRef(null);
+  const accountLaunchRef = useRef('');
   const [touched, setTouched] = useState({});
   const [inlineModal, setInlineModal] = useState(null);
   const [inlineDepartment, setInlineDepartment] = useState(emptyInlineDepartment);
@@ -229,14 +267,18 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   const [accountDetails, setAccountDetails] = useState(null);
   const [accountSort, setAccountSort] = useState({ key: 'fullName', direction: 'asc' });
   const [accountPage, setAccountPage] = useState(1);
-  const [accountPageSize, setAccountPageSize] = useState(10);
+  const [accountPageSize, setAccountPageSize] = useState(5);
+  const [reportDepartment, setReportDepartment] = useState('');
+  const [reportExporting, setReportExporting] = useState('');
+  const [reportError, setReportError] = useState('');
+  const [evaluationPeriods, setEvaluationPeriods] = useState([]);
   const selectedDepartment = departments.find((department) => department.name === userForm.department);
   const selectedProgramOptions = programsForDepartment(selectedDepartment || userForm.department, allPrograms);
   const roleRequiresDepartment = ['Dean', 'Program Head', 'Faculty'].includes(userForm.role);
   const roleUsesProgram = ['Dean', 'Program Head', 'Faculty'].includes(userForm.role);
-  const roleRequiresProgram = ['Faculty', 'Program Head'].includes(userForm.role);
+  const roleRequiresProgram = userForm.role === 'Program Head';
+  const roleRequiresStartPeriod = ['Dean', 'Program Head', 'Faculty'].includes(userForm.role);
   const isEditing = !!userForm.id;
-  const normalizedEmail = userForm.email.trim().toLowerCase();
   const passwordChecks = { length: userForm.password.length >= 8, upper: /[A-Z]/.test(userForm.password), lower: /[a-z]/.test(userForm.password), number: /\d/.test(userForm.password) };
   const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
   const passwordStrength = passwordScore <= 2 ? 'Weak' : passwordScore === 3 ? 'Fair' : 'Strong';
@@ -247,9 +289,86 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   const peopleFilter = viewParams.get('filter') || '';
   const showDepartmentDirectory = !peopleView || peopleView === 'departments';
   const showProgramDirectory = peopleView === 'programs';
+
+  useEffect(() => {
+    if (modal !== 'user' || !formError) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      const form = userFormRef.current;
+      if (!form) return;
+
+      const target = form.querySelector('.people-form-field.has-error')
+        || form.querySelector('.people-form-alert');
+      if (!target) return;
+
+      target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      const control = target.querySelector('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+      control?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [formError, modal]);
   const showUserDirectory = !peopleView || peopleView === 'users';
   const managingAccounts = peopleView === 'users';
   const requestedResetId = Number(viewParams.get('reset_request') || 0);
+  const requestedAccountAction = viewParams.get('action') || '';
+  const requestedAccountUserId = Number(viewParams.get('user_id') || 0);
+  const requestedDepartmentId = Number(viewParams.get('department_id') || 0);
+  const requestedAccountRole = viewParams.get('role') || 'Faculty';
+  const requestedReturnTo = viewParams.get('return_to') || '';
+  const accountReturnTo = /^\/admin\/department\/\d+$/.test(requestedReturnTo) ? requestedReturnTo : '';
+
+  useEffect(() => {
+    let active = true;
+    apiFetch('/api/evaluation-period.php?action=periods')
+      .then((result) => {
+        if (active) setEvaluationPeriods(result.data || []);
+      })
+      .catch((error) => {
+        if (active) setFormError(error.message || 'Unable to load evaluation periods.');
+      });
+    return () => { active = false; };
+  }, []);
+  async function exportAccountReport(format) {
+    if (reportExporting || accountReportRows.length === 0) return;
+    const url = new URL(assetUrl('reports/user_accounts_download.php'), window.location.origin);
+    if (reportDepartment) url.searchParams.set('department', reportDepartment);
+    url.searchParams.set('format', format);
+    url.searchParams.set('_export', String(Date.now()));
+    setReportExporting(format);
+    setReportError('');
+    try {
+      const response = await fetch(url.toString(), { credentials: 'include', cache: 'no-store' });
+      if (!response.ok) throw new Error((await response.text()).trim() || `Unable to generate ${format.toUpperCase()} report.`);
+      const blob = await response.blob();
+      const signature = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+      const isOfficePackage = signature[0] === 0x50 && signature[1] === 0x4b;
+      const isPdf = String.fromCharCode(...signature) === '%PDF-';
+      if ((format === 'excel' || format === 'word') && !isOfficePackage) {
+        const message = (await blob.text()).trim();
+        throw new Error(message || `The server did not return a valid ${format === 'excel' ? 'Excel workbook' : 'Word document'}.`);
+      }
+      if (format === 'pdf' && !isPdf) {
+        const message = (await blob.text()).trim();
+        throw new Error(message || 'The server did not return a valid PDF document.');
+      }
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const extension = format === 'excel' ? 'xlsx' : format === 'word' ? 'docx' : 'pdf';
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || `APPRAISIA-User-Account-Report.${extension}`;
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+    } catch (error) {
+      setReportError(error.message || 'Unable to export the user account report.');
+    } finally {
+      setReportExporting('');
+    }
+  }
 
   const openAccountManagement = useCallback(() => {
     navigate('/admin/people?view=users#account-management');
@@ -278,6 +397,44 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   }, [requestedResetId, usersLoading, users]);
 
   useEffect(() => {
+    if (requestedAccountAction !== 'edit-account' || !requestedAccountUserId || usersLoading) return;
+    const requestedUser = users.find((user) => Number(user.id) === requestedAccountUserId);
+    if (!requestedUser) return;
+    const launchKey = `edit:${requestedAccountUserId}`;
+    if (accountLaunchRef.current === launchKey) return;
+    accountLaunchRef.current = launchKey;
+    openUserForm(requestedUser);
+  }, [requestedAccountAction, requestedAccountUserId, users, usersLoading]);
+
+  useEffect(() => {
+    if (
+      requestedAccountAction !== 'add-account'
+      || !requestedDepartmentId
+      || departmentsLoading
+      || programsLoading
+      || usersLoading
+    ) return;
+
+    const launchKey = `${requestedDepartmentId}:${requestedAccountRole}`;
+    if (accountLaunchRef.current === launchKey) return;
+    const department = departments.find((item) => Number(item.id) === requestedDepartmentId);
+    if (!department) return;
+
+    const allowedRoles = ['Dean', 'Program Head', 'Faculty'];
+    const role = allowedRoles.includes(requestedAccountRole) ? requestedAccountRole : 'Faculty';
+    accountLaunchRef.current = launchKey;
+    openUserForm({ ...emptyUser, role, department: department.name });
+  }, [
+    departments,
+    departmentsLoading,
+    programsLoading,
+    requestedAccountAction,
+    requestedAccountRole,
+    requestedDepartmentId,
+    usersLoading,
+  ]);
+
+  useEffect(() => {
     if (!managingAccounts) return;
     const frame = window.requestAnimationFrame(() => accountManagementRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     return () => window.cancelAnimationFrame(frame);
@@ -288,7 +445,8 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
     setUsersLoading(true);
     setUsersError('');
     try {
-      const payload = await apiFetch(API_BASE);
+      const query = filters.periodId ? `?period_id=${encodeURIComponent(filters.periodId)}` : '';
+      const payload = await apiFetch(`${API_BASE}${query}`);
       const mappedUsers = Array.isArray(payload.users) ? payload.users.map(apiUserToFormUser) : [];
       setUsers(mappedUsers);
       if (payload.next_user_code) setNextUserCode(String(payload.next_user_code));
@@ -297,7 +455,7 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
     } finally {
       setUsersLoading(false);
     }
-  }, []);
+  }, [filters.periodId]);
 
   useEffect(() => {
     fetchUsers();
@@ -360,6 +518,11 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   }, [fetchArchivedDepartments, fetchArchivedUsers, fetchDepartments, fetchPrograms, fetchUsers]);
 
   useEffect(() => {
+    if (modal !== 'account-report') return;
+    refreshDirectories();
+  }, [modal, refreshDirectories]);
+
+  useEffect(() => {
     const nextRole = viewParams.get('role') || '';
     const nextStatus = viewParams.get('status') || '';
     const nextSearch = viewParams.get('search') || '';
@@ -379,15 +542,22 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   }, [fetchArchivedDepartments, fetchArchivedUsers, fetchDepartments, fetchPrograms]);
 
   const accountUsers = useMemo(() => {
-    const source = managingAccounts ? [...users, ...archivedUsers] : users;
+    const source = managingAccounts && !filters.periodId ? [...users, ...archivedUsers] : users;
     return [...new Map(source.map((user) => [user.id, user])).values()];
-  }, [archivedUsers, managingAccounts, users]);
+  }, [archivedUsers, filters.periodId, managingAccounts, users]);
+  const accountReportRows = useMemo(() => {
+    const roleOrder = { Dean: 0, 'Program Head': 1, Faculty: 2 };
+    return accountUsers
+      .filter((user) => ['Dean', 'Program Head', 'Faculty'].includes(user.role))
+      .filter((user) => !reportDepartment || departmentsMatch(user.department, reportDepartment, departments))
+      .sort((left, right) => (roleOrder[left.role] - roleOrder[right.role]) || left.fullName.localeCompare(right.fullName));
+  }, [accountUsers, departments, reportDepartment]);
 
   const filteredUsers = useMemo(() => accountUsers.filter((user) => {
     const searchText = userSearchText(user, departments);
     return (!filters.search || searchText.includes(filters.search.toLowerCase()))
       && (!filters.department || departmentsMatch(user.department, filters.department, departments))
-      && (!filters.program || programsMatch(user.program, filters.program))
+      && (!filters.program || assignedProgramCodes(user).some((program) => programsMatch(program, filters.program)))
       && (!filters.role || user.role === filters.role)
       && (!filters.status || user.status === filters.status);
   }), [accountUsers, departments, filters]);
@@ -399,9 +569,24 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
     return accountSort.direction === 'asc' ? order : -order;
   }), [accountSort, filteredUsers]);
   const accountPageCount = Math.max(1, Math.ceil(sortedUsers.length / accountPageSize));
-  const pagedUsers = managingAccounts ? sortedUsers.slice((accountPage - 1) * accountPageSize, accountPage * accountPageSize) : sortedUsers;
+  const pagedUsers = sortedUsers.slice((accountPage - 1) * accountPageSize, accountPage * accountPageSize);
   const accountMetrics = useMemo(() => ({ total: accountUsers.length, active: accountUsers.filter((user) => user.status === 'Active').length, inactive: accountUsers.filter((user) => user.status === 'Inactive').length, admins: accountUsers.filter((user) => user.role === 'Admin').length }), [accountUsers]);
   const accountPrograms = useMemo(() => allPrograms.filter((program) => !filters.department || departmentsMatch(program.department_name || program.department_code, filters.department, departments)), [allPrograms, departments, filters.department]);
+
+  useEffect(() => {
+    setAccountPage((page) => Math.min(page, accountPageCount));
+  }, [accountPageCount]);
+
+  const periodDepartmentCounts = useMemo(() => {
+    if (!filters.periodId) return null;
+    return departments.reduce((counts, department) => {
+      counts[department.id] = users.filter((user) =>
+        ['Dean', 'Program Head', 'Faculty'].includes(user.role)
+        && departmentsMatch(user.department, department, departments)
+      ).length;
+      return counts;
+    }, {});
+  }, [departments, filters.periodId, users]);
 
   const filteredDepartments = useMemo(() => departments.filter((department) => {
     const searchText = `${department.name} ${department.code} ${department.dean}`.toLowerCase();
@@ -409,6 +594,11 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
     return (!filters.search || searchText.includes(filters.search.toLowerCase()))
       && (!filters.department || department.name === filters.department);
   }), [departments, filters, peopleNeeds]);
+
+  const selectedEvaluationPeriod = useMemo(
+    () => evaluationPeriods.find((period) => String(period.id) === String(filters.periodId)),
+    [evaluationPeriods, filters.periodId],
+  );
 
   const filteredPrograms = useMemo(() => allPrograms.filter((program) => {
     const programName = program.name || program.program_name || '';
@@ -462,12 +652,14 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
     const formDepartment = departments.find((department) => departmentsMatch(user.department, department, departments));
     const formProgram = programsForDepartment(formDepartment || user.department, allPrograms)
       .find((program) => programsMatch(program.code, user.program));
-    const nextForm = { ...emptyUser, ...user, userCode: user.id ? user.userCode : nextUserCode, program: formProgram?.code || user.program || '', password: '' };
+    const assignedProgramCodes = user.programIds?.length ? user.programIds : [formProgram?.code || user.program || ''].filter(Boolean);
+    const nextForm = { ...emptyUser, ...user, userCode: user.id ? user.userCode : nextUserCode, program: assignedProgramCodes[0] || '', programIds: assignedProgramCodes, password: '' };
     setUserForm(nextForm);
     originalUserFormRef.current = nextForm;
     setUserAvatarFile(null);
     setTouched({});
     setShowPassword(false);
+    setShowTemporaryPassword(false);
     setPasswordExpanded(false);
     setConfirmPassword('');
     setFormError('');
@@ -501,7 +693,7 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   async function completePasswordReset() {
     const requestId = userForm.pendingPasswordResetRequestId;
     if (!requestId || saving) return;
-    const confirmed = await confirmProceed({ title: 'Reset this account password?', message: `The temporary password will be ${userForm.birthDate || 'the recorded birth date'}, and the user must replace it after signing in.`, cancelText: 'Cancel', confirmText: 'Reset Password' });
+    const confirmed = await confirmProceed({ title: 'Reset this account password?', message: 'The temporary password will be APPRAISIA_NDMC. The user must change it after signing in.', cancelText: 'Cancel', confirmText: 'Reset Password' });
     if (!confirmed) return;
     setSaving(true); setFormError('');
     try {
@@ -511,6 +703,35 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
       addToast({ type: 'success', text: result.message });
     } catch (error) { setFormError(error.message || 'Unable to reset this password.'); }
     finally { setSaving(false); }
+  }
+
+  async function resetAccountPassword() {
+    if (!userForm.id || saving) return;
+    const confirmed = await confirmProceed({
+      title: 'Reset this account password?',
+      message: 'The password will become APPRAISIA_NDMC. The user must create a new password before entering the dashboard.',
+      cancelText: 'Cancel',
+      confirmText: 'Reset to Temporary Password',
+    });
+    if (!confirmed) return;
+    setSaving(true);
+    setFormError('');
+    try {
+      const result = await apiFetch(API_BASE, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset_account_password', user_id: userForm.id }),
+      });
+      setUserForm((current) => ({ ...current, password: '', mustChangePassword: true }));
+      setPasswordExpanded(false);
+      setConfirmPassword('');
+      await refreshDirectories();
+      addToast({ type: 'success', text: result.message });
+    } catch (error) {
+      setFormError(error.message || 'Unable to reset this password.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const userFormDirty = Object.keys(touched).length > 0 || Boolean(userAvatarFile);
@@ -528,6 +749,7 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
     }
     setInlineModal(null);
     setModal(null);
+    if (accountReturnTo) navigate(accountReturnTo);
   }
 
   function touch(name) {
@@ -594,7 +816,10 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
       });
       if (!result.ok) throw new Error(result.message || 'Failed to add program.');
       await fetchPrograms();
-      setUserForm((current) => ({ ...current, program: inlineProgram.code.trim().toUpperCase() }));
+      setUserForm((current) => {
+        const code = inlineProgram.code.trim().toUpperCase();
+        return { ...current, program: current.program || code, programIds: current.role === 'Program Head' ? [...new Set([...current.programIds, code])] : [code] };
+      });
       touch('program');
       setInlineModal(null);
       setInlineProgram(emptyInlineProgram);
@@ -607,7 +832,7 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
       nextUser.role === 'VPAA' &&
       users.some((user) => user.id !== nextUser.id && user.role === 'VPAA')
     ) {
-      return 'Only one VPAA account is allowed in the system.';
+      return VPAA_ASSIGNMENT_ERROR;
     }
 
     if (
@@ -615,19 +840,21 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
       nextUser.department &&
       users.some((user) => user.id !== nextUser.id && user.role === 'Dean' && user.department === nextUser.department)
     ) {
-      return 'There is already a Dean assigned to this department.';
+      return DEAN_ASSIGNMENT_ERROR;
     }
 
     if (
       nextUser.role === 'Program Head' &&
-      nextUser.program &&
+      (nextUser.programIds?.length || nextUser.program) &&
       users.some((user) =>
         user.id !== nextUser.id &&
         user.role === 'Program Head' &&
-        programsMatch(user.program, nextUser.program)
+        (nextUser.programIds?.length ? nextUser.programIds : [nextUser.program]).some((program) =>
+          (user.programIds?.length ? user.programIds : [user.program]).some((assigned) => programsMatch(assigned, program))
+        )
       )
     ) {
-      return 'There is already a Program Head assigned to this program/course.';
+      return PROGRAM_HEAD_ASSIGNMENT_ERROR;
     }
 
     return '';
@@ -636,6 +863,7 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   function warnRoleAssignment(nextUser) {
     const message = getRoleAssignmentMessage(nextUser);
     if (!message) {
+      setFormError((current) => ASSIGNMENT_FIELD_ERRORS.includes(current) ? '' : current);
       return;
     }
 
@@ -648,6 +876,9 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
       ...userForm,
       role,
       program: ['Dean', 'Faculty', 'Program Head'].includes(role) && !leavingProgramHeadForDean ? userForm.program : '',
+      programIds: role === 'Program Head'
+        ? (userForm.programIds.length ? userForm.programIds : [userForm.program].filter(Boolean))
+        : (['Dean', 'Faculty'].includes(role) && !leavingProgramHeadForDean ? [userForm.program].filter(Boolean) : []),
     };
 
     setUserForm(nextUser);
@@ -658,12 +889,15 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   function updateUserDepartment(departmentName) {
     const department = departments.find((item) => item.name === departmentName);
     const availablePrograms = programsForDepartment(department || departmentName, allPrograms);
+    const matchingPrograms = availablePrograms.filter((program) => userForm.programIds.some((code) => programsMatch(program.code, code)));
     const matchingProgram = availablePrograms.find((program) => programsMatch(program.code, userForm.program));
-    const nextProgram = matchingProgram?.code || '';
+    const nextProgramIds = matchingPrograms.map((program) => program.code);
+    const nextProgram = matchingProgram?.code || nextProgramIds[0] || '';
     const nextUser = {
       ...userForm,
       department: departmentName,
       program: nextProgram,
+      programIds: userForm.role === 'Program Head' ? nextProgramIds : [nextProgram].filter(Boolean),
     };
 
     setUserForm(nextUser);
@@ -671,8 +905,28 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   }
 
   function updateUserProgram(program) {
-    const nextUser = { ...userForm, program };
+    const nextUser = {
+      ...userForm,
+      program,
+      programIds: program ? [program] : [],
+    };
     setUserForm(nextUser);
+    warnRoleAssignment(nextUser);
+  }
+
+  function toggleProgramHeadProgram(programCode) {
+    const code = String(programCode);
+    const selected = userForm.programIds.includes(code);
+    const programIds = selected
+      ? userForm.programIds.filter((item) => item !== code)
+      : [...userForm.programIds, code];
+    const nextUser = {
+      ...userForm,
+      programIds,
+      program: programIds.includes(userForm.program) ? userForm.program : (programIds[0] || ''),
+    };
+    setUserForm(nextUser);
+    touch('program');
     warnRoleAssignment(nextUser);
   }
 
@@ -739,6 +993,13 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
         throw new Error(result.message || 'Failed to save department.');
       }
 
+      if (departmentLogoFile) {
+        notifyLiveDataChanged({
+          source: 'people-department',
+          action: departmentForm.id ? 'updated' : 'created',
+          departmentId: Number(result.data?.id || result.department?.id || departmentForm.id || 0),
+        });
+      }
       setModal(null);
       await refreshDirectories();
       addToast({ type: 'success', text: deanUser ? `${cleanName} has been saved and assigned to ${deanUser.fullName}.` : 'Department saved successfully. No dean assigned yet.' });
@@ -758,23 +1019,18 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
     try {
       const departmentProgramCodes = selectedProgramOptions.map((program) => normalizeProgramKey(program.code));
       const selectedProgramKey = normalizeProgramKey(userForm.program);
-      setTouched({ fullName: true, email: true, userCode: true, birthDate: true, password: true, role: true, department: true, program: true });
+      setTouched({ fullName: true, userCode: true, email: true, password: true, role: true, department: true, program: true, startEvaluationPeriodId: true });
 
       if (!userForm.fullName.trim()) {
         setFormError('Full name is required.');
         return;
       }
-      if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
-        setFormError('Enter a valid email address.');
-        return;
-      }
-      if (users.some((user) => user.id !== userForm.id && user.email.trim().toLowerCase() === normalizedEmail)) {
-        setFormError('An account with this email already exists.');
-        return;
-      }
       if (!/^[1-9]\d*$/.test(userForm.userCode)) { setFormError('Username code must contain positive numeric digits only.'); return; }
       if (users.some((user) => user.id !== userForm.id && user.userCode === userForm.userCode)) { setFormError('This username code is already assigned to another account. Please enter a different code.'); return; }
-      if (!isEditing && !/^\d{4}-\d{2}-\d{2}$/.test(userForm.birthDate)) { setFormError('A valid birth date is required.'); return; }
+      if (userForm.email.trim() && !/^[^\s@]+@gmail\.com$/i.test(userForm.email.trim())) {
+        setFormError('Enter a valid Gmail address ending in @gmail.com, or leave it blank.');
+        return;
+      }
 
       // Local validation (matches schema rules)
       if (isEditing && userForm.password && passwordScore < 4) {
@@ -806,9 +1062,17 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
         setFormError('Select a program/course for this account.');
         return;
       }
+      if (roleRequiresStartPeriod && !userForm.startEvaluationPeriodId) {
+        setFormError('Select the first evaluation period for this account.');
+        return;
+      }
 
       if (roleRequiresProgram && !departmentProgramCodes.includes(selectedProgramKey)) {
         setFormError('The selected program/course does not belong to this department.');
+        return;
+      }
+      if (userForm.role === 'Program Head' && userForm.programIds.some((code) => !departmentProgramCodes.includes(normalizeProgramKey(code)))) {
+        setFormError('Every selected program/course must belong to this department.');
         return;
       }
 
@@ -826,13 +1090,15 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
         // Use FormData when there's a profile image
         const formData = new FormData();
         formData.append('full_name', userForm.fullName.trim().replace(/\s+/g, ' '));
-        formData.append('email', normalizedEmail);
         formData.append('user_code', userForm.userCode);
-        formData.append('birth_date', userForm.birthDate);
+        formData.append('email', userForm.email.trim().toLowerCase());
         formData.append('role', roleToApiRole(userForm.role));
+        formData.append('faculty_designation', userForm.role === 'Faculty' ? userForm.facultyDesignation.trim() : '');
         formData.append('phone', '');
         formData.append('department', userForm.department || '');
         formData.append('program', userForm.program || '');
+        formData.append('program_ids', JSON.stringify(userForm.role === 'Program Head' ? userForm.programIds : [userForm.program].filter(Boolean)));
+        formData.append('start_evaluation_period_id', userForm.startEvaluationPeriodId || '');
         formData.append('is_active', userForm.status === 'Active' ? '1' : '0');
         formData.append('profile_image', userAvatarFile);
 
@@ -861,13 +1127,15 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
       } else {
         const payload = {
           full_name: userForm.fullName.trim().replace(/\s+/g, ' '),
-          email: normalizedEmail,
           user_code: userForm.userCode,
-          birth_date: userForm.birthDate,
+          email: userForm.email.trim().toLowerCase(),
           role: roleToApiRole(userForm.role),
+          faculty_designation: userForm.role === 'Faculty' ? userForm.facultyDesignation.trim() : '',
           phone: '',
           department: userForm.department || null,
           program: userForm.program || null,
+          program_ids: userForm.role === 'Program Head' ? userForm.programIds : [userForm.program].filter(Boolean),
+          start_evaluation_period_id: userForm.startEvaluationPeriodId ? Number(userForm.startEvaluationPeriodId) : null,
           is_active: userForm.status === 'Active',
         };
 
@@ -900,12 +1168,33 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
         return;
       }
 
+      // Multipart uploads use the native fetch API, so explicitly publish the
+      // same cross-module refresh signal that apiFetch publishes for mutations.
+      if (userAvatarFile) {
+        notifyLiveDataChanged({
+          source: 'people-account',
+          action: isEditing ? 'updated' : 'created',
+          userId: Number(result.user?.id || userForm.id || 0),
+        });
+      }
       const assignment = userForm.program ? ` as ${userForm.role} of ${userForm.program}` : userForm.department ? ` as ${userForm.role} of ${userForm.department}` : '';
       addToast({ type: 'success', text: isEditing ? 'Account updated successfully.' : `Account created successfully. ${userForm.fullName.trim()} has been assigned${assignment}.` });
       setModal(null);
+      // Return to an unfiltered first page after saving. This prevents retained
+      // filters from hiding a valid new account without forcing a name search.
+      setFilters((current) => ({
+        ...current,
+        search: '',
+        department: '',
+        program: '',
+        role: '',
+        status: '',
+      }));
+      setAccountPage(1);
       await refreshDirectories();
+      if (accountReturnTo) navigate(accountReturnTo);
     } catch (error) {
-      setFormError('Network error: ' + error.message);
+      setFormError(error.message || 'Unable to save the account. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -1097,7 +1386,7 @@ function handleImageUpload(event, type) {
                     <div className="people-user-copy">
                       <h3>{user.fullName}</h3>
                       <p>{user.role}</p>
-                      <span>{user.department || 'Unassigned'} {user.program ? `- ${user.program}` : ''}</span>
+                      <UserAssignment user={user} />
                       <small>Inactive in database</small>
                     </div>
                   </div>
@@ -1121,11 +1410,23 @@ function handleImageUpload(event, type) {
             {filters.search && <button type="button" className="people-search-clear" onClick={() => updateFilter('search', '')} aria-label="Clear search"><X size={14} /></button>}
           </div>
         </label>
+        <label>Evaluation Period<select value={filters.periodId} onChange={(event) => updateFilter('periodId', event.target.value)}><option value="">Current master data</option>{evaluationPeriods.map((period) => <option key={period.id} value={period.id}>{period.period_name || `Evaluation ${period.id}`}</option>)}</select></label>
         <label>Department<select value={filters.department} onChange={(event) => { updateFilter('department', event.target.value); updateFilter('program', ''); }}><option value="">All departments</option>{departments.map((department) => <option key={department.id}>{department.name}</option>)}</select></label>
         {managingAccounts && <label>Program<select value={filters.program} onChange={(event) => updateFilter('program', event.target.value)}><option value="">All programs</option>{accountPrograms.map((program) => <option key={program.id} value={program.code}>{program.code} — {program.name}</option>)}</select></label>}
         <label>Role<select value={filters.role} onChange={(event) => updateFilter('role', event.target.value)}><option value="">All roles</option>{(managingAccounts ? accountRoleOptions : roleOptions).map((role) => <option key={role} value={role}>{role === 'Admin' ? 'HRDM Director/Admin' : role === 'Faculty' ? 'Faculty Member' : role}</option>)}</select></label>
         <label>Status<select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}><option value="">All status</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select></label>
       </section>
+
+      {filters.periodId && (
+        <div className="people-period-scope-notice" role="status">
+          <Layers3 size={18} />
+          <div>
+            <strong>{selectedEvaluationPeriod?.period_name || 'Selected evaluation period'}</strong>
+            <span>Showing only included evaluation participants with their period-specific role, department, and program assignments.</span>
+          </div>
+          <b>{users.length} participant{users.length === 1 ? '' : 's'}</b>
+        </div>
+      )}
 
       {peopleFilter === 'low-progress' && (
         <div className="notice warning" role="status" style={{ padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '0.75rem', color: '#92400e', fontWeight: 700 }}>
@@ -1146,7 +1447,7 @@ function handleImageUpload(event, type) {
                 <div className="people-department-logo"><img src={department.logo} alt={`${department.name} logo`} /></div>
                 <div className="people-department-copy">
                   <h3>{department.name}</h3>
-                  <p><Users className="h-4 w-4" /> {Number(department.user_count ?? department.faculty_count ?? users.filter((user) => user.department === department.name).length) || 0} total faculty/users</p>
+                  <p><Users className="h-4 w-4" /> {periodDepartmentCounts ? (periodDepartmentCounts[department.id] || 0) : (Number(department.user_count ?? department.faculty_count ?? users.filter((user) => user.department === department.name).length) || 0)} {filters.periodId ? 'evaluation participant(s)' : 'total faculty/users'}</p>
                   <p><Building2 className="h-4 w-4" /> Dean: {department.dean || 'Unassigned'}</p>
                   <p>Programs: {department.programs || 0}</p>
                 </div>
@@ -1196,9 +1497,10 @@ function handleImageUpload(event, type) {
       </section>}
 
       {showUserDirectory && <section className={`people-section ${managingAccounts ? 'people-account-management' : ''}`} id="account-management" ref={accountManagementRef} tabIndex="-1">
-        {managingAccounts && <><div className="people-account-breadcrumb"><button type="button" onClick={() => navigate('/admin/people')}><ChevronLeft size={16} /> Back to People Management</button><span>People Management <b>/</b> Manage Accounts</span></div><div className="people-account-heading"><div className="people-account-heading-copy"><span className="people-account-heading-icon"><Users size={22} /></span><div><p className="eyebrow">Account Administration</p><h2>Manage User Accounts</h2><p>View, search, filter, update, and manage institutional user accounts and organizational assignments.</p></div></div><button type="button" onClick={() => openUserForm()}><UserPlus size={16} /> Add Account/User</button></div><div className="people-account-metrics"><article className="total"><span className="people-account-metric-icon"><Users size={18} /></span><div><span>Total Accounts</span><strong>{accountMetrics.total}</strong><small>All institutional users</small></div></article><article className="active"><span className="people-account-metric-icon"><Check size={18} /></span><div><span>Active</span><strong>{accountMetrics.active}</strong><small>Can access APPRAISIA</small></div></article><article className="inactive"><span className="people-account-metric-icon"><Archive size={18} /></span><div><span>Inactive</span><strong>{accountMetrics.inactive}</strong><small>Sign-in access disabled</small></div></article><article className="admin"><span className="people-account-metric-icon"><Shield size={18} /></span><div><span>Administrators</span><strong>{accountMetrics.admins}</strong><small>HRDM system managers</small></div></article></div><div className="people-account-table-title"><div><h3>Account Directory</h3><p>{filteredUsers.length} account{filteredUsers.length === 1 ? '' : 's'} match the current view</p></div><button type="button" onClick={refreshDirectories} disabled={usersLoading}><RefreshCw size={15} className={usersLoading ? 'animate-spin' : ''} /> Refresh</button></div></>}
+        {managingAccounts && <><div className="people-account-breadcrumb"><button type="button" onClick={() => navigate('/admin/people')}><ChevronLeft size={16} /> Back to People Management</button><span>People Management <b>/</b> Manage Accounts</span></div><div className="people-account-heading"><div className="people-account-heading-copy"><span className="people-account-heading-icon"><Users size={22} /></span><div><p className="eyebrow">Account Administration</p><h2>Manage User Accounts</h2><p>View, search, filter, update, and manage institutional user accounts and organizational assignments.</p></div></div><div className="people-account-heading-actions"><button type="button" className="people-account-report-button" onClick={() => { setReportDepartment(filters.department || ''); setReportError(''); setModal('account-report'); }} disabled={usersLoading}><FileText size={16} /> {usersLoading ? 'Refreshing Accounts…' : 'Generate User Account Report'}</button><button type="button" onClick={() => openUserForm()}><UserPlus size={16} /> Add Account/User</button></div></div><div className="people-account-metrics"><article className="total"><span className="people-account-metric-icon"><Users size={18} /></span><div><span>Total Accounts</span><strong>{accountMetrics.total}</strong><small>All institutional users</small></div></article><article className="active"><span className="people-account-metric-icon"><Check size={18} /></span><div><span>Active</span><strong>{accountMetrics.active}</strong><small>Can access APPRAISIA</small></div></article><article className="inactive"><span className="people-account-metric-icon"><Archive size={18} /></span><div><span>Inactive</span><strong>{accountMetrics.inactive}</strong><small>Sign-in access disabled</small></div></article><article className="admin"><span className="people-account-metric-icon"><Shield size={18} /></span><div><span>Administrators</span><strong>{accountMetrics.admins}</strong><small>HRDM system managers</small></div></article></div><div className="people-account-table-title"><div><h3>Account Directory</h3><p>{filteredUsers.length} account{filteredUsers.length === 1 ? '' : 's'} match the current view</p></div><button type="button" onClick={refreshDirectories} disabled={usersLoading}><RefreshCw size={15} className={usersLoading ? 'animate-spin' : ''} /> Refresh</button></div></>}
         {!managingAccounts && <div className="box-title"><h2>User/People Management</h2><span>{filteredUsers.length} user result(s)</span></div>}
         {usersLoading && <div className="dipascaf-empty" style={{ padding: '2rem' }}>Loading users from database...</div>}
+        {!usersLoading && filteredUsers.length > 0 && <div className="people-account-pagination is-top"><span>Showing {(accountPage - 1) * accountPageSize + 1}–{Math.min(accountPage * accountPageSize, filteredUsers.length)} of {filteredUsers.length} accounts</span><label>Rows<select value={accountPageSize} onChange={(event) => { setAccountPageSize(Number(event.target.value)); setAccountPage(1); }}><option>5</option><option>10</option><option>25</option></select></label><div><button type="button" disabled={accountPage <= 1} onClick={() => setAccountPage((page) => Math.max(1, page - 1))} aria-label="Previous page"><ChevronLeft size={16} /></button><span>Page {accountPage} of {accountPageCount}</span><button type="button" disabled={accountPage >= accountPageCount} onClick={() => setAccountPage((page) => Math.min(accountPageCount, page + 1))} aria-label="Next page"><ChevronRight size={16} /></button></div></div>}
         {!usersLoading && (
         <div className="people-user-list">
           {filteredUsers.length > 0 && (
@@ -1216,11 +1518,11 @@ function handleImageUpload(event, type) {
                 <div className="people-user-avatar">{user.avatar ? <img src={user.avatar} alt={`${user.fullName} profile`} /> : user.fullName.charAt(0)}</div>
                 <div className="people-user-copy">
                   <h3>{user.fullName}</h3>
-                  <small>Username Code: {user.userCode} · {user.email}</small>
+                  <small>Username Code: {user.userCode}</small>
                 </div>
               </div>
               <span className="people-user-role">{user.role}</span>
-              <span className="people-user-assignment">{user.department || 'Unassigned'} {user.program ? `- ${user.program}` : ''}</span>
+              <UserAssignment user={user} />
               <span className={`people-status ${user.status.toLowerCase()}`}>{user.status}</span>
               <div className="people-card-actions">
                 {managingAccounts && <button type="button" className="compact-link" onClick={() => setAccountDetails(user)}><Eye className="h-4 w-4" /> View</button>}
@@ -1230,10 +1532,32 @@ function handleImageUpload(event, type) {
             </article>
           ))}
           {filteredUsers.length === 0 && <div className="dipascaf-empty"><Users size={28} /><strong>{accountUsers.length ? 'No accounts match your search.' : 'No user accounts yet'}</strong><span>{accountUsers.length ? 'Adjust the search or filters to see more results.' : 'Create the first institutional account to begin assigning roles and organizational units.'}</span>{!accountUsers.length && <button type="button" onClick={() => openUserForm()}><UserPlus size={15} /> Add Account/User</button>}</div>}
-          {managingAccounts && filteredUsers.length > 0 && <div className="people-account-pagination"><span>Showing {(accountPage - 1) * accountPageSize + 1}–{Math.min(accountPage * accountPageSize, filteredUsers.length)} of {filteredUsers.length} accounts</span><label>Rows<select value={accountPageSize} onChange={(event) => { setAccountPageSize(Number(event.target.value)); setAccountPage(1); }}><option>10</option><option>25</option><option>50</option></select></label><div><button type="button" disabled={accountPage <= 1} onClick={() => setAccountPage((page) => Math.max(1, page - 1))} aria-label="Previous page"><ChevronLeft size={16} /></button><span>{accountPage} / {accountPageCount}</span><button type="button" disabled={accountPage >= accountPageCount} onClick={() => setAccountPage((page) => Math.min(accountPageCount, page + 1))} aria-label="Next page"><ChevronRight size={16} /></button></div></div>}
+          {filteredUsers.length > 0 && <div className="people-account-pagination"><span>Showing {(accountPage - 1) * accountPageSize + 1}–{Math.min(accountPage * accountPageSize, filteredUsers.length)} of {filteredUsers.length} accounts</span><label>Rows<select value={accountPageSize} onChange={(event) => { setAccountPageSize(Number(event.target.value)); setAccountPage(1); }}><option>5</option><option>10</option><option>25</option></select></label><div><button type="button" disabled={accountPage <= 1} onClick={() => setAccountPage((page) => Math.max(1, page - 1))} aria-label="Previous page"><ChevronLeft size={16} /></button><span>Page {accountPage} of {accountPageCount}</span><button type="button" disabled={accountPage >= accountPageCount} onClick={() => setAccountPage((page) => Math.min(accountPageCount, page + 1))} aria-label="Next page"><ChevronRight size={16} /></button></div></div>}
         </div>
         )}
       </section>}
+
+      {modal === 'account-report' && (
+        <ManagementModal title="User Account Report" subtitle="Filter, verify, and securely export institutional account information." icon={FileText} onClose={() => setModal(null)} className="people-account-report-modal">
+          <section className="people-account-report-workspace">
+            <div className="people-account-report-toolbar">
+              <label><span>Department</span><select value={reportDepartment} onChange={(event) => { setReportDepartment(event.target.value); setReportError(''); }}><option value="">All departments</option>{departments.map((department) => <option key={department.id} value={department.name}>{department.name}</option>)}</select></label>
+              <div><span>Preview records</span><strong>{accountReportRows.length}</strong></div>
+              <div className="people-account-report-exports">
+                <button type="button" onClick={() => exportAccountReport('excel')} disabled={!!reportExporting || accountReportRows.length === 0}><FileSpreadsheet size={16} /> {reportExporting === 'excel' ? 'Generating…' : 'Excel'}</button>
+                <button type="button" onClick={() => exportAccountReport('word')} disabled={!!reportExporting || accountReportRows.length === 0}><Download size={16} /> {reportExporting === 'word' ? 'Generating…' : 'Word'}</button>
+                <button type="button" className="primary" onClick={() => exportAccountReport('pdf')} disabled={!!reportExporting || accountReportRows.length === 0}><FileText size={16} /> {reportExporting === 'pdf' ? 'Generating…' : 'PDF'}</button>
+              </div>
+            </div>
+            <div className="people-account-report-security"><ShieldCheck size={17} /><div><strong>Secure password reporting</strong><p>Existing user-created passwords are never displayed or exported. The report shows only the institution's standard temporary password, APPRAISIA_NDMC.</p></div></div>
+            {reportError && <div className="people-form-alert" role="alert">{reportError}</div>}
+            <div className="people-account-report-paper">
+              <header><p>Notre Dame of Midsayap College</p><h3>APPRAISIA User Account Report</h3><span>{reportDepartment || 'All Departments'} · Generated {new Date().toLocaleDateString()}</span></header>
+              <div className="people-account-report-table-wrap"><table><thead><tr><th>Full Name</th><th>Username</th><th>Temporary Password</th><th>Role</th></tr></thead><tbody>{accountReportRows.map((user) => <tr key={user.id}><td>{user.fullName}</td><td>{user.userCode}</td><td><span className="people-password-report-status temporary">APPRAISIA_NDMC</span></td><td>{user.role === 'Faculty' ? 'Faculty Member' : user.role}</td></tr>)}{accountReportRows.length === 0 && <tr><td colSpan="4" className="empty">No Dean, Program Head, or Faculty accounts found for the selected department.</td></tr>}</tbody></table></div>
+            </div>
+          </section>
+        </ManagementModal>
+      )}
 
       {modal === 'department' && (
         <ManagementModal title={departmentForm.id ? 'Edit Department' : 'Add New Department'} subtitle="Create a department, assign its academic head, and organize its information within APPRAISIA." icon={Building2} onClose={closeDepartmentForm} className="people-department-modal">
@@ -1250,7 +1574,7 @@ function handleImageUpload(event, type) {
                 </div>
                 <FormField label="Department Description" icon={ImageIcon}><textarea value={departmentForm.description} onChange={(e) => { touchDepartment('description'); setDepartmentForm((v) => ({ ...v, description: e.target.value })); }} placeholder="Enter a short description of the department." /></FormField>
               </fieldset>
-              <fieldset className="people-form-section"><legend><User size={17} /> Academic Leadership</legend><FormField label="Assigned Dean" icon={User}><select value={departmentForm.dean} onChange={(e) => { touchDepartment('dean'); setDepartmentForm((v) => ({ ...v, dean: e.target.value })); }}><option value="">Unassigned</option>{users.filter((user) => user.role === 'Dean').map((user) => <option key={user.id} value={user.fullName}>{user.fullName} — {user.email}{user.department ? ` (Current: ${user.department})` : ' (Unassigned)'}</option>)}</select><small>Only active users with the Dean role can be assigned here.</small></FormField></fieldset>
+              <fieldset className="people-form-section"><legend><User size={17} /> Academic Leadership</legend><FormField label="Assigned Dean" icon={User}><select value={departmentForm.dean} onChange={(e) => { touchDepartment('dean'); setDepartmentForm((v) => ({ ...v, dean: e.target.value })); }}><option value="">Unassigned</option>{users.filter((user) => user.role === 'Dean').map((user) => <option key={user.id} value={user.fullName}>{user.fullName}{user.department ? ` (Current: ${user.department})` : ' (Unassigned)'}</option>)}</select><small>Only active users with the Dean role can be assigned here.</small></FormField></fieldset>
               {departmentForm.code.trim() && departmentForm.name.trim() && <aside className="people-assignment-summary"><strong>Department Summary</strong><div><span>Code</span><b>{departmentForm.code}</b></div><div><span>Name</span><b>{departmentForm.name}</b></div><div><span>Assigned Dean</span><b>{departmentForm.dean || 'Unassigned'}</b></div><div><span>Status</span><b>{departmentForm.status}</b></div><div><span>Type</span><b>{departmentForm.department_type}</b></div><div><span>Programs</span><b>{departmentForm.id ? programsForDepartment(departmentForm, allPrograms).length : 0} Linked Programs</b></div></aside>}
             </div>
             <footer className="people-department-form-footer"><button type="button" onClick={closeDepartmentForm}><X size={16} /> Cancel</button><button className="people-save-department" type="submit" disabled={saving}>{saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />} {saving ? 'Saving Department...' : 'Save Department'}</button></footer>
@@ -1262,12 +1586,12 @@ function handleImageUpload(event, type) {
         <div className="people-account-details">
           <div className="people-account-details-person">
             <div className="people-user-avatar">{accountDetails.avatar ? <img src={accountDetails.avatar} alt={`${accountDetails.fullName} profile`} /> : accountDetails.fullName.split(/\s+/).slice(0,2).map((part) => part[0]).join('')}</div>
-            <div className="people-account-person-copy"><span className="people-account-code">Username Code · {accountDetails.userCode}</span><h3>{accountDetails.fullName}</h3><p>{accountDetails.email}</p></div>
+            <div className="people-account-person-copy"><span className="people-account-code">Username Code · {accountDetails.userCode}</span><h3>{accountDetails.fullName}</h3></div>
             <span className={`people-status ${accountDetails.status.toLowerCase()}`}>{accountDetails.status}</span>
           </div>
           <div className="people-account-detail-grid">
-            <section className="people-account-role-card"><h4><Building2 size={15} /> Role and Assignment</h4><dl><div><dt>Role</dt><dd>{accountDetails.role === 'Admin' ? 'HRDM Director/Admin' : accountDetails.role === 'Faculty' ? 'Faculty Member' : accountDetails.role}</dd></div><div><dt>Department</dt><dd>{accountDetails.department || 'Institution-wide / Unassigned'}</dd></div><div><dt>Program</dt><dd>{accountDetails.program || 'Not assigned'}</dd></div></dl></section>
-            <section className="people-account-system-card"><h4><ShieldCheck size={15} /> System Information</h4><dl><div><dt>Date Created</dt><dd>{accountDetails.createdAt ? new Date(accountDetails.createdAt).toLocaleString() : 'Not available'}</dd></div><div><dt>Last Login</dt><dd>{accountDetails.lastLoginAt ? new Date(accountDetails.lastLoginAt).toLocaleString() : 'No recorded login'}</dd></div><div><dt>Email</dt><dd>{accountDetails.emailVerified ? 'Verified' : 'Not verified'}</dd></div></dl></section>
+            <section className="people-account-role-card"><h4><Building2 size={15} /> Role and Assignment</h4><dl><div><dt>Role</dt><dd>{accountDetails.role === 'Admin' ? 'HRDM Director/Admin' : accountDetails.role === 'Faculty' ? 'Faculty Member' : accountDetails.role}</dd></div>{accountDetails.role === 'Faculty' && accountDetails.facultyDesignation && <div><dt>Position</dt><dd>{accountDetails.facultyDesignation}</dd></div>}<div><dt>Department</dt><dd>{accountDetails.department || 'Institution-wide / Unassigned'}</dd></div><div><dt>{assignedProgramCodes(accountDetails).length === 1 ? 'Program' : 'Programs'}</dt><dd>{assignedProgramCodes(accountDetails).length ? assignedProgramCodes(accountDetails).join(', ') : 'Not assigned'}</dd></div>{accountDetails.subjectAssignments?.length > 0 && <div><dt>Subjects</dt><dd>{accountDetails.subjectAssignments.map((subject) => `${subject.subject_code}${subject.is_primary ? ' (Primary)' : ''}${subject.is_coordinator ? ' — Subject Coordinator' : ''}`).join(', ')}</dd></div>}{accountDetails.assignmentNeedsReview && <div><dt>Assignment</dt><dd>Needs subject assignment review</dd></div>}</dl></section>
+            <section className="people-account-system-card"><h4><ShieldCheck size={15} /> System Information</h4><dl><div><dt>Date Created</dt><dd>{accountDetails.createdAt ? new Date(accountDetails.createdAt).toLocaleString() : 'Not available'}</dd></div><div><dt>Last Login</dt><dd>{accountDetails.lastLoginAt ? new Date(accountDetails.lastLoginAt).toLocaleString() : 'No recorded login'}</dd></div></dl></section>
           </div>
           <footer><button type="button" onClick={() => { setAccountDetails(null); openUserForm(accountDetails); }}><Edit3 size={16} /> Edit Account</button><button type="button" onClick={() => setAccountDetails(null)}>Close</button></footer>
         </div>
@@ -1281,27 +1605,32 @@ function handleImageUpload(event, type) {
           onClose={closeUserForm}
           className="people-account-modal"
         >
-          <form className="admin-form people-user-form" onSubmit={saveUser}>
-            {isEditing && <section className="people-edit-profile-header people-edit-profile-header-fixed"><div className="people-edit-avatar">{userForm.avatar ? <img src={userForm.avatar} alt={`${userForm.fullName} profile preview`} /> : <span>{userForm.fullName.trim().split(/\s+/).slice(0,2).map((part) => part[0]).join('').toUpperCase() || 'U'}</span>}</div><div className="people-edit-profile-copy"><h3>{userForm.fullName || 'User Account'}</h3><p>{userForm.email}</p><div><span className="people-role-badge"><BadgeCheck size={13} /> {userForm.role === 'Admin' ? 'HRDM Director/Admin' : userForm.role === 'Faculty' ? 'Faculty Member' : userForm.role}</span>{userForm.department && <span className="people-department-badge"><Building2 size={12} /> {userForm.department}</span>}<span className={`people-status ${userForm.status.toLowerCase()}`}>{userForm.status}</span></div></div><div className="people-edit-photo-actions"><label><Camera size={15} /> Change Photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => handleImageUpload(event, 'user')} /></label><button type="button" onClick={removeUserPhoto} disabled={!userForm.avatar}><Trash2 size={14} /> Remove Photo</button></div><button type="button" className="people-edit-close" onClick={closeUserForm} aria-label="Close Edit User Account" title="Close"><span className="people-edit-close-glyph" aria-hidden="true">×</span></button></section>}
+          <form ref={userFormRef} className="admin-form people-user-form" onSubmit={saveUser}>
+            {isEditing && <section className="people-edit-profile-header people-edit-profile-header-fixed"><div className="people-edit-avatar">{userForm.avatar ? <img src={userForm.avatar} alt={`${userForm.fullName} profile preview`} /> : <span>{userForm.fullName.trim().split(/\s+/).slice(0,2).map((part) => part[0]).join('').toUpperCase() || 'U'}</span>}</div><div className="people-edit-profile-copy"><h3>{userForm.fullName || 'User Account'}</h3><div><span className="people-role-badge"><BadgeCheck size={13} /> {userForm.role === 'Admin' ? 'HRDM Director/Admin' : userForm.role === 'Faculty' ? 'Faculty Member' : userForm.role}</span>{userForm.department && <span className="people-department-badge"><Building2 size={12} /> {userForm.department}</span>}{userForm.role==='Program Head'&&userForm.programIds.length>0&&<span className="people-department-badge"><GraduationCap size={12}/>{userForm.programIds.length} Program{userForm.programIds.length===1?'':'s'}</span>}<span className={`people-status ${userForm.status.toLowerCase()}`}>{userForm.status}</span></div></div><div className="people-edit-photo-actions"><label><Camera size={15} /> Change Photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => handleImageUpload(event, 'user')} /></label><button type="button" onClick={removeUserPhoto} disabled={!userForm.avatar}><Trash2 size={14} /> Remove Photo</button></div><button type="button" className="people-edit-close" onClick={closeUserForm} aria-label="Close Edit User Account" title="Close"><span className="people-edit-close-glyph" aria-hidden="true">×</span></button></section>}
             <div className="people-user-form-scroll">
-              {formError && <div className="people-form-alert" role="alert">{formError}</div>}
-              {isEditing && <section className="people-edit-profile-header"><div className="people-edit-avatar">{userForm.avatar ? <img src={userForm.avatar} alt={`${userForm.fullName} profile preview`} /> : <span>{userForm.fullName.trim().split(/\s+/).slice(0,2).map((part) => part[0]).join('').toUpperCase() || 'U'}</span>}</div><div className="people-edit-profile-copy"><h3>{userForm.fullName || 'User Account'}</h3><p>{userForm.email}</p><div><span className="people-role-badge"><BadgeCheck size={13} /> {userForm.role === 'Admin' ? 'HRDM Director/Admin' : userForm.role === 'Faculty' ? 'Faculty Member' : userForm.role}</span><span className={`people-status ${userForm.status.toLowerCase()}`}>{userForm.status}</span></div></div><div className="people-edit-photo-actions"><label><Camera size={15} /> Change Photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => handleImageUpload(event, 'user')} /></label><button type="button" onClick={removeUserPhoto} disabled={!userForm.avatar}><Trash2 size={14} /> Remove</button></div></section>}
+              {formError && !ASSIGNMENT_FIELD_ERRORS.includes(formError) && <div className="people-form-alert" role="alert">{formError}</div>}
+              {isEditing && <section className="people-edit-profile-header"><div className="people-edit-avatar">{userForm.avatar ? <img src={userForm.avatar} alt={`${userForm.fullName} profile preview`} /> : <span>{userForm.fullName.trim().split(/\s+/).slice(0,2).map((part) => part[0]).join('').toUpperCase() || 'U'}</span>}</div><div className="people-edit-profile-copy"><h3>{userForm.fullName || 'User Account'}</h3><div><span className="people-role-badge"><BadgeCheck size={13} /> {userForm.role === 'Admin' ? 'HRDM Director/Admin' : userForm.role === 'Faculty' ? 'Faculty Member' : userForm.role}</span><span className={`people-status ${userForm.status.toLowerCase()}`}>{userForm.status}</span></div></div><div className="people-edit-photo-actions"><label><Camera size={15} /> Change Photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => handleImageUpload(event, 'user')} /></label><button type="button" onClick={removeUserPhoto} disabled={!userForm.avatar}><Trash2 size={14} /> Remove</button></div></section>}
               <fieldset className="people-form-section">
                 <legend><User size={17} /> Account Information</legend>
                 <div className="people-form-grid">
                   <FormField label="Username Code" icon={BadgeCheck} error={touched.userCode && !/^[1-9]\d*$/.test(userForm.userCode) ? 'Enter a positive numeric code.' : ''}>
                     <input inputMode="numeric" value={userForm.userCode} onBlur={() => touch('userCode')} onChange={(event) => setUserForm((current) => ({ ...current, userCode: event.target.value.replace(/\D/g, '') }))} placeholder={nextUserCode} />
                   </FormField>
-                  <FormField label="Full Name" icon={User} error={touched.fullName && !userForm.fullName.trim() ? 'Full name is required.' : ''}>
-                    <input id="new-user-name" value={userForm.fullName} onBlur={() => touch('fullName')} onChange={(event) => { touch('fullName'); setUserForm((current) => ({ ...current, fullName: event.target.value })); }} placeholder="Enter complete name" autoComplete="name" />
+                  <FormField label="Full Name" icon={User} error={formError === DUPLICATE_NAME_ERROR ? DUPLICATE_NAME_ERROR : touched.fullName && !userForm.fullName.trim() ? 'Full name is required.' : ''}>
+                    <input id="new-user-name" aria-invalid={formError === DUPLICATE_NAME_ERROR || undefined} value={userForm.fullName} onBlur={() => touch('fullName')} onChange={(event) => { touch('fullName'); if (formError === DUPLICATE_NAME_ERROR) setFormError(''); setUserForm((current) => ({ ...current, fullName: event.target.value })); }} placeholder="Enter complete name" autoComplete="name" />
                   </FormField>
-                  <FormField label="Email Address" icon={Mail} labelExtra={<span className={`people-email-verification ${userForm.emailVerified ? 'is-verified' : 'is-unverified'}`}>{userForm.emailVerified ? <><BadgeCheck size={13} /> Verified</> : <><Info size={13} /> Not Verified</>}</span>} error={touched.email && !/^\S+@\S+\.\S+$/.test(normalizedEmail) ? 'Enter a valid email address.' : ''}>
-                    <input id="new-user-email" type="email" value={userForm.email} onBlur={() => touch('email')} onChange={(event) => { touch('email'); setUserForm((current) => ({ ...current, email: event.target.value, emailVerified: event.target.value.trim().toLowerCase() === originalUserFormRef.current.email.trim().toLowerCase() ? originalUserFormRef.current.emailVerified : false })); }} placeholder="name@ndmc.edu.ph" autoComplete="email" />
+                  <FormField label="Gmail (Optional)" icon={Mail} error={touched.email && userForm.email.trim() && !/^[^\s@]+@gmail\.com$/i.test(userForm.email.trim()) ? 'Enter a valid @gmail.com address.' : ''}>
+                    <input type="email" value={userForm.email} onBlur={() => touch('email')} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} placeholder="name@gmail.com" autoComplete="email" />
                   </FormField>
-                  <FormField label="Birth Date" icon={User} error={touched.birthDate && !userForm.birthDate ? 'Birth date is required for new accounts.' : ''}>
-                    <ModernDatePicker value={userForm.birthDate} onBlur={() => touch('birthDate')} onChange={(birthDate) => setUserForm((current) => ({ ...current, birthDate }))} />
-                    {!isEditing && userForm.birthDate && <small>Temporary password: {userForm.birthDate}. The user must change it at first login.</small>}
-                  </FormField>
+                  {!isEditing && <FormField label="Temporary Password" icon={Lock} labelExtra={<span className="people-credential-standard"><Check size={12} /> Standard</span>} className="people-temporary-password-field">
+                    <div className="people-credential-input">
+                      <input type={showTemporaryPassword ? 'text' : 'password'} value="APPRAISIA_NDMC" readOnly aria-label="Standard temporary password" />
+                      <button type="button" onClick={() => setShowTemporaryPassword((visible) => !visible)} aria-label={showTemporaryPassword ? 'Hide temporary password' : 'Show temporary password'} aria-pressed={showTemporaryPassword}>
+                        {showTemporaryPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    <small>The user may change this password later from Profile.</small>
+                  </FormField>}
                 </div>
                 {!isEditing && <div className="people-avatar-card">
                   <div className="people-upload-preview">{userForm.avatar ? <img src={userForm.avatar} alt="Profile preview" /> : <span>{userForm.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U'}</span>}</div>
@@ -1312,24 +1641,35 @@ function handleImageUpload(event, type) {
               <fieldset className="people-form-section">
                 <legend><Building2 size={17} /> Role and Assignment</legend>
                 <div className="people-form-grid">
-                  <FormField label="Role" icon={Shield}>
-                    <select value={userForm.role} onChange={(event) => { touch('role'); updateUserRole(event.target.value); }}><option value="">Select institutional role</option>{(userForm.role === 'Admin' ? accountRoleOptions : roleOptions).map((role) => <option key={role} value={role}>{role === 'Admin' ? 'HRDM Director/Admin' : role === 'Faculty' ? 'Faculty Member' : role}</option>)}</select>
+                  <FormField label="Role" icon={Shield} error={formError === VPAA_ASSIGNMENT_ERROR ? VPAA_ASSIGNMENT_ERROR : touched.role && !userForm.role ? 'Institutional role is required.' : ''}>
+                    <select value={userForm.role} aria-invalid={formError === VPAA_ASSIGNMENT_ERROR || undefined} onChange={(event) => { touch('role'); updateUserRole(event.target.value); }}><option value="">Select institutional role</option>{(userForm.role === 'Admin' ? accountRoleOptions : roleOptions).map((role) => <option key={role} value={role}>{role === 'Admin' ? 'HRDM Director/Admin' : role === 'Faculty' ? 'Faculty Member' : role}</option>)}</select>
                     {userForm.role && <small>{roleDescriptions[userForm.role]}</small>}
                   </FormField>
+                  {roleRequiresStartPeriod && <FormField label="Start Evaluation Period" icon={Layers3} error={touched.startEvaluationPeriodId && !userForm.startEvaluationPeriodId ? 'The first appraisal period is required.' : ''}>
+                    <select value={userForm.startEvaluationPeriodId} onChange={(event) => { setUserForm((current) => ({ ...current, startEvaluationPeriodId: event.target.value })); touch('startEvaluationPeriodId'); }}>
+                      <option value="">Select first appraisal period</option>
+                      {evaluationPeriods.map((period) => <option key={period.id} value={period.id}>{period.period_name}{period.school_year ? ` — ${period.school_year}` : ''}</option>)}
+                    </select>
+                    <small>The account cannot view periods, assignments, results, or reports before this period.</small>
+                  </FormField>}
                   <FormField label="Account Status" icon={ShieldCheck}><div className="people-status-control">{statusOptions.map((status) => <button type="button" key={status} className={userForm.status === status ? 'active' : ''} onClick={() => { touch('status'); setUserForm((current) => ({ ...current, status })); }}><Check size={14} /> {status}</button>)}</div><small>{userForm.status === 'Active' ? 'User can sign in.' : 'Sign-in access is disabled.'}</small></FormField>
                 </div>
               </fieldset>
 
               {roleRequiresDepartment && <fieldset className="people-form-section people-dynamic-section"><legend><Building2 size={17} /> Organizational Assignment</legend><div className="people-form-grid">
-                <FormField label="Department Assignment" icon={Building2} error={touched.department && roleRequiresDepartment && !userForm.department ? 'Department assignment is required.' : ''}><select value={userForm.department} onChange={(event) => { touch('department'); updateUserDepartment(event.target.value); }}><option value="">Search or select department</option>{departments.map((department) => <option key={department.id} value={department.name}>{department.name} ({department.code})</option>)}</select><button type="button" className="people-inline-add" onClick={() => setInlineModal('department')}><Plus size={14} /> Add New Department</button></FormField>
-                {roleUsesProgram && <FormField label="Program Assignment" icon={GraduationCap} error={touched.program && roleRequiresProgram && !userForm.program ? 'Program assignment is required for this role.' : ''}><select value={userForm.program} onChange={(event) => { touch('program'); updateUserProgram(event.target.value); }} disabled={!userForm.department || programsLoading}><option value="">{!userForm.department ? 'Select department first' : programsLoading ? 'Loading programs...' : 'No Program Assigned'}</option>{selectedProgramOptions.map((program) => <option key={program.id || program.code} value={program.code}>{program.code} — {program.name}</option>)}</select>{userForm.department && !programsLoading && selectedProgramOptions.length === 0 && <small className="people-assignment-empty">No active programs are available for the selected department.</small>}{userForm.role === 'Dean' && <small>Deans are assigned to a department. A program assignment is optional and does not make the user a Program Head.</small>}<button type="button" className="people-inline-add" disabled={!selectedDepartment} onClick={() => setInlineModal('program')}><Plus size={14} /> Add New Program</button></FormField>}
+                <FormField label="Department Assignment" icon={Building2} error={formError === DEAN_ASSIGNMENT_ERROR ? DEAN_ASSIGNMENT_ERROR : touched.department && roleRequiresDepartment && !userForm.department ? 'Department assignment is required.' : ''}><select value={userForm.department} aria-invalid={formError === DEAN_ASSIGNMENT_ERROR || undefined} onChange={(event) => { touch('department'); updateUserDepartment(event.target.value); }}><option value="">Search or select department</option>{departments.map((department) => <option key={department.id} value={department.name}>{department.name} ({department.code})</option>)}</select><button type="button" className="people-inline-add" onClick={() => setInlineModal('department')}><Plus size={14} /> Add New Department</button></FormField>
+                {roleUsesProgram && <FormField as={userForm.role === 'Program Head' ? 'div' : 'label'} label={userForm.role === 'Program Head' ? 'Program Assignments' : userForm.role === 'Faculty' ? 'Program Assignment (optional)' : 'Program Assignment'} icon={GraduationCap} error={formError === PROGRAM_HEAD_ASSIGNMENT_ERROR ? PROGRAM_HEAD_ASSIGNMENT_ERROR : touched.program && roleRequiresProgram && !userForm.program ? 'Program assignment is required for this role.' : ''} className={userForm.role === 'Program Head' ? 'people-multi-program-field' : ''}>{userForm.role === 'Program Head' ? <><div className={`people-program-multi-select ${formError === PROGRAM_HEAD_ASSIGNMENT_ERROR ? 'has-conflict' : ''}`} role="group" aria-label="Select programs assigned to this Program Head">{selectedProgramOptions.map((program)=>{const selected=userForm.programIds.includes(program.code);return <button type="button" key={program.id||program.code} className={selected?'selected':''} aria-pressed={selected} onClick={()=>toggleProgramHeadProgram(program.code)} disabled={!userForm.department||programsLoading}><span className="people-program-check">{selected?<Check size={14}/>:null}</span><span><strong>{program.code}</strong><small>{program.name}</small></span></button>;})}</div>{userForm.programIds.length>0&&<div className="people-primary-program"><span>Primary/default program</span><select value={userForm.program} onChange={(event)=>{setUserForm((current)=>({...current,program:event.target.value}));touch('program');}}>{selectedProgramOptions.filter((program)=>userForm.programIds.includes(program.code)).map((program)=><option key={program.id||program.code} value={program.code}>{program.code} — {program.name}</option>)}</select><small>This program remains the compatibility default. All selected programs are assigned to the same account.</small></div>}</>:<select value={userForm.program} onChange={(event) => { touch('program'); updateUserProgram(event.target.value); }} disabled={!userForm.department || programsLoading} aria-invalid={formError === PROGRAM_HEAD_ASSIGNMENT_ERROR || undefined}><option value="">{!userForm.department ? 'Select department first' : programsLoading ? 'Loading programs...' : 'No Program Assigned'}</option>{selectedProgramOptions.map((program) => <option key={program.id || program.code} value={program.code}>{program.code} — {program.name}</option>)}</select>}{userForm.department && !programsLoading && selectedProgramOptions.length === 0 && <small className="people-assignment-empty">No active programs are available for the selected department.</small>}{userForm.role === 'Dean' && <small>Deans are assigned to a department. A program assignment is optional and does not make the user a Program Head.</small>}{userForm.role === 'Faculty' && <small>Program assignment is optional for Faculty Members.</small>}<button type="button" className="people-inline-add" disabled={!selectedDepartment} onClick={() => setInlineModal('program')}><Plus size={14} /> Add New Program</button></FormField>}
+                {userForm.role === 'Faculty' && <FormField label="Position / Designation (optional)" icon={BadgeCheck}>
+                  <input type="text" maxLength={120} value={userForm.facultyDesignation} onChange={(event) => setUserForm((current) => ({ ...current, facultyDesignation: event.target.value }))} placeholder="e.g., Research Coordinator" />
+                  <small>This is an additional position only. The account role remains Faculty Member.</small>
+                </FormField>}
               </div></fieldset>}
 
-              {isEditing && <fieldset className={`people-form-section people-security-section ${passwordExpanded ? 'is-expanded' : ''}`}><legend><ShieldCheck size={17} /> Security and Password</legend>{userForm.pendingPasswordResetRequestId > 0 && <div className="people-reset-request-banner"><span className="people-reset-request-icon"><RotateCcw size={20} /></span><div className="people-reset-request-copy"><strong>Password reset requested</strong><span>Reset this account to its recorded birth date. The user will be required to create a new password after signing in.</span></div><button type="button" onClick={completePasswordReset} disabled={saving}>{saving ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />} <span>{saving ? 'Resetting...' : 'Complete Password Reset'}</span></button></div>}<div className="people-security-head"><div><strong>Update account credentials securely.</strong><small>The current password remains unchanged unless a new one is saved.</small></div><button type="button" onClick={() => setPasswordExpanded((value) => !value)}><Lock size={15} /> {passwordExpanded ? 'Cancel Password Change' : 'Change Password'}</button></div>{passwordExpanded && <div className="people-security-fields"><div className="people-form-grid"><FormField label="New Password" icon={Lock}><input type={showPassword ? 'text':'password'} value={userForm.password} onChange={e=>setUserForm(v=>({...v,password:e.target.value}))}/></FormField><FormField label="Confirm Password" icon={Lock}><input type={showPassword ? 'text':'password'} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}/></FormField></div></div>}</fieldset>}
+              {isEditing && <fieldset className="people-form-section people-security-section"><legend><ShieldCheck size={17} /> Security and Password</legend>{userForm.pendingPasswordResetRequestId > 0 && <div className="people-reset-request-banner"><span className="people-reset-request-icon"><RotateCcw size={20} /></span><div className="people-reset-request-copy"><strong>Password reset requested</strong><span>Reset this account to APPRAISIA_NDMC. The user must replace it after signing in.</span></div><button type="button" onClick={completePasswordReset} disabled={saving}>{saving ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />} <span>{saving ? 'Resetting...' : 'Complete Password Reset'}</span></button></div>}<div className="people-security-head"><div><strong>Reset to the standard temporary password.</strong><small>The user will sign in with APPRAISIA_NDMC and must create a new password before entering the dashboard.</small>{userForm.mustChangePassword && <small className="people-assignment-empty">This account is already required to change its temporary password.</small>}</div><button type="button" onClick={resetAccountPassword} disabled={saving || userForm.role === 'Admin'}><Lock size={15} /> {saving ? 'Resetting...' : 'Reset Password'}</button></div></fieldset>}
 
-              {summaryReady && <aside className="people-assignment-summary"><strong>Assignment Summary</strong><div><span>Role</span><b>{userForm.role === 'Faculty' ? 'Faculty Member' : userForm.role}</b></div>{userForm.department && <div><span>Department</span><b>{userForm.department}</b></div>}{userForm.program && <div><span>Program</span><b>{userForm.program}</b></div>}<div><span>Account Status</span><b>{userForm.status}</b></div></aside>}
+              {summaryReady && <aside className="people-assignment-summary"><strong>Assignment Summary</strong><div><span>Role</span><b>{userForm.role === 'Faculty' ? 'Faculty Member' : userForm.role}</b></div>{userForm.department && <div><span>Department</span><b>{userForm.department}</b></div>}{userForm.program && <div><span>{userForm.role==='Program Head'&&userForm.programIds.length>1?'Programs':'Program'}</span><b>{userForm.role==='Program Head'?userForm.programIds.join(', '):userForm.program}</b></div>}<div><span>Account Status</span><b>{userForm.status}</b></div></aside>}
             </div>
-            <footer className="people-user-form-footer">{isEditing && <button type="button" className="people-reset-account" onClick={resetUserChanges}><RotateCcw size={16} /> Reset Changes</button>}<div className="people-user-footer-primary"><button type="button" className="people-cancel-account" onClick={closeUserForm}><X size={16} /> Cancel</button><button type="submit" className="people-save-account" disabled={saving}>{saving ? <Loader2 size={17} className="animate-spin" /> : isEditing ? <Save size={17} /> : <UserPlus size={17} />} {saving ? (isEditing ? 'Saving Changes...' : 'Creating Account...') : (isEditing ? 'Save Changes' : 'Create Account')}</button></div></footer>
+            <footer className="people-user-form-footer">{isEditing && <button type="button" className="people-reset-account" onClick={resetUserChanges}><RotateCcw size={16} /> Reset Changes</button>}<div className="people-user-footer-primary"><button type="button" className="people-cancel-account" onClick={closeUserForm}>{accountReturnTo ? <ChevronLeft size={16} /> : <X size={16} />} {accountReturnTo ? 'Back to Department Profile' : 'Cancel'}</button><button type="submit" className="people-save-account" disabled={saving}>{saving ? <Loader2 size={17} className="animate-spin" /> : isEditing ? <Save size={17} /> : <UserPlus size={17} />} {saving ? (isEditing ? 'Saving Changes...' : 'Creating Account...') : (isEditing ? 'Save Changes' : 'Create Account')}</button></div></footer>
           </form>
         </ManagementModal>
       )}
@@ -1341,95 +1681,9 @@ function handleImageUpload(event, type) {
   );
 }
 
-function FormField({ label, icon: Icon, labelExtra, error, children, className = '' }) {
-  return <label className={`people-form-field ${error ? 'has-error' : ''} ${className}`}><span className="people-field-label"><span className="people-field-label-copy">{Icon && <Icon size={15} />} {label}</span>{labelExtra}</span>{children}{error && <small className="people-field-error">{error}</small>}</label>;
-}
-
-function parseBirthDate(value) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
-  if (!match) return undefined;
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return date.getFullYear() === Number(match[1]) && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[3]) ? date : undefined;
-}
-
-function ModernDatePicker({ value, onChange, onBlur }) {
-  const [open, setOpen] = useState(false);
-  const [yearPickerOpen, setYearPickerOpen] = useState(false);
-  const rootRef = useRef(null);
-  const selected = parseBirthDate(value);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const [displayMonth, setDisplayMonth] = useState(selected || new Date(1990, 0, 1));
-
-  useEffect(() => {
-    if (open && selected) setDisplayMonth(selected);
-  }, [open, value]);
-
-  useEffect(() => {
-    if (!yearPickerOpen) return undefined;
-    const frame = window.requestAnimationFrame(() => rootRef.current?.querySelector('.people-year-options .is-selected')?.scrollIntoView({ block: 'center' }));
-    return () => window.cancelAnimationFrame(frame);
-  }, [yearPickerOpen]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const closeFromOutside = (event) => {
-      if (!rootRef.current?.contains(event.target)) {
-        setOpen(false);
-        setYearPickerOpen(false);
-        onBlur?.();
-      }
-    };
-    const closeFromKeyboard = (event) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        setYearPickerOpen(false);
-        rootRef.current?.querySelector('.people-date-trigger')?.focus();
-        onBlur?.();
-      }
-    };
-    document.addEventListener('pointerdown', closeFromOutside);
-    document.addEventListener('keydown', closeFromKeyboard);
-    return () => {
-      document.removeEventListener('pointerdown', closeFromOutside);
-      document.removeEventListener('keydown', closeFromKeyboard);
-    };
-  }, [open, onBlur]);
-
-  const selectDate = (date) => {
-    if (!date) return;
-    onChange(format(date, 'yyyy-MM-dd'));
-    setOpen(false);
-    setYearPickerOpen(false);
-    onBlur?.();
-  };
-
-  return <div className={`people-date-picker ${open ? 'is-open' : ''}`} ref={rootRef}>
-    <button type="button" className="people-date-trigger" aria-haspopup="dialog" aria-expanded={open} onClick={(event) => { event.preventDefault(); setYearPickerOpen(false); setOpen((current) => !current); }}>
-      <CalendarDays size={19} aria-hidden="true" />
-      <span className={selected ? '' : 'is-placeholder'}>{selected ? format(selected, 'MMMM d, yyyy') : 'Select birth date'}</span>
-      <ChevronDown size={18} aria-hidden="true" />
-    </button>
-    {open && <div className="people-date-popover" role="dialog" aria-label="Choose birth date" onClick={(event) => event.preventDefault()}>
-      <div className="people-date-popover-heading"><span><CalendarDays size={17} /> Birth date</span><small>{selected ? format(selected, 'EEEE, MMMM d, yyyy') : 'Choose a date below'}</small></div>
-      <div className="people-date-jump" aria-label="Choose month and year">
-        <select aria-label="Calendar month" value={displayMonth.getMonth()} onChange={(event) => setDisplayMonth(new Date(displayMonth.getFullYear(), Number(event.target.value), 1))}>
-          {Array.from({ length: 12 }, (_, month) => <option key={month} value={month}>{format(new Date(2000, month, 1), 'MMMM')}</option>)}
-        </select>
-        <div className={`people-year-picker ${yearPickerOpen ? 'is-open' : ''}`}>
-          <button type="button" className="people-year-trigger" aria-label={`Calendar year ${displayMonth.getFullYear()}`} aria-haspopup="listbox" aria-expanded={yearPickerOpen} onClick={() => setYearPickerOpen((current) => !current)}>{displayMonth.getFullYear()} <ChevronDown size={15} /></button>
-          {yearPickerOpen && <div className="people-year-options" role="listbox" aria-label="Select birth year">
-            {Array.from({ length: today.getFullYear() - 1939 }, (_, index) => today.getFullYear() - index).map((year) => <button type="button" role="option" aria-selected={year === displayMonth.getFullYear()} className={year === displayMonth.getFullYear() ? 'is-selected' : ''} key={year} onClick={() => { setDisplayMonth(new Date(year, displayMonth.getMonth(), 1)); setYearPickerOpen(false); }}>{year}</button>)}
-          </div>}
-        </div>
-      </div>
-      <DayPicker mode="single" selected={selected} month={displayMonth} onMonthChange={setDisplayMonth} onSelect={selectDate} disabled={{ after: today }} startMonth={new Date(1940, 0, 1)} endMonth={today} captionLayout="label" navLayout="after" showOutsideDays fixedWeeks />
-      <div className="people-date-actions">
-        <button type="button" onClick={() => { onChange(''); onBlur?.(); }}>Clear</button>
-        <button type="button" onClick={() => selectDate(today)}>Today</button>
-      </div>
-    </div>}
-  </div>;
+function FormField({ label, icon: Icon, labelExtra, error, children, className = '', as = 'label' }) {
+  const Field = as;
+  return <Field className={`people-form-field ${error ? 'has-error' : ''} ${className}`}><span className="people-field-label"><span className="people-field-label-copy">{Icon && <Icon size={15} />} {label}</span>{labelExtra}</span>{children}{error && <small className="people-field-error">{error}</small>}</Field>;
 }
 
 function StatusSelect({ value, onChange }) {

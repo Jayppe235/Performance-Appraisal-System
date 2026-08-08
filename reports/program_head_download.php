@@ -8,8 +8,9 @@ require_once __DIR__ . '/../includes/report_generator.php';
 require_role('program_head');
 
 $user = current_user();
-$programs = program_head_programs((int) $user['id']);
-$departments = program_head_departments((int) $user['id']);
+$periodId = (int)($_GET['period_id'] ?? 0);
+$programs = program_head_programs((int) $user['id'], $periodId);
+$departments = program_head_departments((int) $user['id'], $periodId);
 $faculty = program_head_faculty($departments, $programs);
 $insights = program_head_ai_insights($departments, $programs, (int) $user['id']);
 $interventions = program_head_interventions($departments, $programs);

@@ -166,7 +166,7 @@ function peer_api_require_admin(array $user): void
     }
 }
 
-function peer_api_setup_payload(array $user): array
+function peer_api_setup_payload(array $user, ?int $evaluationPeriodId = null): array
 {
     admin_ensure_faculty_program_schema();
     dipascaf_ensure_peer_evaluation_schema();
@@ -225,6 +225,23 @@ function peer_api_setup_payload(array $user): array
         'facultyId' => (int) ($row['faculty_id'] ?? 0),
         'avatar' => (string) ($row['profile_image'] ?? ''),
     ], $users);
+    if ($evaluationPeriodId !== null && $evaluationPeriodId > 0) {
+        foreach ($userPayload as &$candidate) {
+            $context = dipascaf_period_user_context($evaluationPeriodId, (int)$candidate['id']);
+            if ($context === null) continue;
+            $candidate['role'] = (string)$context['role'];
+            $candidate['department'] = (string)$context['department'];
+            $candidate['program'] = (string)$context['program'];
+            $candidate['actingRoleLabel'] = $candidate['role'] === 'dean' ? 'Acting Dean' : ($candidate['actingRoleLabel'] ?? null);
+            $candidate['periodWorkStatus'] = (string)($context['work_status'] ?? 'active');
+            $candidate['periodParticipationStatus'] = (string)($context['participation_status'] ?? 'included');
+        }
+        unset($candidate);
+        $userPayload = array_values(array_filter($userPayload, static fn(array $candidate): bool =>
+            ($candidate['periodParticipationStatus'] ?? 'included') === 'included'
+            && ($candidate['periodWorkStatus'] ?? 'active') === 'active'
+        ));
+    }
 
     $actingProgramHeads = admin_all(
         "SELECT
@@ -1261,7 +1278,7 @@ try {
             ],
         ];
         if (isset($_GET['setup']) && peer_api_can_manage($user)) {
-            $response['setup'] = peer_api_setup_payload($user);
+            $response['setup'] = peer_api_setup_payload($user, $periodId);
         }
         echo json_encode($response);
         exit;
@@ -1309,6 +1326,18 @@ try {
         exit;
     }
 
+    if (in_array($action, ['generate','regenerate','save','update','validate'], true)) {
+        $workflow = admin_one(
+            'SELECT participants_finalized_at FROM appraisal_periods WHERE id=:id',
+            ['id'=>(int)$period['id']]
+        );
+        if (empty($workflow['participants_finalized_at'])) {
+            http_response_code(409);
+            echo json_encode(['ok'=>false,'message'=>'Finalize Evaluation Period Participants before configuring Peer Assignments.']);
+            exit;
+        }
+    }
+
     $lifecycle = peer_api_lifecycle_payload((int) $period['id'], $departmentScope);
     $setupMutationActions = ['generate', 'regenerate', 'save', 'update', 'archive', 'remove', 'regenerate_one'];
     if (($lifecycle['isLocked'] ?? false) && in_array($action, $setupMutationActions, true)) {
@@ -1320,9 +1349,18 @@ try {
         ]);
         exit;
     }
+    if (in_array($action, $setupMutationActions, true)) {
+        db()->prepare(
+            'UPDATE appraisal_periods SET peer_assignments_validated_at=NULL,peer_assignments_validated_by=NULL WHERE id=:id'
+        )->execute(['id'=>(int)$period['id']]);
+    }
 
     if ($action === 'generate' || $action === 'regenerate') {
         peer_api_require_admin($user);
+        $peerGroup = (string)($input['peer_group'] ?? 'department');
+        if (!in_array($peerGroup, ['department', 'dean'], true)) {
+            throw new RuntimeException('Select a valid peer assignment group.');
+        }
         $dueDate = (string) ($input['due_date'] ?? $period['due_date'] ?? $period['date_end'] ?? date('Y-m-d', strtotime('+30 days')));
         $summary = dipascaf_generate_peer_evaluation_assignments(
             (int) $period['id'],
@@ -1330,13 +1368,43 @@ try {
             $dueDate,
             (bool) ($input['include_program_heads'] ?? true),
             $action === 'regenerate',
-            $departmentScope
+            $departmentScope,
+            $peerGroup
         );
         $created = (int) ($summary['created'] ?? 0);
         $message = $action === 'regenerate'
             ? "{$created} peer assignment(s) regenerated successfully."
             : "{$created} peer assignment(s) generated successfully.";
         echo json_encode(['ok' => true, 'message' => $message, 'summary' => $summary]);
+        exit;
+    }
+
+    if ($action === 'validate') {
+        peer_api_require_admin($user);
+        $invalid = admin_all(
+            "SELECT pea.id FROM peer_evaluation_assignments pea
+             LEFT JOIN evaluation_period_participation evaluator
+               ON evaluator.evaluation_period_id=pea.evaluation_period_id AND evaluator.user_id=pea.evaluator_id
+             LEFT JOIN evaluation_period_participation evaluatee
+               ON evaluatee.evaluation_period_id=pea.evaluation_period_id AND evaluatee.user_id=pea.evaluatee_id
+             WHERE pea.evaluation_period_id=:period_id AND COALESCE(pea.is_archived,0)=0
+               AND (pea.evaluator_id=pea.evaluatee_id
+                 OR evaluator.participation_status<>'included' OR evaluator.work_status<>'active'
+                 OR evaluator.employment_status NOT IN ('active','newly_added')
+                 OR evaluatee.participation_status<>'included' OR evaluatee.work_status<>'active'
+                 OR evaluatee.employment_status NOT IN ('active','newly_added'))",
+            ['period_id'=>(int)$period['id']]
+        );
+        $total = (int)(admin_one(
+            'SELECT COUNT(*) total FROM peer_evaluation_assignments WHERE evaluation_period_id=:period_id AND COALESCE(is_archived,0)=0',
+            ['period_id'=>(int)$period['id']]
+        )['total'] ?? 0);
+        if ($total === 0) throw new DomainException('Create peer assignments before validation.');
+        if ($invalid !== []) throw new DomainException('Peer assignments contain excluded, inactive, missing, or self-assigned participants.');
+        db()->prepare(
+            'UPDATE appraisal_periods SET peer_assignments_validated_at=NOW(),peer_assignments_validated_by=:actor WHERE id=:id'
+        )->execute(['actor'=>(int)$user['id'],'id'=>(int)$period['id']]);
+        echo json_encode(['ok'=>true,'message'=>'Peer assignments validated. The evaluation period can now be activated.','validated_count'=>$total]);
         exit;
     }
 

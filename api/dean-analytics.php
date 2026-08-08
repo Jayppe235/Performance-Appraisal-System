@@ -23,15 +23,18 @@ header('Content-Type: application/json; charset=utf-8');
 
 try {
     $user = current_user();
-    if ($user === null || ($user['role'] ?? '') !== 'dean') {
+    $selectedPeriod = dipascaf_selected_period_from_request($_GET, true);
+    $periodDean = $user !== null && $selectedPeriod !== null
+        ? dipascaf_period_dean_scope((int)$selectedPeriod['id'], (int)$user['id']) !== []
+        : false;
+    if ($user === null || (($user['role'] ?? '') !== 'dean' && !$periodDean)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'message' => 'Dean access is required.']);
         exit;
     }
 
-    $selectedPeriod = dipascaf_selected_period_from_request($_GET, true);
     $periodName = $selectedPeriod !== null ? trim((string) ($selectedPeriod['period_name'] ?? '')) : trim((string) ($_GET['period'] ?? ''));
-    $departments = dean_departments((int) $user['id']);
+    $departments = dean_departments((int) $user['id'], $selectedPeriod !== null ? (int)$selectedPeriod['id'] : null);
     $analytics = dean_analytics($departments, $periodName);
     $group = trim((string) ($_GET['group'] ?? ''));
     if ($group !== '' && isset($analytics[$group])) {

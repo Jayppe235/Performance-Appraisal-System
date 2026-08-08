@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Bot, Eye, EyeOff, HelpCircle, Info, LoaderCircle, LockKeyhole, UserRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { roles } from '../data/navigation.js';
 import ndmcSeal from '/assets/images/ndmc-seal.png';
@@ -20,11 +20,15 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
   const [rememberCode, setRememberCode] = useState(() => Boolean(window.localStorage.getItem(rememberedCodeKey)));
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({ userCode: '', password: '' });
+  const [touched, setTouched] = useState({ userCode: false, password: false });
   const [submitting, setSubmitting] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(initialRecovery);
   const loginFormRef = useRef(null);
   const recoveryFormRef = useRef(null);
+  const loginUserCodeRef = useRef(null);
+  const recoveryUserCodeRef = useRef(null);
   const [formViewportHeight, setFormViewportHeight] = useState(null);
 
   useLayoutEffect(() => {
@@ -38,32 +42,41 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
     syncFormHeight();
     window.addEventListener('resize', syncFormHeight);
     return () => window.removeEventListener('resize', syncFormHeight);
-  }, [recoveryMode, submitting, capsLockOn]);
+  }, [recoveryMode, submitting, capsLockOn, fieldErrors, touched]);
 
   useEffect(() => {
     if (session?.isLoggedIn) {
-      navigate(dashboardPathForRole(session.roleKey), { replace: true });
+      navigate(session.user?.mustChangePassword ? '/change-password' : dashboardPathForRole(session.roleKey), { replace: true });
     }
   }, [navigate, session]);
+
+  useEffect(() => {
+    const focusTimer = window.setTimeout(() => {
+      (recoveryMode ? recoveryUserCodeRef.current : loginUserCodeRef.current)?.focus();
+    }, 80);
+    return () => window.clearTimeout(focusTimer);
+  }, [recoveryMode]);
+
+  function validateLogin(accountCode = userCode.trim(), accountPassword = password) {
+    return {
+      userCode: !accountCode
+        ? 'Enter your username code.'
+        : !/^[1-9]\d*$/.test(accountCode)
+          ? 'Use numeric digits only; the code cannot begin with zero.'
+          : '',
+      password: accountPassword ? '' : 'Enter your password.',
+    };
+  }
 
   async function submit(event) {
     event.preventDefault();
     const accountCode = userCode.trim();
     let authenticated = false;
-
-    if (!accountCode && !password) {
-      setError('Enter your username code and password to continue.');
-      return;
-    }
-
-    if (!accountCode) {
-      setError('Username code is required.');
-      return;
-    }
-    if (!/^[1-9]\d*$/.test(accountCode)) { setError('Username code must contain numeric digits only.'); return; }
-
-    if (!password) {
-      setError('Password is required.');
+    const validation = validateLogin(accountCode, password);
+    setTouched({ userCode: true, password: true });
+    setFieldErrors(validation);
+    if (validation.userCode || validation.password) {
+      (validation.userCode ? loginUserCodeRef.current : loginFormRef.current?.querySelector('#password'))?.focus();
       return;
     }
 
@@ -103,9 +116,7 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'logout' }),
         });
-        setError(portalType === 'admin'
-          ? 'This portal is for administrator accounts only. Please use the user login page.'
-          : 'Administrator accounts must sign in through the Admin Login page.');
+        setError('Invalid username code or password.');
         return;
       }
 
@@ -120,9 +131,10 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
 
       window.sessionStorage.removeItem('pmas-password-change-authorized');
       onLogin(payload.user);
-      setSuccess(`Login successful. Opening ${selectedRole.portal}.`);
+      const requiresPasswordChange = Boolean(payload.user.mustChangePassword);
+      setSuccess(requiresPasswordChange ? 'Login successful. Please replace your temporary password.' : `Login successful. Opening ${selectedRole.portal}.`);
       window.setTimeout(() => {
-        navigate(`${selectedRole.basePath}/${selectedRole.nav[0].key}`, { replace: true });
+        navigate(requiresPasswordChange ? '/change-password' : `${selectedRole.basePath}/${selectedRole.nav[0].key}`, { replace: true });
       }, 850);
     } catch (exception) {
       console.error('Login fetch failed:', exception);
@@ -135,18 +147,21 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
   }
 
   function showRecovery() {
-    setError(''); setSuccess(''); setRecoveryMode(true);
+    setError(''); setSuccess(''); setFieldErrors({ userCode: '', password: '' }); setRecoveryMode(true);
   }
 
   function showLogin() {
-    setError(''); setSuccess(''); setRecoveryMode(false);
+    setError(''); setSuccess(''); setFieldErrors({ userCode: '', password: '' }); setRecoveryMode(false);
     if (initialRecovery) navigate(portalType === 'admin' ? '/login/admin' : '/login', { replace: true });
   }
 
   async function submitRecovery(event) {
     event.preventDefault();
     const accountCode = userCode.trim();
-    if (!/^[1-9]\d*$/.test(accountCode)) { setError('Enter a valid numeric username code.'); return; }
+    const userCodeError = !accountCode ? 'Enter your username code.' : !/^[1-9]\d*$/.test(accountCode) ? 'Use a valid numeric username code.' : '';
+    setTouched((current) => ({ ...current, userCode: true }));
+    setFieldErrors((current) => ({ ...current, userCode: userCodeError }));
+    if (userCodeError) { recoveryUserCodeRef.current?.focus(); return; }
     setSubmitting(true); setError(''); setSuccess('');
     try {
       const response = await fetch(apiUrl('/api/auth.php'), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ action: 'request-reset', user_code: accountCode }) });
@@ -183,20 +198,22 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
           </div>
           <p className="login-welcome">{recoveryMode ? 'Enter your username code to ask an administrator to reset your password.' : portalType === 'admin' ? 'Administrator access. Enter your credentials to manage APPRAISIA.' : 'Welcome back. Enter your account details to open your role-based dashboard.'}</p>
 
-          {error && <div className="alert" role="alert">{error}</div>}
-          {success && <div className="notice success login-success" role="status">{success}</div>}
+          {error && <div className="alert login-form-alert" role="alert" aria-live="assertive">{error}</div>}
+          {success && <div className="notice success login-success" role="status" aria-live="polite">{success}</div>}
 
           <div className="login-form-viewport" style={formViewportHeight ? { height: `${formViewportHeight}px` } : undefined}>
           <div className={`login-form-track ${recoveryMode ? 'show-recovery' : ''}`}>
           <form ref={loginFormRef} className="form login-form-panel" onSubmit={submit} aria-hidden={recoveryMode} inert={recoveryMode ? '' : undefined}>
             <label htmlFor="user-code">Username Code</label>
-            <div className="login-input-wrap">
+            <div className={`login-input-wrap ${fieldErrors.userCode && touched.userCode ? 'has-error' : ''}`}>
               <UserRound size={18} aria-hidden="true" />
-              <input id="user-code" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="username" placeholder="e.g. 2025001" value={userCode} onChange={(event) => { setUserCode(event.target.value.replace(/\D/g, '')); setError(''); setSuccess(''); }} aria-invalid={Boolean(error && !userCode.trim())} disabled={submitting} />
+              <input ref={loginUserCodeRef} id="user-code" type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="username" placeholder="e.g. 2025001" value={userCode} onBlur={() => { setTouched((current) => ({ ...current, userCode: true })); setFieldErrors((current) => ({ ...current, userCode: validateLogin().userCode })); }} onChange={(event) => { const nextCode = event.target.value.replace(/\D/g, ''); setUserCode(nextCode); setError(''); setSuccess(''); if (touched.userCode) setFieldErrors((current) => ({ ...current, userCode: validateLogin(nextCode, password).userCode })); }} aria-invalid={Boolean(fieldErrors.userCode && touched.userCode)} aria-describedby={fieldErrors.userCode && touched.userCode ? 'user-code-error' : 'user-code-help'} disabled={submitting} />
             </div>
+            <span id="user-code-help" className="login-field-help">Use the numeric code assigned to your account.</span>
+            {fieldErrors.userCode && touched.userCode && <span id="user-code-error" className="login-field-error" role="status"><Info size={13} aria-hidden="true" />{fieldErrors.userCode}</span>}
 
             <label htmlFor="password">Password</label>
-            <div className="login-input-wrap">
+            <div className={`login-input-wrap ${fieldErrors.password && touched.password ? 'has-error' : ''}`}>
               <LockKeyhole size={18} aria-hidden="true" />
               <input
                 id="password"
@@ -204,18 +221,20 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
                 autoComplete="current-password"
                 placeholder="Enter your password"
                 value={password}
-                onBlur={() => setCapsLockOn(false)}
+                onBlur={() => { setCapsLockOn(false); setTouched((current) => ({ ...current, password: true })); setFieldErrors((current) => ({ ...current, password: validateLogin(userCode.trim(), password).password })); }}
                 onKeyUp={(event) => setCapsLockOn(event.getModifierState?.('CapsLock') || false)}
-                onChange={(event) => { setPassword(event.target.value); setError(''); setSuccess(''); }}
-                aria-invalid={Boolean(error && !password)}
+                onChange={(event) => { const nextPassword = event.target.value; setPassword(nextPassword); setError(''); setSuccess(''); if (touched.password) setFieldErrors((current) => ({ ...current, password: validateLogin(userCode.trim(), nextPassword).password })); }}
+                aria-invalid={Boolean(fieldErrors.password && touched.password)}
+                aria-describedby={[fieldErrors.password && touched.password ? 'password-error' : '', capsLockOn ? 'caps-lock-hint' : ''].filter(Boolean).join(' ') || undefined}
                 disabled={submitting}
               />
-              <button className="show-password-button" type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'} disabled={submitting}>
+              <button className="show-password-button" type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} disabled={submitting}>
                 {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
               </button>
             </div>
+            {fieldErrors.password && touched.password && <span id="password-error" className="login-field-error" role="status"><Info size={13} aria-hidden="true" />{fieldErrors.password}</span>}
             {capsLockOn && (
-              <div className="login-inline-hint" role="status">
+              <div id="caps-lock-hint" className="login-inline-hint" role="status" aria-live="polite">
                 <Info size={14} /> Caps Lock is on.
               </div>
             )}
@@ -223,7 +242,7 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
             <div className={`login-options ${portalType === 'admin' ? 'login-options-admin' : ''}`}>
               <label className="password-toggle" htmlFor="remember-code">
                 <input type="checkbox" id="remember-code" checked={rememberCode} onChange={(event) => setRememberCode(event.target.checked)} disabled={submitting} />
-                Remember Me
+                Remember username code
               </label>
               {portalType === 'admin' ? <span className="admin-recovery-note">Password recovery is handled by the system owner.</span> : <button className="login-text-action" type="button" onClick={showRecovery}>Forgot Password?</button>}
             </div>
@@ -235,9 +254,10 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
             </button>
           </form>
           <form ref={recoveryFormRef} className="form login-form-panel login-recovery-panel" onSubmit={submitRecovery} aria-hidden={!recoveryMode} inert={!recoveryMode ? '' : undefined}>
-            <div className="login-recovery-heading"><button type="button" className="login-back-button" onClick={showLogin} aria-label="Back to login"><ArrowLeft size={17} /></button><div><strong>Recover your account</strong><span>An administrator will review your request and reset your password.</span></div></div>
+            <div className="login-recovery-heading"><button type="button" className="login-back-button" onClick={showLogin} aria-label="Back to login"><ArrowLeft size={17} /></button><div><strong>Request a password reset</strong><span>Enter your username code. An administrator will review your request.</span></div></div>
             <label htmlFor="recovery-user-code">Username Code</label>
-            <div className="login-input-wrap"><UserRound size={18} aria-hidden="true" /><input id="recovery-user-code" inputMode="numeric" pattern="[0-9]*" placeholder="e.g. 2025001" value={userCode} onChange={(event) => { setUserCode(event.target.value.replace(/\D/g, '')); setError(''); setSuccess(''); }} disabled={submitting} /></div>
+            <div className={`login-input-wrap ${fieldErrors.userCode && touched.userCode ? 'has-error' : ''}`}><UserRound size={18} aria-hidden="true" /><input ref={recoveryUserCodeRef} id="recovery-user-code" inputMode="numeric" pattern="[0-9]*" autoComplete="username" placeholder="e.g. 2025001" value={userCode} onChange={(event) => { const nextCode = event.target.value.replace(/\D/g, ''); setUserCode(nextCode); setError(''); setSuccess(''); setFieldErrors((current) => ({ ...current, userCode: '' })); }} aria-invalid={Boolean(fieldErrors.userCode && touched.userCode)} aria-describedby={fieldErrors.userCode && touched.userCode ? 'recovery-user-code-error' : undefined} disabled={submitting} /></div>
+            {fieldErrors.userCode && touched.userCode && <span id="recovery-user-code-error" className="login-field-error" role="status"><Info size={13} aria-hidden="true" />{fieldErrors.userCode}</span>}
             <button type="submit" disabled={submitting}>{submitting && <LoaderCircle className="login-spinner" size={18} />}<span>{submitting ? 'Submitting request...' : 'Request Password Reset'}</span>{!submitting && <ArrowRight size={18} />}</button>
             <button type="button" className="login-return-link" onClick={showLogin}><ArrowLeft size={15} /> Back to login</button>
           </form>
@@ -245,7 +265,7 @@ export default function LoginPage({ onLogin, session, portalType = 'user', initi
           </div>
           <div className="login-support-strip">
             <HelpCircle size={15} aria-hidden="true" />
-            <span>{portalType === 'admin' ? <>Not an administrator? <a href="/login">User Login</a></> : <>Need administrator access? <a href="/login/admin">Admin Login</a></>}</span>
+            <span>{portalType === 'admin' ? <>Not an administrator? <Link to="/login">User Login</Link></> : <>Need administrator access? <Link to="/login/admin">Admin Login</Link></>}</span>
           </div>
         </section>
       </section>

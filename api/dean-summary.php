@@ -97,7 +97,11 @@ function dean_summary_api_action(string $weakArea, string $scopeLabel): string
 
 try {
     $user = current_user();
-    if ($user === null || ($user['role'] ?? '') !== 'dean') {
+    $requestedPeriod = dipascaf_selected_period_from_request($_GET, true);
+    $periodDean = $user !== null && $requestedPeriod !== null
+        ? dipascaf_period_dean_scope((int)$requestedPeriod['id'], (int)$user['id']) !== []
+        : false;
+    if ($user === null || (($user['role'] ?? '') !== 'dean' && !$periodDean)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'message' => 'Dean access is required.']);
         exit;
@@ -109,10 +113,15 @@ try {
     admin_ensure_archive_schema();
 
     $deanUserId = (int) $user['id'];
-    $selectedPeriod = dipascaf_selected_period_from_request($_GET, true);
+    $selectedPeriod = $requestedPeriod;
     $selectedPeriodName = $selectedPeriod !== null ? (string) ($selectedPeriod['period_name'] ?? '') : '';
 
-    $departmentAliases = dean_summary_api_scope($deanUserId);
+    $departmentAliases = [];
+    foreach (dean_departments($deanUserId, $selectedPeriod !== null ? (int)$selectedPeriod['id'] : null) as $dept) {
+        $deptRow = admin_one('SELECT * FROM departments WHERE department_code=:value OR department_name=:value LIMIT 1',['value'=>$dept]);
+        $departmentAliases = array_merge($departmentAliases, $deptRow ? admin_department_aliases($deptRow) : [$dept]);
+    }
+    $departmentAliases = array_values(array_unique(array_filter($departmentAliases)));
 
     if ($departmentAliases === []) {
         echo json_encode([

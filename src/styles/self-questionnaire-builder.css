@@ -1,0 +1,53 @@
+.self-questionnaire-workspace{display:grid;grid-template-columns:minmax(420px,.9fr) minmax(520px,1.1fr);gap:22px;align-items:start;margin-top:18px}
+.self-questionnaire-builder-pane,.self-questionnaire-preview-pane{min-width:0;border:1px solid #c9ded4;border-radius:22px;background:#f8fcfa;box-shadow:0 16px 38px rgba(21,67,51,.08)}
+.self-questionnaire-builder-pane{padding:22px}
+.self-questionnaire-pane-label{display:grid;gap:4px;margin-bottom:18px}
+.self-questionnaire-pane-label>span,.self-questionnaire-preview-head span{color:#627a70;font-size:.68rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+.self-questionnaire-pane-label>strong{color:#183e30;font-size:1.15rem}
+.self-questionnaire-pane-label>p{margin:0;color:#63796f;font-size:.78rem}
+.self-questionnaire-preview-pane{position:sticky;top:16px;overflow:hidden;background:#fff}
+.self-questionnaire-preview-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid #d4e4dc;background:#f2f9f5}
+.self-questionnaire-preview-head>div{display:grid;gap:3px;min-width:0}
+.self-questionnaire-preview-head strong{overflow:hidden;color:#173d30;font-size:1rem;text-overflow:ellipsis;white-space:nowrap}
+.self-questionnaire-preview-head>b{flex:none;padding:7px 10px;border-radius:999px;background:#dff3e8;color:#146f4d;font-size:.68rem}
+.self-questionnaire-preview-scroll{max-height:calc(100vh - 180px);overflow:auto;padding:18px;scrollbar-color:#86ad9b transparent;scrollbar-width:thin}
+.self-questionnaire-preview-scroll .admin-self-eval-paper-preview{width:100%;min-width:0;padding:24px;box-shadow:none}
+.self-questionnaire-preview-scroll .self-eval-school-brand h1{font-size:clamp(1rem,1.4vw,1.45rem)}
+.self-questionnaire-preview-scroll .self-eval-school-brand h2{font-size:clamp(.9rem,1.15vw,1.2rem)}
+.dynamic-approval-config{padding:17px;border:1px solid #cfe3da;border-radius:16px;background:#fbfefc}
+.dynamic-approval-config header h3,.dynamic-approval-preview h3{margin:0;color:#193f31;font-size:.95rem}
+.dynamic-approval-config header p{margin:3px 0 0;color:#687e74;font-size:.72rem}
+.dynamic-approval-grid{display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,1fr);gap:14px;margin-top:13px}
+.dynamic-approval-grid select[multiple]{min-height:112px}
+.dynamic-approval-grid small{color:#7b8e85;font-weight:500}
+.dynamic-approval-checks{display:grid;align-content:start;gap:9px;padding:10px;border:1px solid #dbe9e2;border-radius:11px;background:#fff}
+.dynamic-approval-checks label,.dynamic-question-options label{display:flex;grid-auto-flow:column;justify-content:start;align-items:center;gap:7px}
+.dynamic-approval-checks input,.dynamic-question-options input{width:17px!important;height:17px}
+.dynamic-question-options{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap;padding:10px;border-radius:10px;background:#eef7f2}
+.dynamic-supporting-field{display:grid;gap:5px}
+.dynamic-supporting-field>span{color:#35594a;font-size:.7rem;font-weight:850}
+.dynamic-supporting-field em{color:#c93d3d;font-style:normal}
+.dynamic-approval-preview{overflow:hidden;border:1px solid #d2e4da;border-radius:15px;background:#fff}
+.dynamic-approval-preview>header{padding:14px 17px;background:#edf8f2}
+.dynamic-approval-preview>header span{color:#168358;font-size:.64rem;font-weight:900;text-transform:uppercase}
+.dynamic-approval-preview>div{display:flex;gap:8px;flex-wrap:wrap;padding:14px}
+.dynamic-approval-preview>div span,.self-eval-approval-summary span,.self-eval-runtime-approval span{padding:6px 9px;border-radius:999px;background:#e7f5ed;color:#176e4e;font-size:.68rem;font-weight:800;text-transform:capitalize}
+.self-eval-approval-summary,.self-eval-runtime-approval{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0;padding:10px 12px;border:1px solid #cfe3da;border-radius:10px;background:#f5faf7}
+.self-eval-approval-summary strong,.self-eval-runtime-approval strong{color:#25493b;font-size:.72rem}
+
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .self-questionnaire-builder-pane,
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .self-questionnaire-preview-pane{border-color:#2f5067;background:#0c2031;box-shadow:0 18px 42px rgba(0,0,0,.25)}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .self-questionnaire-preview-head{border-color:#2b4b61;background:#122a3d}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.self-questionnaire-pane-label>strong,.self-questionnaire-preview-head strong){color:#eef7ff}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.self-questionnaire-pane-label>span,.self-questionnaire-pane-label>p,.self-questionnaire-preview-head span){color:#9fb5c5}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .self-questionnaire-preview-head>b{background:#154d3e;color:#a5efd0}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.dynamic-approval-config,.dynamic-approval-preview){border-color:#315269;background:#102638}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.dynamic-approval-config header h3,.dynamic-approval-preview h3,.dynamic-supporting-field>span,.self-eval-approval-summary strong,.self-eval-runtime-approval strong){color:#eaf5fc}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.dynamic-approval-config header p,.dynamic-approval-grid small){color:#9db1c0}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.dynamic-approval-checks,.dynamic-question-options){border-color:#2f5067;background:#0b1d2c}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) .dynamic-approval-preview>header{background:#153149}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.dynamic-approval-preview>div span,.self-eval-approval-summary span,.self-eval-runtime-approval span){background:#154b3d;color:#a5efd0}
+body:has(:is(.admin-body,.admin-dashboard-body).dark-mode) :is(.self-eval-approval-summary,.self-eval-runtime-approval){border-color:#315269;background:#102638}
+
+@media(max-width:1180px){.self-questionnaire-workspace{grid-template-columns:1fr}.self-questionnaire-preview-pane{position:relative;top:auto}.self-questionnaire-preview-scroll{max-height:760px}}
+@media(max-width:700px){.self-questionnaire-builder-pane{padding:14px}.dynamic-approval-grid{grid-template-columns:1fr}.self-questionnaire-preview-scroll{padding:8px}.self-questionnaire-preview-scroll .admin-self-eval-paper-preview{padding:14px}}
