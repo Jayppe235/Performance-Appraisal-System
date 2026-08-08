@@ -70,7 +70,9 @@ export default defineConfig(({ mode }) => {
     : undefined;
 
   return ({
-  base: mode === 'production' ? '/PMAS/' : '/',
+  base: mode === 'production'
+    ? (env.VITE_APP_BASE_PATH || '/')
+    : '/',
   plugins: [legacyDevelopmentBasePath(), developmentIndex(), react(), cssDiagnosticCompatibility()],
   server: {
     https,
