@@ -110,13 +110,12 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
 
     $deptOptions = admin_all("SELECT department_code value, department_name label FROM departments WHERE is_active=1 ORDER BY department_name");
     $periodOptions = admin_all(
-        "SELECT id value, period_name label, status
+         "SELECT id value, period_name label, status
          FROM appraisal_periods
-         WHERE id <> ?
-           AND period_name NOT LIKE 'Smoke Self Eval Period%'
+         WHERE period_name NOT LIKE 'Smoke Self Eval Period%'
            AND period_name NOT LIKE '%SMK%'
          ORDER BY date_start DESC, id DESC",
-        [$periodId]
+        []
     );
     if ($scopeEnforced && $scopeDepartmentAliases === []) $deptOptions = [];
     if ($scopeDepartmentAliases !== []) {
@@ -338,7 +337,11 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
     $snap->execute([$periodId,$snapshotDepartment,$snapshotProgram,json_encode($current)]);
     $comparison = null;
     $comparisonCounts = null;
-    if (!$comparisonMode && $comparisonPeriodId > 0 && $comparisonPeriodId !== $periodId) {
+    if (!$comparisonMode && $comparisonPeriodId > 0) {
+        if ($comparisonPeriodId === $periodId) {
+            $comparisonCounts = $current;
+            $comparison = ['id'=>$periodId,'label'=>$periodName];
+        } else {
         $comparisonPeriod = admin_one('SELECT * FROM appraisal_periods WHERE id=? LIMIT 1', [$comparisonPeriodId]);
         if ($comparisonPeriod !== null) {
             $comparisonQuery = $query;
@@ -347,6 +350,7 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
             $comparisonOverview = dashboard_admin_overview($db, $comparisonPeriod, $comparisonQuery);
             $comparisonCounts = $comparisonOverview['counts'] ?? null;
             $comparison = ['id'=>(int)$comparisonPeriod['id'],'label'=>(string)$comparisonPeriod['period_name']];
+        }
         }
     }
     $trends=[]; foreach($current as $key=>$value) $trends[$key]=['delta'=>is_array($comparisonCounts)?$value-(int)($comparisonCounts[$key]??0):null,'available'=>is_array($comparisonCounts)];

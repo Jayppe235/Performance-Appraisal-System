@@ -92,7 +92,7 @@ export default function AdminDashboardOverview({ overview, loading, error, filte
   const bands=overview?.performance_distribution || {};
   const comparisonPeriods=(overview?.filters?.periods?.length
     ? overview.filters.periods.map(period=>({id:period.value,label:period.label,status:period.status}))
-    : periods.filter(period=>String(period.id)!==String(selectedPeriodId)).map(period=>({id:period.id,label:period.period_name || period.school_year,status:period.status})));
+    : periods.map(period=>({id:period.id,label:period.period_name || period.school_year,status:period.status})));
   const bandData=useMemo(()=>({labels:['Below 50%','50–75%','Above 75%'],datasets:[{label:'Faculty',data:[bands.below_50||0,bands.between_50_75||0,bands.above_75||0],backgroundColor:['#d9363e','#e8a317','#169c5b'],borderRadius:8}]}),[bands]);
   const chartOptions={
     responsive:true,
@@ -112,7 +112,7 @@ export default function AdminDashboardOverview({ overview, loading, error, filte
     <div className="admin-overview-filters" aria-label="Dashboard filters">
       <label>College / Department<select value={filters.department} onChange={e=>onFiltersChange({...filters,department:e.target.value,program:''})}><option value="">All departments</option>{overview?.filters?.departments?.map(d=><option key={d.value} value={d.value}>{d.label}</option>)}</select></label>
       <label>Program<select value={filters.program} onChange={e=>onFiltersChange({...filters,program:e.target.value})}><option value="">All programs</option>{overview?.filters?.programs?.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
-      <label>Compare with period<select value={filters.comparisonPeriodId} onChange={e=>onFiltersChange({...filters,comparisonPeriodId:e.target.value})}><option value="">Select a period</option>{comparisonPeriods.map(period=><option key={period.id} value={period.id}>{period.label}{period.status ? ` (${period.status})` : ''}</option>)}</select></label>
+      <label>Compare with period<select value={filters.comparisonPeriodId} onChange={e=>onFiltersChange({...filters,comparisonPeriodId:e.target.value})}><option value="">Select a period</option>{comparisonPeriods.map(period=><option key={period.id} value={period.id}>{period.label}{String(period.id)===String(selectedPeriodId) ? ' (current)' : period.status ? ` (${period.status})` : ''}</option>)}</select></label>
       {(filters.department||filters.program) && <button type="button" onClick={()=>onFiltersChange({...filters,department:'',program:''})}>Clear filters</button>}
     </div>
     {error && <p className="dashboard-live-warning">Live refresh paused: {error}</p>}
