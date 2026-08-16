@@ -34,8 +34,15 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
     $comparisonPeriodId = (int) ($query['comparison_period_id'] ?? 0);
     $comparisonMode = !empty($query['_comparison_mode']);
 
-    $where = ["COALESCE(pa.is_archived,0)=0", "pa.status <> 'not_required'", "COALESCE(f.is_archived,0)=0"];
-    $where[] = "(pa.assignment_type<>'peer' OR EXISTS (
+    $where = [
+        "COALESCE(pa.is_archived,0)=0",
+        "pa.status NOT IN ('not_required','reassigned','cancelled','replaced')",
+        "COALESCE(f.is_archived,0)=0",
+    ];
+    // Generated peer rows require the locked official-pair record. An
+    // administrator-authorized additional peer evaluation is itself official
+    // and may coexist with the evaluator's original locked peer assignment.
+    $where[] = "(pa.assignment_type<>'peer' OR COALESCE(pa.is_additional,0)=1 OR EXISTS (
         SELECT 1 FROM peer_evaluation_assignments pea
         WHERE pea.peer_assignment_id=pa.id AND COALESCE(pea.is_archived,0)=0
     ))";
@@ -160,10 +167,21 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
         )) > 0));
     }
 
-    $scoreWhere = ["s.submission_status='submitted'", "COALESCE(f.is_archived,0)=0"];
+    // Category results are the canonical submitted scores. The legacy
+    // evaluator summary table is optional and may not exist on older installs.
+    $scoreWhere = ["r.status='completed'", "COALESCE(r.is_archived,0)=0", "COALESCE(f.is_archived,0)=0"];
     if ($scopeViolation) $scoreWhere[]='1=0';
     $scoreParams = [];
-    if ($periodName !== '') { $scoreWhere[]='s.evaluation_period=?'; $scoreParams[]=$periodName; }
+    if ($periodName !== '') { $scoreWhere[]='r.evaluation_period=?'; $scoreParams[]=$periodName; }
+    if ($periodId > 0) {
+        $scoreWhere[] = "EXISTS (SELECT 1 FROM evaluation_period_participation score_epp
+                                 WHERE score_epp.evaluation_period_id=?
+                                   AND score_epp.faculty_id=f.id
+                                   AND score_epp.participation_status='included'
+                                   AND score_epp.work_status='active'
+                                   AND score_epp.employment_status IN ('active','newly_added'))";
+        $scoreParams[] = $periodId;
+    }
     if ($departmentAliases !== []) {
         $scoreWhere[]='f.department IN (' . implode(',', array_fill(0, count($departmentAliases), '?')) . ')';
         $scoreParams=array_merge($scoreParams,$departmentAliases);
@@ -172,24 +190,43 @@ function dashboard_admin_overview(PDO $db, ?array $period, array $query): array
         $scoreWhere[]="UPPER(COALESCE(f.program_code,'')) IN (" . implode(',', array_fill(0, count($effectivePrograms), '?')) . ')';
         $scoreParams=array_merge($scoreParams,array_map('strtoupper',$effectivePrograms));
     }
-    $scores = dashboard_table_exists($db, 'pmas_evaluator_results_summary') ? admin_all(
-        "SELECT f.id, f.full_name, LEAST(100,GREATEST(0,AVG(COALESCE(s.overall_rating,s.average_category_score))*20)) score
-         FROM pmas_evaluator_results_summary s JOIN faculty f ON f.id=s.faculty_id
-         WHERE " . implode(' AND ', $scoreWhere) . " GROUP BY f.id,f.full_name", $scoreParams
-    ) : [];
+    $scores = admin_all(
+        "SELECT f.id,f.full_name,LEAST(100,GREATEST(0,AVG(r.average_rating)*20)) score
+           FROM (
+                SELECT evaluatee_faculty_id,average_rating,evaluation_period,status,is_archived
+                  FROM pmas_form_a_category_results
+                UNION ALL
+                SELECT evaluatee_faculty_id,average_rating,evaluation_period,status,is_archived
+                  FROM pmas_form_b_category_results
+           ) r
+           JOIN faculty f ON f.id=r.evaluatee_faculty_id
+          WHERE " . implode(' AND ', $scoreWhere) . "
+          GROUP BY f.id,f.full_name",
+        $scoreParams
+    );
     $bands = ['below_50'=>0,'between_50_75'=>0,'above_75'=>0,'without_results'=>0];
     foreach ($scores as $score) { $v=(float)$score['score']; if ($v<50) $bands['below_50']++; elseif ($v<=75) $bands['between_50_75']++; else $bands['above_75']++; }
-    $facultyScopeWhere = ['COALESCE(is_archived,0)=0']; $facultyScopeParams=[];
+    $facultyScopeWhere = ['COALESCE(f.is_archived,0)=0']; $facultyScopeParams=[];
+    $facultyScopeFrom = 'faculty f';
+    if ($periodId > 0) {
+        $facultyScopeFrom .= " JOIN evaluation_period_participation scope_epp
+                              ON scope_epp.faculty_id=f.id
+                             AND scope_epp.evaluation_period_id=?
+                             AND scope_epp.participation_status='included'
+                             AND scope_epp.work_status='active'
+                             AND scope_epp.employment_status IN ('active','newly_added')";
+        $facultyScopeParams[] = $periodId;
+    }
     if ($scopeViolation) $facultyScopeWhere[]='1=0';
     if ($departmentAliases !== []) {
-        $facultyScopeWhere[]='department IN (' . implode(',', array_fill(0, count($departmentAliases), '?')) . ')';
+        $facultyScopeWhere[]='f.department IN (' . implode(',', array_fill(0, count($departmentAliases), '?')) . ')';
         $facultyScopeParams=array_merge($facultyScopeParams,$departmentAliases);
     }
     if ($effectivePrograms !== []) {
-        $facultyScopeWhere[]="UPPER(COALESCE(program_code,'')) IN (" . implode(',', array_fill(0, count($effectivePrograms), '?')) . ')';
+        $facultyScopeWhere[]="UPPER(COALESCE(f.program_code,'')) IN (" . implode(',', array_fill(0, count($effectivePrograms), '?')) . ')';
         $facultyScopeParams=array_merge($facultyScopeParams,array_map('strtoupper',$effectivePrograms));
     }
-    $facultyScope = dashboard_count($db, 'SELECT COUNT(*) FROM faculty WHERE '.implode(' AND ',$facultyScopeWhere), $facultyScopeParams);
+    $facultyScope = dashboard_count($db, 'SELECT COUNT(DISTINCT f.id) FROM '.$facultyScopeFrom.' WHERE '.implode(' AND ',$facultyScopeWhere), $facultyScopeParams);
     $bands['without_results'] = max(0, $facultyScope-count($scores));
 
     $activity = [];

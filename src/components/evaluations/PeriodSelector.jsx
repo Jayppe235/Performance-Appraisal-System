@@ -3,7 +3,7 @@ import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx'
 import { Calendar, ChevronDown, RefreshCw, Loader2, LockKeyhole } from 'lucide-react';
 
 export default function PeriodSelector({ compact = false, className = '', showRefresh = true }) {
-  const { selectedPeriodId, setSelectedPeriodId, periods, selectedPeriod, loading, refresh } = useEvaluationPeriod();
+  const { selectedPeriodId, setSelectedPeriodId, periods, selectedPeriod, loading, error, refresh } = useEvaluationPeriod();
   const visiblePeriods = useMemo(() => {
     const uniquePeriods = new Map();
 
@@ -44,7 +44,25 @@ export default function PeriodSelector({ compact = false, className = '', showRe
   }
 
   if (periods.length === 0) {
-    return null;
+    return (
+      <div className={`period-selector ${compact ? 'period-selector-compact' : ''} ${className}`} role="status">
+        <Calendar size={14} className="period-selector-icon" />
+        <span className="period-selector-label">Evaluation Period</span>
+        <span className="period-selector-status closed" title={error || 'No evaluation periods are available'}>
+          Unavailable
+        </span>
+        <button
+          type="button"
+          className="period-selector-refresh"
+          onClick={() => refresh({ selectCurrent: true })}
+          title={error || 'Retry loading evaluation periods'}
+          aria-label="Retry loading evaluation periods"
+        >
+          <RefreshCw size={12} />
+          <span className="sr-only">Retry</span>
+        </button>
+      </div>
+    );
   }
 
   const selectedStatus = String(selectedPeriod?.status || (selectedPeriod?.is_open ? 'open' : 'draft')).toLowerCase();

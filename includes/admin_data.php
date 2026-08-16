@@ -875,6 +875,7 @@ function admin_completion_by_department(string $periodName = ''): array
         if ($periodId > 0) {
             $requirements = admin_all(
                 "SELECT u.id,
+                        COALESCE(NULLIF(epp.role_snapshot,''),u.role) effective_role,
                         COALESCE(NULLIF(epp.department_snapshot,''),u.department,'Unassigned') department,
                         EXISTS(SELECT 1 FROM peer_assignments px
                                LEFT JOIN peer_evaluation_assignments pex ON pex.peer_assignment_id=px.id
@@ -902,8 +903,11 @@ function admin_completion_by_department(string $periodName = ''): array
                 } else {
                     $normalized[$dept]['pending']++;
                 }
-                // One official peer evaluation per included participant.
-                if ((int)$requirement['has_peer'] === 0) {
+                // Active evaluation rules require peer evaluation for faculty
+                // members only. Leadership roles are evaluated through their
+                // configured Dean/VPAA/Program Head assignment paths.
+                if ((string)($requirement['effective_role'] ?? '') === 'teacher'
+                    && (int)$requirement['has_peer'] === 0) {
                     $normalized[$dept]['total_assignments']++;
                     $normalized[$dept]['pending']++;
                 }

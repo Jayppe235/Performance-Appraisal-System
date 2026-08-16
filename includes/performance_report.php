@@ -34,12 +34,27 @@ function performance_report_level(?float $score): string
     return 'Needs Improvement';
 }
 
+function performance_report_source(string $assignmentType, string $evaluatorRole = ''): string
+{
+    $assignmentType = strtolower(trim($assignmentType));
+    return match ($assignmentType) {
+        'self' => 'self',
+        'dean', 'vpaa' => 'head',
+        'program_head' => 'phsc',
+        'peer' => 'peer',
+        default => in_array(strtolower(trim($evaluatorRole)), ['vpaa', 'dean'], true)
+            ? 'head'
+            : (strtolower(trim($evaluatorRole)) === 'program_head' ? 'phsc' : 'peer'),
+    };
+}
+
 function performance_report_metadata(): array
 {
     return [
         'departments' => admin_all('SELECT id, department_code AS code, department_name AS name, dean_user_id, logo_image FROM departments WHERE is_active = 1 ORDER BY department_name'),
         'programs' => admin_all('SELECT id, department_id, program_code AS code, program_name AS name FROM programs WHERE is_active = 1 ORDER BY program_name'),
         'periods' => admin_all('SELECT id, period_name, school_year, date_start, date_end, status FROM appraisal_periods ORDER BY date_start DESC, id DESC'),
+        'faculty' => [],
     ];
 }
 
@@ -51,6 +66,17 @@ function performance_report_user_scope(array $user, array $filters, array $metad
     if ($requestedPeriodId > 0 && $role !== 'dean') {
         require_once __DIR__ . '/evaluation_participation.php';
         if (dipascaf_period_dean_scope($requestedPeriodId, (int)$user['id']) !== []) $role = 'dean';
+    }
+    if ($role === 'teacher') {
+        $faculty = admin_one('SELECT id, department, program_code FROM faculty WHERE user_id = :id AND COALESCE(is_archived, 0) = 0 LIMIT 1', ['id' => (int)$user['id']]);
+        if ($faculty === null) throw new PerformanceReportScopeException('No faculty profile is assigned to this account.');
+        $requestedFacultyId = (int)($filters['faculty_id'] ?? 0);
+        if ($requestedFacultyId > 0 && $requestedFacultyId !== (int)$faculty['id']) throw new PerformanceReportScopeException('The requested faculty record is outside your reporting scope.');
+        $filters['faculty_id'] = (int)$faculty['id'];
+        $filters['role'] = 'teacher';
+        $filters['report_type'] = 'individual';
+        $metadata['faculty'] = [['id' => (int)$faculty['id'], 'name' => $user['full_name'] ?? 'My Report', 'department' => $faculty['department'], 'program' => $faculty['program_code']]];
+        return [$filters, $metadata];
     }
     if (!in_array($role, ['dean', 'program_head'], true)) return [$filters, $metadata];
 
@@ -120,7 +146,7 @@ function performance_report_user_scope(array $user, array $filters, array $metad
         throw new PerformanceReportScopeException('The requested department is outside your assigned reporting scope.');
     }
     $filters['department_id'] = $assignedDepartmentId;
-    $filters['report_type'] = 'department';
+    if (!in_array((string)($filters['report_type'] ?? ''), ['consolidated','form_a','form_b','department','role_based'], true)) $filters['report_type'] = 'consolidated';
     $filters['role'] = 'teacher';
     $allowedIds = array_map(static fn ($item) => (int) $item['id'], $programs);
     $metadata['programs'] = array_values(array_filter($metadata['programs'], static fn ($item) => in_array((int) $item['id'], $allowedIds, true)));
@@ -140,23 +166,33 @@ function performance_report_build(array $filters): array
         is_array($filters['_allowed_program_codes'] ?? null) ? $filters['_allowed_program_codes'] : []
     ))));
     $periodId = (int) ($filters['period_id'] ?? 0);
+    $facultyId = (int) ($filters['faculty_id'] ?? 0);
     $sort = (string) ($filters['sort'] ?? 'name');
 
     $department = $departmentId > 0 ? admin_one('SELECT d.*, u.full_name AS dean_name FROM departments d LEFT JOIN users u ON u.id = d.dean_user_id WHERE d.id = :id', ['id' => $departmentId]) : null;
     $period = $periodId > 0 ? admin_one('SELECT * FROM appraisal_periods WHERE id = :id', ['id' => $periodId]) : null;
+    $periodJoin = ' LEFT JOIN evaluation_period_participation epp ON 1=0 ';
     $where = ['COALESCE(f.is_archived, 0) = 0'];
     $params = [];
+    if ($period !== null) {
+        $periodJoin = ' LEFT JOIN evaluation_period_participation epp ON epp.user_id = u.id AND epp.evaluation_period_id = :report_period_id ';
+        $params['report_period_id'] = $periodId;
+    }
+    if ($facultyId > 0) {
+        $where[] = 'f.id = :faculty_id';
+        $params['faculty_id'] = $facultyId;
+    }
     if ($department !== null) {
-        $where[] = '(f.department = :department_name OR f.department = :department_code)';
+        $where[] = '(COALESCE(NULLIF(epp.department_snapshot, ""), f.department) = :department_name OR COALESCE(NULLIF(epp.department_snapshot, ""), f.department) = :department_code)';
         $params['department_name'] = $department['department_name'];
         $params['department_code'] = $department['department_code'];
     }
     if ($role !== '') {
-        $where[] = 'COALESCE(u.role, "teacher") = :role';
+        $where[] = 'COALESCE(NULLIF(epp.role_snapshot, ""), u.role, "teacher") = :role';
         $params['role'] = $role;
     }
     if ($program !== '') {
-        $where[] = 'f.program_code = :program';
+        $where[] = 'UPPER(COALESCE(NULLIF(epp.program_snapshot, ""), f.program_code)) = :program';
         $params['program'] = $program;
     } elseif ($allowedProgramCodes !== []) {
         $programParts = [];
@@ -165,7 +201,7 @@ function performance_report_build(array $filters): array
             $programParts[] = ':' . $key;
             $params[$key] = $code;
         }
-        $where[] = 'UPPER(f.program_code) IN (' . implode(',', $programParts) . ')';
+        $where[] = 'UPPER(COALESCE(NULLIF(epp.program_snapshot, ""), f.program_code)) IN (' . implode(',', $programParts) . ')';
     }
     if ($period !== null) {
         $where[] = 'p.cycle_name = :cycle_name';
@@ -184,10 +220,14 @@ function performance_report_build(array $filters): array
         GROUP BY assignment_id";
 
     $rows = admin_all(
-        'SELECT f.id, f.full_name, f.department, f.program_code, COALESCE(u.role, "teacher") AS user_role,
-                p.id AS assignment_id, p.assignment_type, p.evaluator_role, r.score
+        'SELECT f.id, f.full_name,
+                COALESCE(NULLIF(epp.department_snapshot, ""), f.department) AS department,
+                COALESCE(NULLIF(epp.program_snapshot, ""), f.program_code) AS program_code,
+                COALESCE(NULLIF(epp.role_snapshot, ""), u.role, "teacher") AS user_role,
+                p.id AS assignment_id, p.assignment_type, p.evaluator_role, p.status AS assignment_status, r.score
          FROM faculty f
          LEFT JOIN users u ON u.id = f.user_id
+         ' . $periodJoin . '
          JOIN peer_assignments p ON p.evaluatee_faculty_id = f.id AND COALESCE(p.is_archived, 0) = 0
          LEFT JOIN (' . $resultSql . ') r ON r.assignment_id = p.id
          WHERE ' . implode(' AND ', $where) . '
@@ -208,12 +248,9 @@ function performance_report_build(array $filters): array
         ];
         $people[$id]['assignments']++;
         $assignmentTotal++;
-        if ($row['score'] === null) continue;
+        if ($row['score'] === null || !in_array((string)$row['assignment_status'], ['submitted', 'completed'], true)) continue;
         $score = (float) $row['score'];
-        $source = $row['assignment_type'] === 'self' ? 'self'
-            : ($row['assignment_type'] === 'peer' ? 'peer'
-                : (in_array($row['evaluator_role'], ['vpaa', 'dean'], true) ? 'head'
-                    : ($row['evaluator_role'] === 'program_head' ? 'phsc' : 'peer')));
+        $source = performance_report_source((string)$row['assignment_type'], (string)$row['evaluator_role']);
         $people[$id]['sources'][$source][] = $score;
         $people[$id]['scores'][] = $score;
         $people[$id]['completed']++;
@@ -275,6 +312,7 @@ function performance_report_build(array $filters): array
     $institutionAsset = performance_report_asset('assets/images/ndmc-seal.png');
     $departmentAsset = performance_report_asset($department['logo_image'] ?? null);
 
+    $analytics = performance_report_analytics($personRows, $period, $filters);
     return [
         'report_type' => $reportType,
         'department' => $departmentName,
@@ -296,8 +334,145 @@ function performance_report_build(array $filters): array
             'completion' => $assignmentTotal > 0 ? round($assignmentCompleted / $assignmentTotal * 100, 1) : 0,
             'highest_department' => $reportType === 'overall_department' && $outputRows !== [] ? $outputRows[0]['department'] : null,
         ],
+        'analytics' => $analytics,
+        'recommendation' => $analytics['recommendation'],
+        'warnings' => $analytics['warnings'],
         'signatory' => $department['dean_name'] ?? null,
         'generated_by' => current_user()['full_name'] ?? 'Authorized User',
         'generated_at' => date(DATE_ATOM),
     ];
+}
+
+function performance_report_average(array $values): ?float
+{
+    $values = array_values(array_filter($values, static fn($value) => $value !== null && is_numeric($value)));
+    return $values === [] ? null : round(array_sum($values) / count($values), 2);
+}
+
+function performance_report_source_analysis(string $key, string $label, array $categories, array $scores): array
+{
+    $grouped = [];
+    foreach ($categories as $row) {
+        $title = trim((string)($row['category'] ?? '')) ?: 'Uncategorized';
+        $grouped[$title] ??= ['title' => $title, 'values' => [], 'weight' => (float)($row['factor_weight'] ?? 0), 'result_count' => 0];
+        $grouped[$title]['values'][] = (float)$row['score'];
+        $grouped[$title]['result_count']++;
+    }
+    $items = array_map(static function(array $item): array {
+        $item['score'] = performance_report_average($item['values']);
+        unset($item['values']);
+        return $item;
+    }, array_values($grouped));
+    usort($items, static fn($a, $b) => ($b['score'] ?? 0) <=> ($a['score'] ?? 0));
+    $strengths = array_slice($items, 0, 3);
+    $ascending = $items;
+    usort($ascending, static fn($a, $b) => ($a['score'] ?? 99) <=> ($b['score'] ?? 99));
+    $weak = array_values(array_filter($ascending, static fn($item) => ($item['score'] ?? 99) <= 3.5));
+    $improvements = array_slice($weak !== [] ? $weak : $ascending, 0, $weak !== [] ? 3 : 2);
+    foreach ($improvements as &$item) $item['classification'] = ($item['score'] ?? 99) <= 3.5 ? 'weakness' : 'growth_opportunity';
+    unset($item);
+    return [
+        'key' => $key, 'label' => $label, 'available' => $scores !== [],
+        'completed_count' => count($scores), 'score' => performance_report_average($scores),
+        'categories' => $items, 'strengths' => $strengths, 'improvement_areas' => $improvements,
+    ];
+}
+
+function performance_report_development_activity(array $evidence): array
+{
+    $haystack = strtolower(implode(' ', array_column($evidence, 'category')));
+    if (str_contains($haystack, 'teach') || str_contains($haystack, 'instruction')) {
+        return ['activity_type' => 'Workshop', 'title' => 'Instructional Strategies and Effective Communication Workshop', 'objective' => 'Strengthen evidence-based teaching delivery, learner engagement, and clear classroom communication.'];
+    }
+    if (str_contains($haystack, 'communicat')) return ['activity_type' => 'Seminar', 'title' => 'Professional Communication Seminar', 'objective' => 'Improve clear, inclusive, and effective professional communication.'];
+    if (str_contains($haystack, 'leader') || str_contains($haystack, 'manage')) return ['activity_type' => 'Training', 'title' => 'Academic Leadership and Management Training', 'objective' => 'Develop planning, delegation, coaching, and accountable academic leadership.'];
+    if (str_contains($haystack, 'research')) return ['activity_type' => 'Workshop', 'title' => 'Research Capability Development Workshop', 'objective' => 'Improve applied research design, publication readiness, and research mentoring.'];
+    return ['activity_type' => 'Intervention', 'title' => 'Targeted Faculty Performance Development Program', 'objective' => 'Address the lowest-scoring competency areas through guided practice, coaching, and follow-up assessment.'];
+}
+
+function performance_report_analytics(array $people, ?array $period, array $filters): array
+{
+    $ids = array_values(array_unique(array_map(static fn($person) => (int)$person['id'], $people)));
+    $periodName = (string)($period['period_name'] ?? '');
+    $categoryRows = ['form_a' => [], 'form_b' => []];
+    if ($ids !== [] && $periodName !== '') {
+        $idList = implode(',', array_map('intval', $ids));
+        foreach (['form_a' => 'a', 'form_b' => 'b'] as $key => $suffix) {
+            $categoryRows[$key] = admin_all(
+                "SELECT r.evaluatee_faculty_id AS faculty_id, c.title AS category, r.average_rating AS score, r.factor_weight
+                 FROM pmas_form_{$suffix}_category_results r
+                 JOIN pmas_form_{$suffix}_categories c ON c.id = r.category_id
+                 WHERE r.evaluatee_faculty_id IN ({$idList}) AND r.evaluation_period = :period
+                   AND r.status = 'completed' AND COALESCE(r.is_archived, 0) = 0",
+                ['period' => $periodName]
+            );
+        }
+    }
+    $aScores = []; $bScores = [];
+    foreach ($people as $person) {
+        foreach ($categoryRows['form_a'] as $row) if ((int)$row['faculty_id'] === (int)$person['id']) $aScores[] = (float)$row['score'];
+        foreach ($categoryRows['form_b'] as $row) if ((int)$row['faculty_id'] === (int)$person['id']) $bScores[] = (float)$row['score'];
+    }
+    $sources = [
+        'form_a' => performance_report_source_analysis('form_a', 'PMAS Form A', $categoryRows['form_a'], $aScores),
+        'form_b' => performance_report_source_analysis('form_b', 'PMAS Form B', $categoryRows['form_b'], $bScores),
+    ];
+    $missing = array_values(array_map(static fn($source) => $source['label'], array_filter($sources, static fn($source) => !$source['available'])));
+    $sourceMeans = array_column($sources, 'score');
+    $consolidated = $missing === [] ? performance_report_average($sourceMeans) : null;
+    $evidence = [];
+    foreach ($sources as $source) foreach ($source['improvement_areas'] as $item) $evidence[] = [
+        'source' => $source['label'], 'category' => $item['title'], 'score' => $item['score'],
+        'trigger' => $item['classification'] === 'weakness' ? 'Score at or below 3.50' : 'Lowest available growth opportunity',
+    ];
+    usort($evidence, static fn($a, $b) => $a['score'] <=> $b['score']);
+    $evidence = array_slice($evidence, 0, 5);
+    $recommendation = null;
+    if ($missing === []) {
+        $activity = performance_report_development_activity($evidence);
+        $reasonParts = array_map(static fn($item) => $item['category'] . ' (' . number_format((float)$item['score'], 2) . ', ' . $item['source'] . ')', array_slice($evidence, 0, 3));
+        $recommendation = [...$activity,
+            'reason' => 'Recommended because the selected-period evidence identifies ' . implode(', ', $reasonParts) . ' as the lowest development priorities.',
+            'evidence' => $evidence, 'source' => 'scoped_database_rules', 'generated_at' => date(DATE_ATOM),
+        ];
+    }
+    $distribution = ['Excellent' => 0, 'Very Satisfactory' => 0, 'Satisfactory' => 0, 'Needs Improvement' => 0];
+    foreach ($people as $person) if ($person['mean'] !== null) $distribution[performance_report_level((float)$person['mean'])]++;
+    return [
+        'sources' => $sources,
+        'consolidated' => ['available' => $missing === [], 'score' => $consolidated, 'level' => performance_report_level($consolidated), 'required_sources' => ['PMAS Form A', 'PMAS Form B'], 'missing_sources' => $missing],
+        'charts' => [
+            'source_comparison' => ['labels' => array_column($sources, 'label'), 'values' => $sourceMeans],
+            'rating_distribution' => ['labels' => array_keys($distribution), 'values' => array_values($distribution)],
+            'categories' => array_values(array_merge($sources['form_a']['categories'], $sources['form_b']['categories'])),
+        ],
+        'recommendation' => $recommendation,
+        'warnings' => $missing === [] ? [] : ['Consolidated recommendation unavailable. Missing completed evidence: ' . implode(', ', $missing) . '.'],
+    ];
+}
+
+function performance_report_snapshot(array $filters, array $analytics, array $user, bool $regenerate = false): ?array
+{
+    try {
+        db()->exec("CREATE TABLE IF NOT EXISTS report_ai_snapshots (
+          id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,user_id INT NOT NULL,filter_hash CHAR(64) NOT NULL,evidence_hash CHAR(64) NOT NULL,
+          filters_json JSON NOT NULL,evidence_json JSON NOT NULL,recommendation_json JSON NULL,source VARCHAR(60) NOT NULL DEFAULT 'scoped_database_rules',
+          provider VARCHAR(80) NULL,model VARCHAR(120) NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_report_snapshot(user_id,filter_hash,evidence_hash),KEY idx_report_snapshot_lookup(user_id,filter_hash,created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+        $safeFilters = array_intersect_key($filters, array_flip(['report_type','department_id','role','program','faculty_id','period_id']));
+        $evidence = ['sources' => $analytics['sources'], 'consolidated' => $analytics['consolidated'], 'charts' => $analytics['charts']];
+        $filterHash = hash('sha256', json_encode($safeFilters, JSON_UNESCAPED_UNICODE));
+        $evidenceHash = hash('sha256', json_encode($evidence, JSON_UNESCAPED_UNICODE));
+        if (!$regenerate) {
+            $existing = admin_one('SELECT id, source, provider, model, created_at FROM report_ai_snapshots WHERE user_id=:user_id AND filter_hash=:filter_hash AND evidence_hash=:evidence_hash LIMIT 1', ['user_id'=>(int)$user['id'],'filter_hash'=>$filterHash,'evidence_hash'=>$evidenceHash]);
+            if ($existing !== null) return [...$existing, 'filter_hash'=>$filterHash, 'evidence_hash'=>$evidenceHash, 'reused'=>true];
+        }
+        $stmt = db()->prepare('INSERT INTO report_ai_snapshots(user_id,filter_hash,evidence_hash,filters_json,evidence_json,recommendation_json,source) VALUES(:user_id,:filter_hash,:evidence_hash,:filters,:evidence,:recommendation,:source) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)');
+        $stmt->execute(['user_id'=>(int)$user['id'],'filter_hash'=>$filterHash,'evidence_hash'=>$evidenceHash,'filters'=>json_encode($safeFilters),'evidence'=>json_encode($evidence),'recommendation'=>json_encode($analytics['recommendation']),'source'=>$analytics['recommendation']['source'] ?? 'unavailable']);
+        return ['id'=>(int)db()->lastInsertId(),'filter_hash'=>$filterHash,'evidence_hash'=>$evidenceHash,'source'=>$analytics['recommendation']['source'] ?? 'unavailable','created_at'=>date(DATE_ATOM),'reused'=>false];
+    } catch (Throwable $error) {
+        error_log('APPRAISIA report snapshot unavailable: ' . $error->getMessage());
+        return null;
+    }
 }

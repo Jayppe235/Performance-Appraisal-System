@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { X, CheckCircle2, AlertTriangle, AlertCircle, ClipboardCheck, Printer, PartyPopper, Sparkles, ArrowRight, Trophy } from 'lucide-react';
+import { X, CheckCircle2, AlertTriangle, AlertCircle, ClipboardCheck, Printer, PartyPopper, Sparkles, ArrowRight, Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { confirmSubmitEvaluation } from '../common/ConfirmationModal.jsx';
 import casLogo from '../../../assets/images/CAS LOGO.png';
@@ -40,6 +40,8 @@ const RATING_HELP = {
     example: 'Performance falls substantially below expectations. Immediate intervention and a structured improvement plan are recommended.',
   },
 };
+
+const NEXT_EVALUATEES_PER_PAGE = 6;
 
 function getScoreInterpretation(score) {
   if (score >= 4.5) return 'Highly Evident';
@@ -193,6 +195,7 @@ export default function EvaluationModal({
   const categoryEvidenceRef = useRef({});
   const activeCategoryRef = useRef(null);
   const [submittedResults, setSubmittedResults] = useState(null);
+  const [nextEvaluateePage, setNextEvaluateePage] = useState(1);
   const [showReview, setShowReview] = useState(false);
   const [draftRestoredKey, setDraftRestoredKey] = useState('');
   const [lastSaved, setLastSaved] = useState(null);
@@ -315,6 +318,7 @@ export default function EvaluationModal({
     setSubmitError('');
     setSubmitting(false);
     setSubmittedResults(null);
+    setNextEvaluateePage(1);
     setShowReview(false);
     setDraftRestoredKey('');
   }, [evaluation?.id]);
@@ -347,9 +351,17 @@ export default function EvaluationModal({
       .filter((item) => {
         const status = String(item.status || '').toLowerCase();
         return status !== 'submitted' && status !== 'done';
-      })
-      .slice(0, 6);
+      });
   }, [assignments, evaluation?.id]);
+  const nextEvaluateePageCount = Math.max(1, Math.ceil(pendingEvaluateesAfterSubmit.length / NEXT_EVALUATEES_PER_PAGE));
+  const visiblePendingEvaluatees = useMemo(() => {
+    const start = (nextEvaluateePage - 1) * NEXT_EVALUATEES_PER_PAGE;
+    return pendingEvaluateesAfterSubmit.slice(start, start + NEXT_EVALUATEES_PER_PAGE);
+  }, [nextEvaluateePage, pendingEvaluateesAfterSubmit]);
+
+  useEffect(() => {
+    setNextEvaluateePage((current) => Math.min(Math.max(1, current), nextEvaluateePageCount));
+  }, [nextEvaluateePageCount]);
   const submittedCategoryRows = useMemo(() => categories.map((cat) => {
     const submittedCategory = viewOnly && Array.isArray(evaluation?.categoryResults)
       ? getSubmittedCategoryResult(cat, evaluation.categoryResults)
@@ -1260,7 +1272,7 @@ export default function EvaluationModal({
               <span>{pendingEvaluateesAfterSubmit.length} available</span>
             </div>
             <div className="evaluation-next-grid">
-              {pendingEvaluateesAfterSubmit.map((item) => {
+              {visiblePendingEvaluatees.map((item) => {
                 const name = item.fullName || item.evaluateeName || 'Assigned Employee';
                 const initial = name.charAt(0).toUpperCase();
                 const roleLabel = item.section === 'self'
@@ -1283,6 +1295,32 @@ export default function EvaluationModal({
                 );
               })}
             </div>
+            {nextEvaluateePageCount > 1 && (
+              <nav className="evaluation-next-pagination" aria-label="Pending evaluatee pages">
+                <button
+                  type="button"
+                  onClick={() => setNextEvaluateePage((page) => Math.max(1, page - 1))}
+                  disabled={nextEvaluateePage === 1}
+                >
+                  <ChevronLeft size={16} />
+                  Previous
+                </button>
+                <span>
+                  Page <strong>{nextEvaluateePage}</strong> of <strong>{nextEvaluateePageCount}</strong>
+                  <small>
+                    {((nextEvaluateePage - 1) * NEXT_EVALUATEES_PER_PAGE) + 1}–{Math.min(nextEvaluateePage * NEXT_EVALUATEES_PER_PAGE, pendingEvaluateesAfterSubmit.length)} of {pendingEvaluateesAfterSubmit.length}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setNextEvaluateePage((page) => Math.min(nextEvaluateePageCount, page + 1))}
+                  disabled={nextEvaluateePage === nextEvaluateePageCount}
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </button>
+              </nav>
+            )}
           </div>
         ) : (
           <div className="evaluation-complete-panel">

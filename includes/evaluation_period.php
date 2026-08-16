@@ -544,22 +544,10 @@ function dipascaf_assignment_relationship_allowed(
             return false;
         }
 
-        if ($evaluatorRole === 'teacher') {
-            return $evaluateeRole === 'teacher'
-                && dipascaf_department_matches_scope($evaluateeDepartment, $scope['departments']);
-        }
-
-        if ($evaluatorRole === 'program_head') {
-            return $evaluateeRole === 'program_head'
-                && dipascaf_department_matches_scope($evaluateeDepartment, $scope['departments']);
-        }
-
-        if ($evaluatorRole === 'dean') {
-            return $evaluateeRole === 'dean'
-                && !dipascaf_department_matches_scope($evaluateeDepartment, $scope['departments']);
-        }
-
-        return false;
+        // A locked official peer mapping is the authorization boundary. Peer work
+        // belongs to the evaluator's account for that period and must remain visible
+        // when the same account has a different leadership/faculty role selection.
+        return true;
     }
 
     // Self-evaluations are always allowed — the evaluator is evaluating themselves
@@ -584,7 +572,6 @@ function dipascaf_assignment_relationship_allowed(
         ),
         'teacher' => (
             $assignmentType === 'dean'
-            && $evaluateeRole === 'dean'
             && dipascaf_department_matches_scope($evaluateeDepartment, $scope['departments'])
         ) || (
             $assignmentType === 'program_head'

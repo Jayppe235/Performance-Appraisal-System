@@ -6,6 +6,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.vercel/
 
 # Local database dumps (keep versioned migration_*.sql files)
 database/pmas.sql

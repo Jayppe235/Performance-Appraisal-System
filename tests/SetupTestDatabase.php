@@ -164,7 +164,7 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     ");
 
-    self::$pdo->exec("CREATE TABLE IF NOT EXISTS password_reset_requests (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,user_id INT NOT NULL,status ENUM('pending','completed') NOT NULL DEFAULT 'pending',requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at DATETIME NULL,completed_by_user_id INT NULL,pending_user_id INT GENERATED ALWAYS AS (CASE WHEN status='pending' THEN user_id ELSE NULL END) STORED,UNIQUE KEY uq_password_reset_pending_user(pending_user_id)) ENGINE=InnoDB");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS password_reset_requests (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,user_id INT NOT NULL,status ENUM('pending','completed') NOT NULL DEFAULT 'pending',requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at DATETIME NULL,completed_by_user_id INT NULL,pending_user_id INT GENERATED ALWAYS AS (CASE WHEN status='pending' THEN user_id ELSE NULL END) STORED,UNIQUE KEY uq_password_reset_pending_user(pending_user_id)) ENGINE=InnoDB");
 
     // ── notifications table (matches production) ────────────
     $pdo->exec("
@@ -177,10 +177,15 @@ try {
             link VARCHAR(500) DEFAULT NULL COMMENT 'Optional link to relevant page',
             related_entity_type VARCHAR(50) DEFAULT NULL COMMENT 'e.g., evaluation, intervention, profile, period',
             related_entity_id INT DEFAULT NULL COMMENT 'ID of the related entity',
+            event_key VARCHAR(191) DEFAULT NULL,
+            event_payload JSON DEFAULT NULL,
+            delivery_status VARCHAR(30) NOT NULL DEFAULT 'created',
+            delivery_error TEXT DEFAULT NULL,
             is_read TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             KEY idx_notifications_user_read (user_id, is_read),
             KEY idx_notifications_created (created_at),
+            KEY idx_notifications_event_key (event_key),
             CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     ");

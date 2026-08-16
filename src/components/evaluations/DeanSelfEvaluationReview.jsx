@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowUp, Building2, CheckCircle2, ClipboardCheck, ClipboardList, Download, Edit3, Eye, FileText, Loader2, Printer, RefreshCcw, RotateCcw, Save, Search, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, ArrowUp, Building2, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Download, Edit3, Eye, FileText, Loader2, Printer, RefreshCcw, RotateCcw, Save, Search, ShieldCheck, X } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { addToast } from '../common/Toast.jsx';
 import { confirmProceed } from '../common/ConfirmationModal.jsx';
@@ -132,6 +132,8 @@ export default function DeanSelfEvaluationReview({ role }) {
   const [reopenReason, setReopenReason] = useState('');
   const [editTarget, setEditTarget] = useState(null);
   const [reviewWorkspace, setReviewWorkspace] = useState('self');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const reviewPanelRef = useRef(null);
   const searchInputRef = useRef(null);
 
@@ -179,6 +181,20 @@ export default function DeanSelfEvaluationReview({ role }) {
       .filter((row) => !filters.status || displayStatus(row, reviewer) === filters.status)
       .filter((row) => !query || [row.full_name, row.program_code, row.evaluation_period, row.performance_level].some((value) => String(value || '').toLowerCase().includes(query)));
   }, [filters, periodRows, reviewer]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const pagedRows = useMemo(
+    () => filteredRows.slice((page - 1) * pageSize, page * pageSize),
+    [filteredRows, page, pageSize],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedPeriodId, filters.faculty, filters.program, filters.status, pageSize]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
 
   const cards = summaryCards(periodRows, reviewer, subjectPlural);
   const activeRecord = detail?.record || null;
@@ -282,7 +298,7 @@ export default function DeanSelfEvaluationReview({ role }) {
     window.setTimeout(() => searchInputRef.current?.focus({ preventScroll: true }), 260);
   }
 
-  if (!isProgramHead && reviewWorkspace === 'goals') {
+  if (reviewWorkspace === 'goals') {
     return (
       <section className="dean-self-review module-wide page-enter">
         <div className="self-review-workspace-tabs" role="tablist" aria-label={`${reviewer} review modules`}>
@@ -373,12 +389,10 @@ export default function DeanSelfEvaluationReview({ role }) {
         </div>
         <img className="dean-self-review-robot" src={reviewRobotImage} alt="" aria-hidden="true" />
       </div>
-      {!isProgramHead && (
-        <div className="self-review-workspace-tabs self-review-workspace-tabs-below" role="tablist" aria-label={`${reviewer} review modules`}>
-          <button type="button" role="tab" aria-selected="true" className="active" onClick={() => setReviewWorkspace('self')}><ClipboardList size={17} /><span>Self-Evaluation Reviews</span></button>
-          <button type="button" role="tab" aria-selected="false" onClick={() => setReviewWorkspace('goals')}><FileText size={17} /><span>Goals Record Reviews</span></button>
-        </div>
-      )}
+      <div className="self-review-workspace-tabs self-review-workspace-tabs-below" role="tablist" aria-label={`${reviewer} review modules`}>
+        <button type="button" role="tab" aria-selected="true" className="active" onClick={() => setReviewWorkspace('self')}><ClipboardList size={17} /><span>Self-Evaluation Reviews</span></button>
+        <button type="button" role="tab" aria-selected="false" onClick={() => setReviewWorkspace('goals')}><FileText size={17} /><span>Goals Record Reviews</span></button>
+      </div>
 
       <div className="dean-self-review-summary">
         {cards.map((item) => {
@@ -419,9 +433,10 @@ export default function DeanSelfEvaluationReview({ role }) {
           <div className="eval-monitor-empty">
             <ClipboardCheck size={28} />
             <strong>No self evaluations match the current review filters.</strong>
-            <p>{isDean ? 'Submitted Program Head evaluations and Program Head-approved faculty evaluations in your department will appear here.' : `Submitted ${subject.toLowerCase()} self evaluations in your allowed scope will appear here for ${reviewer} review.`}</p>
+            <p>{isDean ? 'Submitted Faculty and Program Head self evaluations in your department will appear here for direct Dean review.' : `Submitted ${subject.toLowerCase()} self evaluations in your allowed scope will appear here for ${reviewer} review.`}</p>
           </div>
         ) : (
+          <>
           <div className="dean-self-review-table-wrap">
             <table className="dean-self-review-table">
               <thead>
@@ -435,11 +450,11 @@ export default function DeanSelfEvaluationReview({ role }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map((row) => {
+                {pagedRows.map((row) => {
                   const label = displayStatus(row, reviewer);
                   return (
                     <tr key={row.id}>
-                      <td data-label={`${subject} Name`}><strong>{row.full_name || `Unnamed ${subject.toLowerCase()}`}</strong><small>{row.role === 'program_head' ? 'Program Head' : (row.position_title || row.faculty_department || row.department)}</small></td>
+                      <td data-label={`${subject} Name`}><strong>{row.full_name || `Unnamed ${subject.toLowerCase()}`}</strong><small>{row.role === 'program_head' ? 'Program Head' : `Faculty${row.position_title ? ` — ${row.position_title}` : ''}`}</small></td>
                       <td data-label="Program">{row.program_code || 'Unassigned'}</td>
                       <td data-label="Evaluation Period">{row.evaluation_period || 'Current period'}</td>
                       <td data-label="Completion Date">{formatDate(row.submitted_at)}</td>
@@ -456,6 +471,25 @@ export default function DeanSelfEvaluationReview({ role }) {
               </tbody>
             </table>
           </div>
+          <footer className="dean-self-review-pagination" aria-label="Self evaluation review pages">
+            <span>
+              Showing <strong>{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filteredRows.length)}</strong> of <strong>{filteredRows.length}</strong> records
+            </span>
+            <label>
+              Rows per page
+              <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+              </select>
+            </label>
+            <div className="dean-self-review-page-controls">
+              <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} aria-label="Previous page"><ChevronLeft size={17} /><span>Previous</span></button>
+              <span className="dean-self-review-page-count">Page <strong>{page}</strong> of <strong>{pageCount}</strong></span>
+              <button type="button" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} aria-label="Next page"><span>Next</span><ChevronRight size={17} /></button>
+            </div>
+          </footer>
+          </>
         )}
       </div>
 
@@ -539,7 +573,7 @@ export default function DeanSelfEvaluationReview({ role }) {
                       }}
                       disabled={!canReview}
                     >
-                      <Edit3 size={15} /> Edit Submitted Evaluation
+                      <Edit3 size={15} /> Complete Part II Appraisal
                     </button>
                   )}
                 </div>
@@ -564,9 +598,9 @@ export default function DeanSelfEvaluationReview({ role }) {
           <div className="dipascaf-modal-panel eval-form-panel self-eval-task-panel managed-self-eval-editor" role="dialog" aria-modal="true" aria-labelledby="managed-self-eval-editor-title">
             <header className="managed-self-eval-editor-head">
               <div>
-                <p>{reviewer} Edit Submitted Self Evaluation</p>
+                <p>{reviewer} Part II Evaluation and Scoring</p>
                 <h2 id="managed-self-eval-editor-title">{editTarget.full_name || 'Faculty Member'}</h2>
-                <span>{editTarget.evaluation_period || 'Current evaluation period'} · Changes remain submitted and are recorded.</span>
+                <span>{editTarget.evaluation_period || 'Current evaluation period'} · Complete Part II before approving the faculty record.</span>
               </div>
               <button type="button" className="modal-icon-close" onClick={() => setEditTarget(null)} aria-label="Close self evaluation editor">
                 <X size={20} />

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Bot, Eye, EyeOff, HelpCircle, Info, LoaderCircle, LockKeyhole, UserRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { roles } from '../data/navigation.js';
-import ndmcSeal from '/assets/images/ndmc-seal.png';
+import ndmcSeal from '../../assets/images/ndmc-seal.png';
 import { apiUrl } from '../data/apiBase.js';
 
 const rememberedCodeKey = 'dipascaf-remembered-user-code';

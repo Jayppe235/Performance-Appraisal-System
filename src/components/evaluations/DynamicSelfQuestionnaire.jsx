@@ -33,7 +33,7 @@ export function DynamicQuestionnaireRenderer({ definition, answers = {}, onAnswe
     {showApproval && <section className="dynamic-approval-preview">
       <header><div><span>Approval workflow</span><h3>Review and confirmation requirements</h3></div></header>
       <div>
-        {(definition?.approvalRequirements?.reviewers || ['employee', 'program_head', 'dean']).map((reviewer) => <span key={reviewer}>{String(reviewer).replaceAll('_', ' ')}</span>)}
+        {(definition?.approvalRequirements?.reviewers || ['employee', 'dean']).map((reviewer) => <span key={reviewer}>{String(reviewer).replaceAll('_', ' ')}</span>)}
         {definition?.approvalRequirements?.requireEmployeeSignature !== false && <span>Employee signature</span>}
         {definition?.approvalRequirements?.requireReviewerComments && <span>Reviewer comments required</span>}
         {definition?.approvalRequirements?.allowReturn !== false && <span>Return for revision enabled</span>}
@@ -61,7 +61,7 @@ export function DynamicQuestionnaireBuilder({ title, definition, revision, savin
     <section className="dynamic-approval-config">
       <header><div><h3>Approval Requirements</h3><p>Configure who confirms the completed evaluation and what reviewers must provide.</p></div></header>
       <div className="dynamic-approval-grid">
-        <label>Required reviewers<select multiple value={definition.approvalRequirements?.reviewers || ['employee', 'program_head', 'dean']} onChange={(e) => update((next) => { next.approvalRequirements = { ...(next.approvalRequirements || {}), reviewers: Array.from(e.target.selectedOptions, (option) => option.value) }; })}><option value="employee">Employee</option><option value="program_head">Program Head</option><option value="dean">Dean</option><option value="vpaa">VPAA</option></select><small>Use Ctrl/Cmd to select more than one reviewer.</small></label>
+        <label>Required reviewers<select multiple value={definition.approvalRequirements?.reviewers || ['employee', 'dean']} onChange={(e) => update((next) => { next.approvalRequirements = { ...(next.approvalRequirements || {}), reviewers: Array.from(e.target.selectedOptions, (option) => option.value) }; })}><option value="employee">Employee</option><option value="dean">Dean</option><option value="vpaa">VPAA</option></select><small>Use Ctrl/Cmd to select more than one reviewer.</small></label>
         <div className="dynamic-approval-checks">
           <label><input type="checkbox" checked={definition.approvalRequirements?.requireEmployeeSignature !== false} onChange={(e) => update((next) => { next.approvalRequirements = { ...(next.approvalRequirements || {}), requireEmployeeSignature: e.target.checked }; })}/> Employee signature required</label>
           <label><input type="checkbox" checked={!!definition.approvalRequirements?.requireReviewerComments} onChange={(e) => update((next) => { next.approvalRequirements = { ...(next.approvalRequirements || {}), requireReviewerComments: e.target.checked }; })}/> Reviewer comments required</label>

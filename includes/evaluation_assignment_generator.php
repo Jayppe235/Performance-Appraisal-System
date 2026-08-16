@@ -223,16 +223,27 @@ function dipascaf_upsert_user_requirements_for_period(
         $programHead = $programId > 0 ? admin_one(
             "SELECT COALESCE(
                     (SELECT epph.user_id FROM evaluation_period_program_heads epph
+                     WHERE epph.evaluation_period_id=:period_id_role AND epph.program_id=p.id
+                     ORDER BY epph.is_lead_evaluator DESC,epph.is_primary DESC,epph.id LIMIT 1),
+                    p.program_head_user_id
+                ) user_id,
+                (SELECT role FROM users WHERE id=COALESCE(
+                    (SELECT epph.user_id FROM evaluation_period_program_heads epph
                      WHERE epph.evaluation_period_id=:period_id AND epph.program_id=p.id
                      ORDER BY epph.is_lead_evaluator DESC,epph.is_primary DESC,epph.id LIMIT 1),
                     p.program_head_user_id
-                ) user_id
+                )) user_role
              FROM programs p
              WHERE p.id=:program_id AND p.is_active=1
              LIMIT 1",
-            ['period_id'=>$evaluationPeriodId,'program_id'=>$programId]
+            ['period_id'=>$evaluationPeriodId,'period_id_role'=>$evaluationPeriodId,'program_id'=>$programId]
         ) : null;
-        if ((int)($programHead['user_id'] ?? 0) > 0 && (int)$programHead['user_id'] !== $userId) {
+        // A Dean may also be assigned administrative responsibility for a
+        // program. That assignment must not create a second Program Head
+        // evaluation; the same person evaluates strictly in the Dean role.
+        if ((int)($programHead['user_id'] ?? 0) > 0
+            && (int)$programHead['user_id'] !== $userId
+            && (string)($programHead['user_role'] ?? '') !== 'dean') {
             $requirements[] = [
                 'evaluator_user_id'=>(int)$programHead['user_id'],
                 'evaluator_role'=>'program_head',

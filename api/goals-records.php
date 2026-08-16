@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/evaluation_period.php';
+require_once __DIR__ . '/../includes/notifications.php';
 header('Content-Type: application/json; charset=utf-8');
 set_exception_handler(static function (Throwable $error): void {
     error_log('Goals Record Sheet API error: ' . $error->getMessage());
@@ -208,6 +209,14 @@ function goal_decode_record(array $row): array
 function goal_attach_assigned_reviewer(PDO $pdo, array $row): array
 {
     $employeeRole = (string)($row['employee_role'] ?? '');
+    $assignedName = null;
+    $periodContext = null;
+    if ((int)($row['period_id'] ?? 0) > 0 && (int)($row['user_id'] ?? 0) > 0) {
+        $contextStmt = $pdo->prepare('SELECT role_snapshot,department_id,program_id FROM evaluation_period_participation WHERE evaluation_period_id=? AND user_id=? LIMIT 1');
+        $contextStmt->execute([(int)$row['period_id'], (int)$row['user_id']]);
+        $periodContext = $contextStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($periodContext && (string)$periodContext['role_snapshot'] !== '') $employeeRole = (string)$periodContext['role_snapshot'];
+    }
     if ($employeeRole === '') {
         $roleStmt = $pdo->prepare('SELECT role FROM users WHERE id=? LIMIT 1');
         $roleStmt->execute([(int)($row['user_id'] ?? 0)]);
@@ -216,24 +225,88 @@ function goal_attach_assigned_reviewer(PDO $pdo, array $row): array
     if ($employeeRole === 'dean') {
         $stmt = $pdo->prepare("SELECT full_name FROM users WHERE role='vpaa' AND id<>? ORDER BY id LIMIT 1");
         $stmt->execute([(int)($row['user_id'] ?? 0)]);
+        $assignedRole = 'VPAA';
     } else {
-        $stmt = $pdo->prepare("SELECT full_name FROM users WHERE role='dean' AND department=? AND id<>? ORDER BY id LIMIT 1");
-        $stmt->execute([(string)($row['department'] ?? ''), (int)($row['user_id'] ?? 0)]);
+        $stmt = $pdo->prepare(
+            "SELECT u.full_name
+               FROM evaluation_period_deans epd
+               JOIN users u ON u.id=epd.user_id AND u.is_active=1
+              WHERE epd.evaluation_period_id=?
+                AND epd.department_id=COALESCE(?,epd.department_id)
+                AND epd.user_id<>?
+              ORDER BY epd.is_acting DESC,epd.id
+              LIMIT 1"
+        );
+        $stmt->execute([(int)$row['period_id'], $periodContext['department_id'] ?? null, (int)($row['user_id'] ?? 0)]);
+        $assignedRole = 'Dean';
+        $assignedName = (string)($stmt->fetchColumn() ?: '');
+        if ($assignedName === '') {
+            $stmt = $pdo->prepare("SELECT full_name FROM users WHERE role='dean' AND department=? AND is_active=1 AND id<>? ORDER BY id LIMIT 1");
+            $stmt->execute([(string)($row['department'] ?? ''), (int)($row['user_id'] ?? 0)]);
+            $assignedName = (string)($stmt->fetchColumn() ?: '');
+        }
     }
-    $row['assigned_reviewer_name'] = (string)($stmt->fetchColumn() ?: '');
-    $row['assigned_reviewer_role'] = $employeeRole === 'dean' ? 'VPAA' : 'Dean';
+    $row['assigned_reviewer_name'] = $assignedName ?? (string)($stmt->fetchColumn() ?: '');
+    $row['assigned_reviewer_role'] = $assignedRole;
     return $row;
 }
 
-function goal_can_review(array $reviewer, array $record): bool
+function goal_notify_assigned_reviewer(PDO $pdo, array $record, string $title, string $message, string $eventKey): array
+{
+    $assigned = goal_attach_assigned_reviewer($pdo, $record);
+    $name = trim((string)($assigned['assigned_reviewer_name'] ?? ''));
+    if ($name === '') return notify_delivery_result(false, null, 'no_recipient', 'No assigned reviewer was found.');
+    $stmt = $pdo->prepare('SELECT id,role FROM users WHERE full_name=? AND is_active=1 LIMIT 1');
+    $stmt->execute([$name]);
+    $recipient = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $recipientId = (int)($recipient['id'] ?? 0);
+    $actionUrl = match ((string)($recipient['role'] ?? '')) {
+        'vpaa' => '/vpaa/self-evaluation-review',
+        'dean' => '/dean/self-evaluation-review',
+        default => '/faculty/evaluate',
+    };
+    return notify_send_with_result([
+        'recipient_id' => $recipientId,
+        'type' => 'approval',
+        'title' => $title,
+        'message' => $message,
+        'action_url' => $actionUrl,
+        'module' => 'goals_records',
+        'related_record_id' => (int)$record['id'],
+        'event_key' => $eventKey,
+    ]);
+}
+
+function goal_can_review(PDO $pdo, array $reviewer, array $record): bool
 {
     if ((int)$reviewer['id'] === (int)$record['user_id']) return false;
     $role = (string)($reviewer['role'] ?? '');
     $employeeRole = (string)($record['employee_role'] ?? '');
     if ($role === 'vpaa') return $employeeRole === 'dean';
     if ($role === 'dean') {
-        return in_array($employeeRole, ['teacher', 'faculty', 'program_head'], true)
-            && trim((string)($reviewer['department'] ?? '')) === trim((string)($record['department'] ?? ''));
+        if (!in_array($employeeRole, ['teacher', 'faculty', 'program_head'], true)) return false;
+
+        $periodId = (int)($record['period_id'] ?? 0);
+        $employeeId = (int)($record['user_id'] ?? 0);
+        if ($periodId > 0 && $employeeId > 0) {
+            $stmt = $pdo->prepare(
+                "SELECT COUNT(*)
+                   FROM evaluation_period_deans epd
+                   JOIN evaluation_period_participation epp
+                     ON epp.evaluation_period_id=epd.evaluation_period_id
+                    AND epp.department_id=epd.department_id
+                  WHERE epd.evaluation_period_id=?
+                    AND epd.user_id=?
+                    AND epp.user_id=?"
+            );
+            $stmt->execute([$periodId, (int)$reviewer['id'], $employeeId]);
+            if ((int)$stmt->fetchColumn() > 0) return true;
+        }
+
+        // Compatibility fallback for historical periods without assignment snapshots.
+        $reviewerDepartment = strtolower(trim((string)($reviewer['department'] ?? '')));
+        $recordDepartment = strtolower(trim((string)($record['department'] ?? '')));
+        return $reviewerDepartment !== '' && hash_equals($reviewerDepartment, $recordDepartment);
     }
     return false;
 }
@@ -408,7 +481,14 @@ if (in_array($action, ['save', 'submit'], true)) {
         $stmt->execute([(int)$user['id'], $periodId, $activeTemplate['id'], $activeTemplate['version'], (string)$user['full_name'], $position, (string)($user['department'] ?? ''), $periodLabel, json_encode($clean), $templateJson, $status, $status]);
         $id = (int)$pdo->lastInsertId();
     }
-    echo json_encode(['ok' => true, 'message' => $action === 'submit' ? 'Goals Record Sheet submitted for review.' : 'Draft saved.', 'record_id' => $id]);
+    $delivery = null;
+    if ($action === 'submit') {
+        $recordStmt = $pdo->prepare("SELECT g.*,u.role employee_role FROM pmas_goals_records g JOIN users u ON u.id=g.user_id WHERE g.id=?");
+        $recordStmt->execute([$id]);
+        $record = $recordStmt->fetch(PDO::FETCH_ASSOC);
+        if ($record) $delivery = goal_notify_assigned_reviewer($pdo, $record, 'Goals Record Sheet Pending Review', (string)$user['full_name'] . ' submitted a Goals Record Sheet for review.', 'goals:submitted:' . $id . ':' . time());
+    }
+    echo json_encode(['ok' => true, 'message' => $action === 'submit' ? 'Goals Record Sheet submitted for review.' : 'Draft saved.', 'record_id' => $id, 'notification_delivery' => $delivery]);
     exit;
 }
 
@@ -417,7 +497,7 @@ if ($action === 'reviewer_save') {
     $stmt = $pdo->prepare("SELECT g.*,u.role employee_role FROM pmas_goals_records g JOIN users u ON u.id=g.user_id WHERE g.id=? AND g.period_id=?");
     $stmt->execute([$id, $periodId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$row || !goal_can_review($user, $row)) {
+    if (!$row || !goal_can_review($pdo, $user, $row)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'message' => 'You are not authorized to edit this Goals Record Sheet.']);
         exit;
@@ -482,7 +562,7 @@ if (in_array($action, ['approve', 'return', 'reopen', 'resubmit'], true)) {
     $stmt = $pdo->prepare("SELECT g.*,u.role employee_role FROM pmas_goals_records g JOIN users u ON u.id=g.user_id WHERE g.id=? AND g.period_id=?");
     $stmt->execute([$id, $periodId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$row || !goal_can_review($user, $row)) {
+    if (!$row || !goal_can_review($pdo, $user, $row)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'message' => 'You are not authorized to review this Goals Record Sheet.']);
         exit;
@@ -511,12 +591,44 @@ if (in_array($action, ['approve', 'return', 'reopen', 'resubmit'], true)) {
         echo json_encode(['ok' => false, 'message' => 'Only a reopened record can be re-submitted.']);
         exit;
     }
-    goal_snapshot($pdo, $id, $action, $user, $comment);
     $status = ['approve' => 'approved', 'return' => 'returned', 'reopen' => 'reopened', 'resubmit' => 'submitted'][$action];
-    $stmt = $pdo->prepare("UPDATE pmas_goals_records SET status=?,reviewer_id=?,reviewer_name=?,review_comment=?,reviewed_at=NOW() WHERE id=?");
-    $stmt->execute([$status, (int)$user['id'], (string)$user['full_name'], $comment, $id]);
+    $pdo->beginTransaction();
+    try {
+        goal_snapshot($pdo, $id, $action, $user, $comment);
+        $stmt = $pdo->prepare("UPDATE pmas_goals_records SET status=?,reviewer_id=?,reviewer_name=?,review_comment=?,reviewed_at=NOW() WHERE id=?");
+        $stmt->execute([$status, (int)$user['id'], (string)$user['full_name'], $comment, $id]);
+        $verified = $pdo->prepare('SELECT status,reviewer_id,reviewer_name,review_comment,reviewed_at FROM pmas_goals_records WHERE id=? FOR UPDATE');
+        $verified->execute([$id]);
+        $savedReview = $verified->fetch(PDO::FETCH_ASSOC);
+        if (!$savedReview || (string)$savedReview['status'] !== $status || (int)$savedReview['reviewer_id'] !== (int)$user['id']) {
+            throw new RuntimeException('The review status could not be verified after saving.');
+        }
+        $pdo->commit();
+    } catch (Throwable $reviewError) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $reviewError;
+    }
     $messages = ['approve' => 'Goals Record Sheet approved.', 'return' => 'Goals Record Sheet returned for revision.', 'reopen' => 'Goals Record Sheet reopened for revision.', 'resubmit' => 'Goals Record Sheet re-submitted for review.'];
-    echo json_encode(['ok' => true, 'message' => $messages[$action]]);
+    try {
+        if ($action === 'resubmit') {
+            $delivery = goal_notify_assigned_reviewer($pdo, $row, 'Goals Record Sheet Re-submitted', (string)$row['employee_name'] . ' re-submitted a Goals Record Sheet.', 'goals:resubmitted:' . $id . ':' . time());
+        } else {
+            $delivery = notify_send_with_result([
+                'recipient_id' => (int)$row['user_id'],
+                'type' => $action === 'approve' ? 'success' : 'revision',
+                'title' => $messages[$action],
+                'message' => $comment !== '' ? $comment : $messages[$action],
+                'action_url' => '/faculty/evaluate',
+                'module' => 'goals_records',
+                'related_record_id' => $id,
+                'event_key' => 'goals:' . $action . ':' . $id . ':' . time(),
+            ]);
+        }
+    } catch (Throwable $notificationError) {
+        error_log('Goals Record Sheet notification failed after ' . $action . ': ' . $notificationError->getMessage());
+        $delivery = notify_delivery_result(false, null, 'delivery_error', 'Record updated, but the notification could not be delivered.');
+    }
+    echo json_encode(['ok' => true, 'message' => $messages[$action], 'review' => $savedReview, 'notification_delivery' => $delivery]);
     exit;
 }
 

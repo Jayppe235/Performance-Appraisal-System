@@ -1286,6 +1286,57 @@ body:has(:is(.admin-body,.admin-dashboard-body,.dean-body).dark-mode) .profile-m
   .profile-modal-panel .profile-password-grid,.profile-modal-panel .profile-password-section.is-open .profile-password-grid{grid-template-columns:1fr!important;min-height:0!important}
   .profile-modal-panel .profile-password-grid>label:last-child{grid-column:auto!important}
 }
+
+/* Profile flow guard: the expanded password editor and action buttons must
+   occupy separate rows. This intentionally overrides earlier grid rules. */
+.people-modal-panel.profile-modal-panel > form.profile-form {
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:stretch!important;
+}
+
+.people-modal-panel.profile-modal-panel > form.profile-form > * {
+  flex:0 0 auto!important;
+  width:100%!important;
+}
+
+.people-modal-panel.profile-modal-panel .profile-password-section.is-open {
+  display:block!important;
+  position:relative!important;
+  z-index:1!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  overflow:visible!important;
+}
+
+.people-modal-panel.profile-modal-panel .profile-password-section.is-open .profile-password-editor {
+  display:grid!important;
+  position:relative!important;
+  inset:auto!important;
+  z-index:1!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  transform:none!important;
+}
+
+.people-modal-panel.profile-modal-panel .profile-form-actions {
+  display:grid!important;
+  position:static!important;
+  inset:auto!important;
+  z-index:auto!important;
+  clear:both!important;
+  width:100%!important;
+  margin:18px 0 0!important;
+  transform:none!important;
+}
+
+.people-modal-panel.profile-modal-panel .profile-form-actions button {
+  position:static!important;
+  inset:auto!important;
+  transform:none!important;
+}
 /* Secure user-account reporting workspace */
 .people-account-heading-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
 .people-account-heading-actions>button{min-height:44px;padding:0 15px;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:11px;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;font-weight:800;white-space:nowrap;box-shadow:0 9px 20px rgba(37,99,235,.2)}

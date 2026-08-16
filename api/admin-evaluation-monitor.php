@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/admin_data.php';
+require_once __DIR__ . '/../includes/vpaa_data.php';
 require_once __DIR__ . '/../includes/evaluation_cards.php';
 require_once __DIR__ . '/../includes/gemini.php';
 require_once __DIR__ . '/../includes/openai.php';
@@ -164,6 +165,88 @@ function admin_monitor_recommendation_status_payload(int $submitted, int $total,
     ];
 }
 
+function admin_monitor_recommended_action(string $category, string $form): string
+{
+    $key = strtolower($category);
+    if (str_contains($key, 'communication')) return $form === 'PMAS Form A'
+        ? 'Conduct an executive communication and constructive feedback workshop for academic leaders.'
+        : 'Conduct a communication, learner engagement, and feedback workshop for faculty.';
+    if (str_contains($key, 'leadership') || str_contains($key, 'management')) return 'Conduct an academic leadership, planning, and management development seminar.';
+    if (str_contains($key, 'job knowledge') || str_contains($key, 'quality')) return 'Conduct quality assurance, role mastery, and work excellence coaching.';
+    if (str_contains($key, 'teamwork') || str_contains($key, 'interpersonal')) return 'Conduct a collaboration, teamwork, and interpersonal sensitivity seminar.';
+    if (str_contains($key, 'initiative') || str_contains($key, 'resourcefulness') || str_contains($key, 'creativity') || str_contains($key, 'innovation')) return 'Conduct an innovation, initiative, and resourcefulness workshop.';
+    if (str_contains($key, 'institutional')) return 'Conduct an institutional commitment, mission alignment, and values seminar.';
+    if (str_contains($key, 'commitment') || str_contains($key, 'responsibility')) return 'Conduct professional responsibility and job commitment coaching.';
+    if (str_contains($key, 'decorum') || str_contains($key, 'professional')) return 'Conduct a professional ethics, decorum, and workplace conduct seminar.';
+    return $form === 'PMAS Form A'
+        ? "Conduct targeted academic leadership development for {$category}."
+        : "Conduct targeted faculty development for {$category}.";
+}
+
+function admin_monitor_department_form_recommendations(array $aliases, string $periodName = ''): array
+{
+    if ($aliases === []) return [];
+    $placeholders = implode(',', array_fill(0, count($aliases), '?'));
+    $result = [];
+    foreach ([
+        'PMAS Form A' => ['pmas_form_a_category_results', 'pmas_form_a_categories'],
+        'PMAS Form B' => ['pmas_form_b_category_results', 'pmas_form_b_categories'],
+    ] as $form => [$resultsTable, $categoriesTable]) {
+        $params = $aliases;
+        $periodSql = '';
+        if ($periodName !== '') {
+            $periodSql = ' AND pa.cycle_name = ?';
+            $params[] = $periodName;
+        }
+        $rows = admin_all(
+            "SELECT c.title AS category, ROUND(AVG(r.average_rating), 2) AS average_rating,
+                    COUNT(DISTINCT pa.id) AS submitted_evaluations,
+                    COUNT(DISTINCT r.evaluatee_faculty_id) AS affected_people
+               FROM {$resultsTable} r
+               JOIN {$categoriesTable} c ON c.id = r.category_id
+               JOIN peer_assignments pa ON pa.id = r.assignment_id
+               JOIN faculty f ON f.id = pa.evaluatee_faculty_id
+              WHERE f.department IN ({$placeholders})
+                AND r.status = 'completed'
+                AND pa.status = 'submitted'
+                AND pa.is_current = 1
+                AND pa.assignment_type <> 'self'
+                AND COALESCE(r.is_archived, 0) = 0
+                AND COALESCE(pa.is_archived, 0) = 0
+                AND COALESCE(f.is_archived, 0) = 0{$periodSql}
+              GROUP BY c.id, c.title
+              ORDER BY average_rating ASC, submitted_evaluations DESC
+              LIMIT 3",
+            $params
+        );
+        if ($rows === []) {
+            $result[] = ['form' => $form, 'available' => false, 'recommendation' => "No completed {$form} category results are available for this department and period.", 'focus_areas' => []];
+            continue;
+        }
+        $primary = $rows[0];
+        $focusAreas = array_map(static fn(array $row): array => [
+            'category' => (string) ($row['category'] ?? ''),
+            'average_rating' => (float) ($row['average_rating'] ?? 0),
+            'submitted_evaluations' => (int) ($row['submitted_evaluations'] ?? 0),
+            'affected_people' => (int) ($row['affected_people'] ?? 0),
+        ], $rows);
+        $category = (string) ($primary['category'] ?? 'Professional Development');
+        $score = number_format((float) ($primary['average_rating'] ?? 0), 2);
+        $submissions = (int) ($primary['submitted_evaluations'] ?? 0);
+        $result[] = [
+            'form' => $form,
+            'available' => true,
+            'primary_category' => $category,
+            'average_rating' => (float) ($primary['average_rating'] ?? 0),
+            'submitted_evaluations' => $submissions,
+            'focus_areas' => $focusAreas,
+            'recommended_action' => admin_monitor_recommended_action($category, $form),
+            'recommendation' => "Priority focus: {$category} (combined average {$score}/5 from all {$submissions} submitted evaluations). " . admin_monitor_recommended_action($category, $form),
+        ];
+    }
+    return $result;
+}
+
 function admin_monitor_authorized_departments(array $user, int $periodId): array
 {
     $role = (string)($user['role'] ?? '');
@@ -171,11 +254,15 @@ function admin_monitor_authorized_departments(array $user, int $periodId): array
         return array_map(static fn(array $row): int => (int)$row['id'], admin_all('SELECT id FROM departments WHERE is_active=1'));
     }
     if ($role === 'vpaa') {
+        $departmentCodes = vpaa_departments((int)$user['id']);
+        if ($departmentCodes === []) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($departmentCodes), '?'));
         $rows = admin_all(
-            'SELECT DISTINCT d.id FROM departments d
-             JOIN vpaa_departments vd ON vd.department_code=d.department_code
-             WHERE vd.vpaa_user_id=:user_id AND d.is_active=1',
-            ['user_id'=>(int)$user['id']]
+            "SELECT DISTINCT d.id FROM departments d
+             WHERE d.department_code IN ($placeholders) AND d.is_active=1",
+            $departmentCodes
         );
         return array_map(static fn(array $row): int => (int)$row['id'], $rows);
     }
@@ -266,7 +353,8 @@ function admin_monitor_roster(array $user, int $periodId, string $periodName): a
             $assignmentParams[] = $periodName;
         }
         $assignments = admin_all(
-            "SELECT pa.id,pa.evaluatee_faculty_id,pa.status,pa.assignment_type,pa.deadline,
+            "SELECT pa.id,pa.evaluatee_faculty_id,pa.status,pa.assignment_type,pa.questionnaire_type,
+                    pa.submitted_at,pa.deadline,
                     COALESCE(evaluator.full_name,'Unassigned evaluator') evaluator_name,
                     COALESCE(evaluator.role,pa.evaluator_role,'') evaluator_role
              FROM peer_assignments pa
@@ -404,11 +492,25 @@ function admin_monitor_roster(array $user, int $periodId, string $periodName): a
             'category_results'=>array_map(static fn(array $score): array => [
                 'category_title'=>$score['name'],'score'=>$score['score'],'form_name'=>$expectedForm,
             ],$scores),
-            'evaluator_assignments'=>array_map(static fn(array $assignment): array => [
-                'id'=>(int)$assignment['id'],'evaluator_name'=>(string)$assignment['evaluator_name'],
-                'evaluator_role'=>(string)$assignment['evaluator_role'],'assignment_type'=>(string)$assignment['assignment_type'],
-                'assignment_status'=>(string)$assignment['status'],'deadline'=>(string)($assignment['deadline']??''),
-            ],$assignments),
+            'evaluator_assignments'=>array_map(static function(array $assignment): array {
+                $status = (string)($assignment['status'] ?? 'pending');
+                $evaluatorName = (string)($assignment['evaluator_name'] ?? 'Evaluator');
+                $assignmentType = (string)($assignment['assignment_type'] ?? '');
+                $evaluationType = admin_monitor_evaluation_type_label($assignmentType, (string)($assignment['evaluator_role'] ?? ''));
+                return [
+                    'id'=>(int)$assignment['id'],
+                    'evaluator_name'=>$evaluatorName,
+                    'evaluator_role'=>(string)$assignment['evaluator_role'],
+                    'type'=>$assignmentType,
+                    'questionnaire_type'=>(string)($assignment['questionnaire_type'] ?? ''),
+                    'status'=>$status,
+                    'status_note'=>$status === 'submitted'
+                        ? 'Submitted by '.$evaluatorName.'.'
+                        : 'Waiting for '.$evaluatorName.' to submit the '.$evaluationType.'.',
+                    'submitted_at'=>(string)($assignment['submitted_at'] ?? ''),
+                    'deadline'=>(string)($assignment['deadline'] ?? ''),
+                ];
+            },$assignments),
             'ai_insights'=>[],'intervention_plans'=>[],
         ];
     }
@@ -480,6 +582,57 @@ function admin_monitor_pending_evaluator_payload(array $assignment): array
         'days_until_deadline' => $days,
         'overdue' => $isOverdue,
     ];
+}
+
+function admin_monitor_department_pending_evaluators(array $aliases, string $periodName = ''): array
+{
+    if ($aliases === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($aliases), '?'));
+    $params = $aliases;
+    $periodSql = '';
+    if ($periodName !== '') {
+        $periodSql = " AND pa.cycle_name = ?
+            AND EXISTS (
+                SELECT 1 FROM evaluation_period_participation evaluator_epp
+                JOIN appraisal_periods evaluator_ap ON evaluator_ap.id = evaluator_epp.evaluation_period_id
+                WHERE evaluator_ap.period_name = pa.cycle_name
+                  AND evaluator_epp.user_id = pa.evaluator_user_id
+                  AND evaluator_epp.participation_status = 'included'
+                  AND evaluator_epp.work_status = 'active'
+                  AND evaluator_epp.employment_status IN ('active','newly_added')
+            )
+            AND EXISTS (
+                SELECT 1 FROM evaluation_period_participation evaluatee_epp
+                JOIN appraisal_periods evaluatee_ap ON evaluatee_ap.id = evaluatee_epp.evaluation_period_id
+                WHERE evaluatee_ap.period_name = pa.cycle_name
+                  AND evaluatee_epp.user_id = f.user_id
+                  AND evaluatee_epp.participation_status = 'included'
+                  AND evaluatee_epp.work_status = 'active'
+                  AND evaluatee_epp.employment_status IN ('active','newly_added')
+            )";
+        $params[] = $periodName;
+    }
+
+    $rows = admin_all(
+        "SELECT pa.id, COALESCE(NULLIF(evaluator.full_name, ''), 'Evaluator') evaluator_name,
+                pa.evaluator_role, pa.assignment_type, pa.status assignment_status, pa.deadline
+         FROM peer_assignments pa
+         JOIN faculty f ON f.id = pa.evaluatee_faculty_id
+         LEFT JOIN users evaluator ON evaluator.id = pa.evaluator_user_id
+         WHERE f.department IN ($placeholders)
+           AND COALESCE(f.is_archived, 0) = 0
+           AND COALESCE(pa.is_archived, 0) = 0
+           AND pa.status <> 'submitted'
+           AND pa.status NOT IN ('not_required','reassigned','cancelled','replaced')
+           $periodSql
+         ORDER BY pa.deadline IS NULL, pa.deadline, evaluator.full_name, pa.id",
+        $params
+    );
+
+    return array_map('admin_monitor_pending_evaluator_payload', $rows);
 }
 
 function admin_monitor_completion_summary_from_assignments(array $assignments): array
@@ -1187,11 +1340,13 @@ try {
             );
 
             $allEvaluated = ($stats['pending'] ?? 0) === 0 && ($stats['overdue'] ?? 0) === 0 && ($stats['total_assignments'] ?? 0) > 0;
+            $pendingEvaluators = admin_monitor_department_pending_evaluators($aliases, $periodFilter);
             $recommendationStatus = admin_monitor_recommendation_status_payload(
                 (int) ($stats['submitted'] ?? 0),
                 (int) ($stats['total_assignments'] ?? 0),
-                []
+                $pendingEvaluators
             );
+            $formRecommendations = admin_monitor_department_form_recommendations($aliases, $periodFilter);
 
             $departments[] = [
                 'id' => (int) $dept['id'],
@@ -1207,6 +1362,8 @@ try {
                 'completion_pct' => (float) ($stats['completion_pct'] ?? 0),
                 'all_evaluated' => $allEvaluated,
                 'recommendation_status' => $recommendationStatus,
+                'pending_evaluators' => $pendingEvaluators,
+                'form_recommendations' => $formRecommendations,
             ];
         }
 
@@ -1581,7 +1738,8 @@ try {
                         r.ai_suggestion, r.submitted_at, pa.assignment_type,
                         COALESCE(pea.evaluator_id, r.evaluator_user_id, pa.evaluator_user_id) AS evaluator_id,
                         COALESCE(peer_user.full_name, result_user.full_name, u.full_name) AS evaluator_name,
-                        COALESCE(peer_user.role, result_user.role, u.role, pa.evaluator_role) AS evaluator_role,
+                        CASE WHEN pa.evaluator_role='dean' AND u.role='dean' THEN 'dean'
+                             ELSE COALESCE(epp_evaluator.role_snapshot, pa.evaluator_role_snapshot, pa.evaluator_role, peer_user.role, result_user.role, u.role) END AS evaluator_role,
                         'Form B' AS form_name
                  FROM pmas_form_b_category_results r
                  JOIN pmas_form_b_categories c ON c.id = r.category_id
@@ -1590,6 +1748,10 @@ try {
                  LEFT JOIN users peer_user ON peer_user.id = pea.evaluator_id
                  LEFT JOIN users result_user ON result_user.id = r.evaluator_user_id
                  LEFT JOIN users u ON u.id = pa.evaluator_user_id
+                 LEFT JOIN appraisal_periods assignment_period ON assignment_period.period_name = pa.cycle_name
+                 LEFT JOIN evaluation_period_participation epp_evaluator
+                   ON epp_evaluator.evaluation_period_id = assignment_period.id
+                  AND epp_evaluator.user_id = pa.evaluator_user_id
                  WHERE r.evaluatee_faculty_id = :fac_id AND r.status = 'completed' AND COALESCE(r.is_archived, 0) = 0 AND COALESCE(pa.is_archived, 0) = 0
                    AND pa.evaluatee_faculty_id = r.evaluatee_faculty_id
                    AND (pa.assignment_type <> 'peer' OR (pea.id IS NOT NULL AND COALESCE(pea.is_archived, 0) = 0))
@@ -1607,7 +1769,8 @@ try {
                         r.ai_suggestion, r.submitted_at, pa.assignment_type,
                         COALESCE(pea.evaluator_id, r.evaluator_user_id, pa.evaluator_user_id) AS evaluator_id,
                         COALESCE(peer_user.full_name, result_user.full_name, u.full_name) AS evaluator_name,
-                        COALESCE(peer_user.role, result_user.role, u.role, pa.evaluator_role) AS evaluator_role,
+                        CASE WHEN pa.evaluator_role='dean' AND u.role='dean' THEN 'dean'
+                             ELSE COALESCE(epp_evaluator.role_snapshot, pa.evaluator_role_snapshot, pa.evaluator_role, peer_user.role, result_user.role, u.role) END AS evaluator_role,
                         'Form A' AS form_name
                  FROM pmas_form_a_category_results r
                  JOIN pmas_form_a_categories c ON c.id = r.category_id
@@ -1616,6 +1779,10 @@ try {
                  LEFT JOIN users peer_user ON peer_user.id = pea.evaluator_id
                  LEFT JOIN users result_user ON result_user.id = r.evaluator_user_id
                  LEFT JOIN users u ON u.id = pa.evaluator_user_id
+                 LEFT JOIN appraisal_periods assignment_period ON assignment_period.period_name = pa.cycle_name
+                 LEFT JOIN evaluation_period_participation epp_evaluator
+                   ON epp_evaluator.evaluation_period_id = assignment_period.id
+                  AND epp_evaluator.user_id = pa.evaluator_user_id
                  WHERE r.evaluatee_faculty_id = :fac_id AND r.status = 'completed' AND COALESCE(r.is_archived, 0) = 0 AND COALESCE(pa.is_archived, 0) = 0
                    AND pa.evaluatee_faculty_id = r.evaluatee_faculty_id
                    AND (pa.assignment_type <> 'peer' OR (pea.id IS NOT NULL AND COALESCE(pea.is_archived, 0) = 0))
@@ -1631,13 +1798,18 @@ try {
                 "SELECT pa.id, pa.assignment_type, pa.questionnaire_type, pa.status AS assignment_status,
                         pea.id AS official_peer_id,
                         COALESCE(peer_user.full_name, pa.evaluator_name_snapshot, u.full_name) AS evaluator_name,
-                        COALESCE(peer_user.role, pa.evaluator_role_snapshot, pa.evaluator_role, u.role) AS evaluator_role,
+                        CASE WHEN pa.evaluator_role='dean' AND u.role='dean' THEN 'dean'
+                             ELSE COALESCE(epp_evaluator.role_snapshot, pa.evaluator_role_snapshot, pa.evaluator_role, peer_user.role, u.role) END AS evaluator_role,
                         pa.submitted_at, pa.deadline, pa.is_current, pa.effective_from, pa.effective_to,
                         pa.replacement_reason
                  FROM peer_assignments pa
                  LEFT JOIN peer_evaluation_assignments pea ON pea.peer_assignment_id = pa.id
                  LEFT JOIN users peer_user ON peer_user.id = pea.evaluator_id
                  LEFT JOIN users u ON u.id = pa.evaluator_user_id
+                 LEFT JOIN appraisal_periods assignment_period ON assignment_period.period_name = pa.cycle_name
+                 LEFT JOIN evaluation_period_participation epp_evaluator
+                   ON epp_evaluator.evaluation_period_id = assignment_period.id
+                  AND epp_evaluator.user_id = pa.evaluator_user_id
                  WHERE pa.evaluatee_faculty_id = :fac_id
                    AND pa.assignment_type IN ('peer', 'dean', 'program_head', 'vpaa', 'self')
                    AND COALESCE(pa.is_archived, 0) = 0
@@ -1732,7 +1904,21 @@ try {
             }
             $evaluatorAssignments = array_values($uniqueEvaluatorAssignments);
 
+            // A permanent Dean keeps the Dean role even when a program is attached
+            // to the period participation row. Program affiliation scopes the roster;
+            // it must not implicitly turn the Dean into a Program Head.
             $resolvedFacultyRole = (string)($fac['user_role'] ?? 'teacher');
+            if ($periodId > 0 && (int)($fac['user_id'] ?? 0) > 0 && $resolvedFacultyRole !== 'dean') {
+                $periodRole = admin_one(
+                    "SELECT role_snapshot
+                     FROM evaluation_period_participation
+                     WHERE evaluation_period_id = :period_id AND user_id = :user_id
+                       AND participation_status = 'included' AND work_status = 'active'
+                     LIMIT 1",
+                    ['period_id' => $periodId, 'user_id' => (int)$fac['user_id']]
+                );
+                $resolvedFacultyRole = (string)($periodRole['role_snapshot'] ?? $resolvedFacultyRole);
+            }
             $hasDeanAssignment = count(array_filter(
                 $evaluatorAssignments,
                 static fn(array $row): bool => (string)($row['assignment_type'] ?? '') === 'dean'
@@ -1806,6 +1992,54 @@ try {
             $recommendationStatus = admin_monitor_completion_summary_from_assignments($evaluatorAssignments);
             $selfEvaluationSubmission = admin_monitor_self_evaluation_payload($facId, $periodFilter);
 
+            // Resolve the official period peer directly before creating any TBA row.
+            // This protects the monitor from stale/incomplete joined data after a peer
+            // map is corrected while a faculty detail view is already open.
+            if ($periodId > 0) {
+                $officialPeriodPeer = admin_one(
+                    "SELECT pa.id, pa.assignment_type, pa.questionnaire_type,
+                            pa.status AS assignment_status, pea.id AS official_peer_id,
+                            COALESCE(peer_user.full_name, pa.evaluator_name_snapshot, evaluator.full_name) AS evaluator_name,
+                            COALESCE(evaluator_period.role_snapshot, pa.evaluator_role_snapshot, pa.evaluator_role, 'teacher') AS evaluator_role,
+                            pa.submitted_at, pa.deadline, pa.is_current, pa.effective_from,
+                            pa.effective_to, pa.replacement_reason
+                       FROM peer_evaluation_assignments pea
+                       JOIN peer_assignments pa ON pa.id=pea.peer_assignment_id
+                       JOIN users peer_user ON peer_user.id=pea.evaluator_id
+                       LEFT JOIN users evaluator ON evaluator.id=pa.evaluator_user_id
+                       LEFT JOIN evaluation_period_participation evaluator_period
+                         ON evaluator_period.evaluation_period_id=pea.evaluation_period_id
+                        AND evaluator_period.user_id=pea.evaluator_id
+                      WHERE pea.evaluation_period_id=:period_id
+                        AND pea.evaluatee_faculty_id=:faculty_id
+                        AND COALESCE(pea.is_archived,0)=0
+                        AND COALESCE(pa.is_archived,0)=0
+                        AND pa.assignment_type='peer'
+                        AND pa.status NOT IN ('not_required','reassigned','cancelled','replaced')
+                      ORDER BY FIELD(pa.status,'submitted','pending'), pea.id DESC
+                      LIMIT 1",
+                    ['period_id' => $periodId, 'faculty_id' => $facId]
+                );
+                if ($officialPeriodPeer !== null) {
+                    $officialAssignmentId = (int) ($officialPeriodPeer['id'] ?? 0);
+                    $evaluatorAssignments = array_values(array_filter(
+                        $evaluatorAssignments,
+                        static fn(array $row): bool => !(
+                            (string) ($row['assignment_type'] ?? '') === 'peer'
+                            && (int) ($row['id'] ?? 0) === 0
+                        )
+                    ));
+                    $alreadyIncluded = count(array_filter(
+                        $evaluatorAssignments,
+                        static fn(array $row): bool => (int) ($row['id'] ?? 0) === $officialAssignmentId
+                    )) > 0;
+                    if (!$alreadyIncluded) {
+                        $evaluatorAssignments[] = $officialPeriodPeer;
+                    }
+                    $hasPeerAssignment = true;
+                }
+            }
+
             if (!$hasPeerAssignment && !$peerRequirementWaived) {
                 $peerPlaceholderDeadline = '';
                 foreach ($evaluatorAssignments as $assignmentRow) {
@@ -1852,11 +2086,25 @@ try {
             $weaknesses = [];
             $totalScore = 0;
             $scoreCount = 0;
+            $categoryAggregates = [];
 
             foreach ($allResults as $res) {
                 $rating = (float) ($res['average_rating'] ?? 0);
+                $categoryTitle = trim((string) ($res['category_title'] ?? ''));
                 $totalScore += $rating;
                 $scoreCount++;
+                if ($categoryTitle !== '' && $rating > 0) {
+                    $categoryKey = mb_strtolower($categoryTitle);
+                    if (!isset($categoryAggregates[$categoryKey])) {
+                        $categoryAggregates[$categoryKey] = [
+                            'category' => $categoryTitle,
+                            'score_total' => 0.0,
+                            'result_count' => 0,
+                        ];
+                    }
+                    $categoryAggregates[$categoryKey]['score_total'] += $rating;
+                    $categoryAggregates[$categoryKey]['result_count']++;
+                }
                 if ($rating >= 4.0) {
                     $strengths[] = [
                         'category' => (string) ($res['category_title'] ?? ''),
@@ -1875,13 +2123,33 @@ try {
             usort($strengths, fn($a, $b) => $b['score'] <=> $a['score']);
             usort($weaknesses, fn($a, $b) => $a['score'] <=> $b['score']);
 
+            $categoryAverages = array_values(array_map(static function (array $row): array {
+                $count = max(1, (int) ($row['result_count'] ?? 0));
+                return [
+                    'category' => (string) ($row['category'] ?? ''),
+                    'score' => round((float) ($row['score_total'] ?? 0) / $count, 2),
+                    'result_count' => $count,
+                ];
+            }, $categoryAggregates));
+            usort($categoryAverages, static fn(array $a, array $b): int => $a['score'] <=> $b['score']);
+
             $allEvalComplete = (int) ($evalStats['total'] ?? 0) > 0 && (int) ($evalStats['pending'] ?? 0) === 0;
             $primaryRecommendation = '';
-            foreach ($interventions as $plan) {
-                $text = trim((string) ($plan['recommendation'] ?? ''));
-                if ($text !== '') {
-                    $primaryRecommendation = $text;
-                    break;
+            if ($allEvalComplete && $categoryAverages !== []) {
+                $priority = $categoryAverages[0];
+                $priorityCategory = (string) ($priority['category'] ?? 'the identified priority area');
+                $priorityScore = number_format((float) ($priority['score'] ?? 0), 2);
+                $primaryRecommendation = 'Priority focus: ' . $priorityCategory
+                    . ' (combined average ' . $priorityScore . '/5 from all '
+                    . (int) ($evalStats['completed'] ?? 0) . ' submitted evaluations). '
+                    . admin_monitor_recommended_session($priorityCategory);
+            } else {
+                foreach ($interventions as $plan) {
+                    $text = trim((string) ($plan['recommendation'] ?? ''));
+                    if ($text !== '') {
+                        $primaryRecommendation = $text;
+                        break;
+                    }
                 }
             }
             if ((int) ($evalStats['total'] ?? 0) === 0) {
@@ -2012,7 +2280,7 @@ try {
                         'status_note' => $status === 'tba' && $assignmentType === 'dean'
                             ? 'No active Dean is assigned to this department for the selected evaluation period.'
                             : ($status === 'submitted'
-                            ? ($assignmentType === 'program_head'
+                            ? ($assignmentType === 'program_head' && (string)($a['evaluator_role'] ?? '') === 'program_head'
                                 ? 'Submitted by ' . $evaluatorName . ', who was the Program Head at the time of submission.'
                                 : 'Submitted by ' . $evaluatorName . '.')
                             : ($status === 'not_required'

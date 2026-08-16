@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Building2, CalendarRange, CheckCircle2, ChevronDown, Download, Eye, FileSpreadsheet, FileText, GraduationCap, LockKeyhole, Printer, RotateCcw, Search, SlidersHorizontal, Users } from 'lucide-react';
 import apiFetch from '../../data/api.js';
-import { assetUrl } from '../../data/apiBase.js';
+import { assetUrl, reportUrl } from '../../data/apiBase.js';
 import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
 
 const noDataMessage = 'No evaluation data available for the selected appraisal period.';
@@ -258,7 +258,7 @@ function ExportControls({ roleKey, selectedPeriodId, programCode, evaluationForm
 
   function exportReport() {
     setBusy(true);
-    const url = new URL(assetUrl(endpoint), window.location.origin);
+    const url = new URL(reportUrl(endpoint));
     url.searchParams.set('report_type', 'complete_export');
     url.searchParams.set('format', format);
     if (selectedPeriodId) url.searchParams.set('period_id', selectedPeriodId);
@@ -730,7 +730,7 @@ function GenericReportGrid({ role }) {
   function handleGenerate(reportType = 'complete_export') {
     setBusyType(reportType);
     const endpoint = isVpaa ? 'reports/vpaa_download.php' : 'reports/download.php';
-    const url = new URL(assetUrl(endpoint), window.location.origin);
+    const url = new URL(reportUrl(endpoint));
     url.searchParams.set('report_type', reportType);
     url.searchParams.set('format', format);
     if (selectedPeriodId) url.searchParams.set('period_id', selectedPeriodId);
@@ -805,9 +805,33 @@ function GenericReportGrid({ role }) {
 }
 
 function performanceReportDefaults(roleKey) {
-  if (roleKey === 'vpaa') return { report_type: 'overall_department', department_id: '', role: '', program: '', period_id: '', sort: 'score_desc', orientation: 'auto' };
-  if (roleKey === 'programHead') return { report_type: 'department', department_id: '', role: 'teacher', program: '', period_id: '', sort: 'name', orientation: 'auto' };
-  return { report_type: 'department', department_id: '', role: 'teacher', program: '', period_id: '', sort: 'name', orientation: 'auto' };
+  if (roleKey === 'vpaa') return { report_type: 'overall_department', department_id: '', role: '', program: '', faculty_id: '', period_id: '', sort: 'score_desc', orientation: 'auto' };
+  if (roleKey === 'programHead') return { report_type: 'department', department_id: '', role: 'teacher', program: '', faculty_id: '', period_id: '', sort: 'name', orientation: 'auto' };
+  return { report_type: 'department', department_id: '', role: 'teacher', program: '', faculty_id: '', period_id: '', sort: 'name', orientation: 'auto' };
+}
+
+function AnalyticsPreview({ analytics, displayScore }) {
+  if (!analytics) return null;
+  const sources = Object.values(analytics.sources || {});
+  const distribution = analytics.charts?.rating_distribution || { labels: [], values: [] };
+  const total = distribution.values.reduce((sum, value) => sum + Number(value || 0), 0) || 1;
+  const colors = ['#07875c', '#37b77e', '#e5b72e', '#df762e'];
+  let cursor = 0;
+  const stops = distribution.values.map((value, index) => { const start = cursor; cursor += Number(value || 0) / total * 100; return `${colors[index]} ${start}% ${cursor}%`; });
+  const categories = analytics.charts?.categories || [];
+  const linePoints = categories.slice(0, 10).map((item, index, rows) => `${rows.length === 1 ? 50 : index / (rows.length - 1) * 100},${100 - Math.max(0, Math.min(5, Number(item.score))) / 5 * 100}`).join(' ');
+  return <section className="report-ai-analytics" aria-labelledby="report-ai-title">
+    <div className="report-ai-heading"><div><span>AI Analytics</span><h3 id="report-ai-title">PMAS Evidence Overview</h3><p>Selected-period analysis from authorized completed evaluation records.</p></div><strong>{analytics.consolidated?.available ? `${displayScore(analytics.consolidated.score)} · ${analytics.consolidated.level}` : 'Incomplete evidence'}</strong></div>
+    {(analytics.warnings || []).map((warning) => <div className="report-analytics-warning" role="status" key={warning}><AlertCircle size={17} /> {warning}</div>)}
+    <div className="report-source-cards">{sources.map((source) => <article key={source.key}><header><span>{source.label}</span><b>{source.available ? displayScore(source.score) : 'N/A'}</b></header><small>{source.completed_count} completed result{source.completed_count === 1 ? '' : 's'}</small><div className="report-mini-bar"><i style={{ width: `${Math.max(0, Math.min(100, Number(source.score || 0) * 20))}%` }} /></div><dl><div><dt>Strengths</dt><dd>{source.strengths?.map((item) => `${item.title} (${displayScore(item.score)})`).join(', ') || 'Insufficient data'}</dd></div><div><dt>Improve</dt><dd>{source.improvement_areas?.map((item) => `${item.title} (${displayScore(item.score)})`).join(', ') || 'Insufficient data'}</dd></div></dl></article>)}</div>
+    <div className="report-chart-grid">
+      <article className="report-chart-panel"><h4>Performance Distribution</h4><div className="report-donut" style={{ background: `conic-gradient(${stops.join(',') || '#dbe9e2 0 100%'})` }}><span><b>{total === 1 && distribution.values.every((v) => !v) ? 0 : total}</b><small>People</small></span></div><ul>{distribution.labels.map((label, index) => <li key={label}><i style={{ background: colors[index] }} />{label}<b>{distribution.values[index] || 0}</b></li>)}</ul></article>
+      <article className="report-chart-panel"><h4>Form Score Comparison</h4><div className="report-source-bars">{sources.map((source) => <div key={source.key}><label>{source.label}<b>{displayScore(source.score)}</b></label><span><i style={{ height: `${Math.max(2, Number(source.score || 0) * 20)}%` }} /></span></div>)}</div></article>
+      <article className="report-chart-panel report-category-panel"><h4>Category Results</h4><div className="report-category-bars">{categories.slice(0, 10).map((item, index) => <div key={`${item.title}-${index}`}><label>{item.title}<b>{displayScore(item.score)}</b></label><span><i style={{ width: `${Number(item.score || 0) * 20}%` }} /></span></div>)}</div></article>
+      <article className="report-chart-panel"><h4>Selected-Period Category Profile</h4><svg className="report-line-chart" viewBox="0 0 100 100" role="img" aria-label="Line graph of category scores from zero to five"><line x1="0" y1="100" x2="100" y2="100" /><line x1="0" y1="0" x2="0" y2="100" /><polyline points={linePoints} /></svg><table className="report-chart-data"><thead><tr><th>Category</th><th>Score</th></tr></thead><tbody>{categories.slice(0, 10).map((item, index) => <tr key={`${item.title}-data-${index}`}><td>{item.title}</td><td>{displayScore(item.score)}</td></tr>)}</tbody></table></article>
+    </div>
+    <article className={`report-recommendation ${analytics.recommendation ? '' : 'unavailable'}`}><span>Overall Faculty Development Recommendation</span>{analytics.recommendation ? <><h3>{analytics.recommendation.activity_type}: {analytics.recommendation.title}</h3><p>{analytics.recommendation.objective}</p><h4>Why this is recommended</h4><p>{analytics.recommendation.reason}</p><table><thead><tr><th>Source</th><th>Evidence category</th><th>Score</th><th>Trigger</th></tr></thead><tbody>{analytics.recommendation.evidence.map((item, index) => <tr key={`${item.source}-${item.category}-${index}`}><td>{item.source}</td><td>{item.category}</td><td>{displayScore(item.score)}</td><td>{item.trigger}</td></tr>)}</tbody></table></> : <><h3>Recommendation unavailable</h3><p>PMAS Form A and PMAS Form B must both contain completed evidence. No values have been invented.</p></>}</article>
+  </section>;
 }
 
 function PerformanceReportWorkspace({ role }) {
@@ -836,7 +860,7 @@ function PerformanceReportWorkspace({ role }) {
         if (department) setFilters((current) => ({ ...current, department_id: String(department.id) }));
       }
       if (isProgramHead && payload.data?.program && payload.data.program !== 'All Programs') {
-        setFilters((current) => ({ ...current, program: payload.data.program, role: 'teacher', report_type: 'department' }));
+        setFilters((current) => ({ ...current, program: payload.data.program, role: 'teacher' }));
       }
     }).catch((err) => alive && setError(err.message || 'Unable to load report options.'));
     return () => { alive = false; };
@@ -874,7 +898,7 @@ function PerformanceReportWorkspace({ role }) {
   }
 
   function queryString() {
-    const params = new URLSearchParams(filters);
+    const params = new URLSearchParams({ ...filters, include_analytics: '1' });
     return params.toString();
   }
 
@@ -916,8 +940,9 @@ function PerformanceReportWorkspace({ role }) {
 
   async function exportReport(format) {
     if (exporting) return;
-    const url = new URL(assetUrl('reports/performance_download.php'), window.location.origin);
+    const url = new URL(reportUrl('performance_download.php'));
     Object.entries(filters).forEach(([key, value]) => value !== '' && url.searchParams.set(key, value));
+    if (report?.snapshot?.id) url.searchParams.set('snapshot_id', report.snapshot.id);
     url.searchParams.set('format', format);
     url.searchParams.set('_export', String(Date.now()));
     setExporting(format); setExportStage('Preparing assets...'); setError('');
@@ -932,6 +957,15 @@ function PerformanceReportWorkspace({ role }) {
           : message || `Unable to generate ${format.toUpperCase()}.`);
       }
       const blob = await response.blob();
+      const signature = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+      const isPdf = signature[0] === 0x25 && signature[1] === 0x50 && signature[2] === 0x44 && signature[3] === 0x46;
+      const isZip = signature[0] === 0x50 && signature[1] === 0x4b;
+      if ((format === 'pdf' && !isPdf) || ((format === 'word' || format === 'excel') && !isZip)) {
+        const diagnostic = (await blob.text()).slice(0, 180).replace(/\s+/g, ' ').trim();
+        throw new Error(diagnostic.startsWith('<?php')
+          ? 'The server returned PHP source instead of generating the report. Redeploy the corrected export route.'
+          : `The server returned an invalid ${format.toUpperCase()} file. Please preview the report and try again.`);
+      }
       const disposition = response.headers.get('Content-Disposition') || '';
       const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || `APPRAISIA-report.${format === 'word' ? 'docx' : format === 'excel' ? 'xlsx' : 'pdf'}`;
       const link = document.createElement('a');
@@ -949,6 +983,7 @@ function PerformanceReportWorkspace({ role }) {
   }
 
   const overall = report?.report_type === 'overall_department';
+  const analyticsMode = ['consolidated', 'form_a', 'form_b'].includes(report?.report_type);
   // A Dean is permanently scoped to one department, so repeating it in every
   // result row adds width without adding useful information.
   const showDepartmentColumn = !isDean && report?.report_type !== 'department';
@@ -985,12 +1020,13 @@ function PerformanceReportWorkspace({ role }) {
     </div></section>
     <nav className="program-report-stepper" aria-label="Report workflow"><span className="complete"><CheckCircle2 size={16} /> <b>1</b> Configure</span><i /><span className={report ? 'complete' : 'active'}>{report ? <CheckCircle2 size={16} /> : <Eye size={16} />} <b>2</b> Preview</span><i /><span className={hasReportData ? 'active' : ''}><Download size={16} /> <b>3</b> Export</span></nav>
     <section className="performance-report-config"><div className="performance-report-section-head"><SlidersHorizontal size={19} /><div><h3>Report Configuration</h3><p>Choose report options, preview the output, then export when ready.</p></div></div><div className={`performance-report-filter-grid ${isProgramHead ? 'program-report-filter-grid' : 'leader-report-filter-grid'}`}>
-      <label>Report Type<select value={filters.report_type} disabled={isProgramHead} onChange={(e) => updateFilter('report_type', e.target.value)}>{isProgramHead ? <option value="department">Program Faculty Performance Report</option> : <><option value="department">Department Performance Report</option>{isVpaa && <option value="overall_department">Institutional Department Comparison</option>}<option value="role_based">Role-Based Performance Report</option></>}</select></label>
+      <label>Report Type<select value={filters.report_type} onChange={(e) => updateFilter('report_type', e.target.value)}><optgroup label="Original Performance Reports"><option value="department">Department Performance Report</option>{isVpaa && <option value="overall_department">Institutional Department Comparison</option>}<option value="role_based">Role-Based Performance Report</option></optgroup><optgroup label="Separate AI Analytics Reports"><option value="consolidated">Overall AI Analytics</option><option value="form_a">PMAS Form A Analytics</option><option value="form_b">PMAS Form B Analytics</option></optgroup></select><small>Overall AI Analytics combines PMAS Form A and PMAS Form B only.</small></label>
       {!isProgramHead && !isDean && <label>Department<select value={filters.department_id} disabled={filters.report_type === 'overall_department'} onChange={(e) => updateFilter('department_id', e.target.value)}><option value="">All Departments</option>{metadata.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
       {!isProgramHead && <label>Role<select value={filters.role} disabled={filters.report_type === 'overall_department'} onChange={(e) => updateFilter('role', e.target.value)}><option value="">All Applicable Roles</option><option value="dean">Dean</option><option value="program_head">Program Head</option><option value="teacher">Faculty Member</option></select></label>}
       {isProgramHead && assignedProgramCount > 1 && <label>Program<select id="program-report-program" value={filters.program} onChange={(e) => { updateFilter('program', e.target.value); setReport(null); }}><option value="">All Assigned Programs</option>{metadata.programs.map((item) => <option key={item.id} value={item.code}>{item.code} — {item.name}</option>)}</select><small>Select one handled program or combine all assigned programs.</small></label>}
       <label>Evaluation Name<select id="program-report-period" aria-describedby={isProgramHead ? 'program-period-help' : undefined} value={filters.period_id} onChange={(e) => updateFilter('period_id', e.target.value)}><option value="">Select Evaluation Name</option>{metadata.periods.map((item) => <option key={item.id} value={item.id}>{item.period_name || (item.school_year ? `AY ${item.school_year}` : `Evaluation ${item.id}`)}</option>)}</select>{isProgramHead && <small id="program-period-help">Uses the selected appraisal evaluation for this report.</small>}</label>
       {!isProgramHead && <label>Program<select value={filters.program} disabled={!filters.department_id || filters.report_type === 'overall_department'} onChange={(e) => updateFilter('program', e.target.value)}><option value="">All Programs</option>{availablePrograms.map((item) => <option key={item.id} value={item.code}>{item.code} — {item.name}</option>)}</select></label>}
+      <label>Faculty Member<select value={filters.faculty_id} onChange={(e) => updateFilter('faculty_id', e.target.value)}><option value="">All authorized faculty</option>{metadata.faculty?.filter((item) => (!filters.department_id || item.department === selectedDepartment?.name || item.department === selectedDepartment?.code) && (!filters.program || item.program === filters.program)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label>Sort By<select value={filters.sort} onChange={(e) => updateFilter('sort', e.target.value)}><option value="name">Name A–Z</option><option value="score_desc">Highest Mean</option><option value="score_asc">Lowest Mean</option></select></label>
       {!isProgramHead && <label>Page Orientation<select value={filters.orientation} onChange={(e) => updateFilter('orientation', e.target.value)}><option value="auto">Auto</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>}
     </div>{isProgramHead && <div className={`program-report-advanced ${advancedOpen ? 'open' : ''}`}><button type="button" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}><span><SlidersHorizontal size={15} /> Advanced Options</span><ChevronDown size={16} /></button>{advancedOpen && <div><label>Page Orientation<select value={filters.orientation} onChange={(e) => updateFilter('orientation', e.target.value)}><option value="auto">Auto — based on report width</option><option value="portrait">Portrait — compact reports</option><option value="landscape">Landscape — wide tables</option></select></label></div>}</div>}<div className="performance-report-config-actions"><button type="button" onClick={resetFilters}><RotateCcw size={15} /> {isProgramHead ? 'Reset' : 'Reset Filters'}</button><button type="button" className="primary" onClick={previewReport} disabled={loading}><Search size={15} /> {loading ? 'Preparing Preview...' : 'Preview Report'}</button></div></section>
@@ -1000,10 +1036,11 @@ function PerformanceReportWorkspace({ role }) {
     {report && <section className="performance-report-preview" id="performance-report-preview"><div className="performance-report-paper" data-report-ready="true">
       <header><div className="performance-report-brand"><span className="performance-report-logo"><img src={assetUrl(report.institution_logo || 'assets/images/ndmc-seal.png')} alt="Notre Dame of Midsayap College seal" onError={(event) => { const image = event.currentTarget; const fallback = assetUrl('assets/images/ndmc-seal.png'); image.onerror = () => { if (image.parentElement) image.parentElement.style.display = 'none'; }; if (image.src !== new URL(fallback, window.location.origin).href) image.src = fallback; else if (image.parentElement) image.parentElement.style.display = 'none'; }} /></span><div><h2>Notre Dame of Midsayap College</h2><h3>{overall ? 'Institutional Academic Departments' : report.department}</h3><p>Midsayap, Cotabato</p></div>{report.department_logo && <span className="performance-report-logo department"><img src={assetUrl(report.department_logo)} alt={`${report.department} logo`} onError={(event) => { if (event.currentTarget.parentElement) event.currentTarget.parentElement.style.display = 'none'; }} /></span>}</div><hr /><div className="performance-report-title"><h4>{overall ? 'OVERALL DEPARTMENT PERFORMANCE REPORT' : 'PERFORMANCE FACTORS APPRAISAL'}</h4><strong>{report.role_label}</strong><span>{report.period?.school_year ? `AY ${report.period.school_year}` : report.period?.period_name || 'All Evaluation Periods'}</span></div></header>
       <div className="performance-report-meta"><div><span>Department</span><b>{report.department}</b></div><div><span>Program</span><b>{report.program}</b></div><div><span>Role</span><b>{report.role_label}</b></div><div><span>Evaluation Period</span><b>{periodLabel}</b></div><div><span>Generated</span><b>{new Date(report.generated_at).toLocaleDateString()}</b></div><div><span>Generated By</span><b>{report.generated_by || 'Authorized User'}</b></div></div>
+      {analyticsMode && <AnalyticsPreview analytics={report.analytics} displayScore={displayScore} />}
       {overall && <div className="performance-report-summary"><article><span>Institutional Mean</span><strong>{displayScore(report.summary.overall_mean)}</strong></article><article><span>Highest Department</span><strong>{report.summary.highest_department || 'N/A'}</strong></article><article><span>Departments</span><strong>{report.summary.departments}</strong></article><article><span>Evaluated Personnel</span><strong>{report.summary.personnel}</strong></article><article><span>Completion</span><strong>{report.summary.completion}%</strong></article></div>}
-      <div className="performance-report-table-wrap"><table className={showDepartmentColumn ? 'with-department' : 'single-department'}><thead><tr>{overall ? <><th>Department</th><th>Personnel</th><th>Peer Mean</th><th>Head Mean</th><th>PH/SC Mean</th><th>Overall Mean</th><th>Level of Performance</th></> : <><th>Name</th>{showDepartmentColumn && <th>Department</th>}<th>Program</th><th>Peer</th><th>Head</th><th>PH/SC</th><th>Total</th><th>Mean</th><th>Level of Performance</th></>}</tr></thead><tbody>{report.rows.map((row) => { const level = performanceLevelPresentation(row.level); return overall ? <tr key={row.department}><td>{row.department}</td><td>{row.personnel}</td><td>{displayScore(row.peer)}</td><td>{displayScore(row.head)}</td><td>{displayScore(row.phsc)}</td><td>{displayScore(row.mean)}</td><td><span className={`performance-level ${level.className}`}>{level.label}</span></td></tr> : <tr key={row.id}><td>{row.name}</td>{showDepartmentColumn && <td>{row.department}</td>}<td>{row.program || 'N/A'}</td><td>{displayScore(row.peer)}</td><td>{displayScore(row.head)}</td><td>{displayScore(row.phsc)}</td><td>{displayScore(row.total)}</td><td>{displayScore(row.mean)}</td><td><span className={`performance-level ${level.className}`}>{level.label}</span></td></tr>; })}{report.rows.length === 0 && <tr><td colSpan={overall ? 7 : showDepartmentColumn ? 9 : 8} className="empty">No completed evaluation results found for the selected filters.</td></tr>}</tbody></table></div>
+      {!analyticsMode && <><div className="performance-report-table-wrap"><table className={showDepartmentColumn ? 'with-department' : 'single-department'}><thead><tr>{overall ? <><th>Department</th><th>Personnel</th><th>Peer Mean</th><th>Head Mean</th><th>PH/SC Mean</th><th>Overall Mean</th><th>Level of Performance</th></> : <><th>Name</th>{showDepartmentColumn && <th>Department</th>}<th>Program</th><th>Peer</th><th>Head</th><th>PH/SC</th><th>Total</th><th>Mean</th><th>Level of Performance</th></>}</tr></thead><tbody>{report.rows.map((row) => { const level = performanceLevelPresentation(row.level); return overall ? <tr key={row.department}><td>{row.department}</td><td>{row.personnel}</td><td>{displayScore(row.peer)}</td><td>{displayScore(row.head)}</td><td>{displayScore(row.phsc)}</td><td>{displayScore(row.mean)}</td><td><span className={`performance-level ${level.className}`}>{level.label}</span></td></tr> : <tr key={row.id}><td>{row.name}</td>{showDepartmentColumn && <td>{row.department}</td>}<td>{row.program || 'N/A'}</td><td>{displayScore(row.peer)}</td><td>{displayScore(row.head)}</td><td>{displayScore(row.phsc)}</td><td>{displayScore(row.total)}</td><td>{displayScore(row.mean)}</td><td><span className={`performance-level ${level.className}`}>{level.label}</span></td></tr>; })}{report.rows.length === 0 && <tr><td colSpan={overall ? 7 : showDepartmentColumn ? 9 : 8} className="empty">No completed evaluation results found for the selected filters.</td></tr>}</tbody></table></div>
       <section className="performance-report-legend" aria-label="Report legend"><strong>Performance Rating Legend</strong><div><span className="excellent"><i />Excellent <b>4.50–5.00</b></span><span className="very-satisfactory"><i />Very Satisfactory <b>3.75–4.49</b></span><span className="satisfactory"><i />Satisfactory <b>3.00–3.74</b></span><span className="needs-improvement"><i />Needs Improvement <b>Below 3.00</b></span><span className="incomplete"><i />Incomplete / N/A <b>Required results unavailable</b></span></div><small>Badge colors match the performance levels above. Peer = peer evaluators · Head = Dean or Program Head · PH/SC = Program Head / Section Chair · Mean = overall computed rating.</small></section>
-      {!overall && <footer className="performance-report-signatory"><div className="signature-space" /><span className="signature-line" /><strong>{report.signatory || 'Dean assignment not configured'}</strong><small>Dean</small><small>{report.department}</small></footer>}
+      {!overall && <footer className="performance-report-signatory"><div className="signature-space" /><span className="signature-line" /><strong>{report.signatory || 'Dean assignment not configured'}</strong><small>Dean</small><small>{report.department}</small></footer>}</>}
     </div></section>}
   </section>;
 }

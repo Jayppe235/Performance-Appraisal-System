@@ -1,6 +1,4 @@
-import { assetUrl } from '../../data/apiBase.js';
-
-const robotImage = assetUrl('assets/images/ROBOT 1.svg');
+import robotImage from '../../../assets/images/ROBOT 1.svg';
 
 export default function Hero({ eyebrow, title, children, actions = null, className = '', visual = null, background = null }) {
   return (

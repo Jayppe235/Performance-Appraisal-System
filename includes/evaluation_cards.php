@@ -87,38 +87,48 @@ function dipascaf_assignment_rows(int $evaluatorUserId, string $evaluatorRole): 
                 f.full_name,
                 f.full_name AS evaluatee_name,
                 f.email,
-                f.department,
-                f.program_code,
-                f.position_title,
+                COALESCE(NULLIF(epp_context.department_snapshot, ''), f.department) AS department,
+                COALESCE(NULLIF(epp_context.program_snapshot, ''), f.program_code) AS program_code,
+                CASE
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = 'program_head' THEN 'Program Head'
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = 'dean' THEN 'Dean'
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = 'vpaa' THEN 'VPAA'
+                    ELSE 'Faculty'
+                END AS position_title,
                 f.progress_percent,
                 u.profile_image,
                 u.id AS evaluatee_user_id,
+                ap_scope.id AS assignment_period_id,
                 pea_scope.id AS official_peer_assignment_id,
                 pea_scope.evaluation_period_id AS official_peer_period_id,
-                u.role AS evaluatee_user_role,
+                COALESCE(epp_context.role_snapshot, u.role) AS evaluatee_user_role,
                 CASE
                     WHEN pa.assignment_type = 'self' THEN "self"
                     WHEN pa.assignment_type = 'peer' THEN "peer"
-                    WHEN u.role = "vpaa" OR LOWER(f.position_title) LIKE "%vpaa%" THEN "vpaa"
-                    WHEN u.role = "dean" OR LOWER(f.position_title) LIKE "%dean%" THEN "dean"
-                    WHEN u.role = "program_head" OR LOWER(f.position_title) LIKE "%program head%" THEN "program_head"
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = "vpaa" THEN "vpaa"
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = "dean" THEN "dean"
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = "program_head" THEN "program_head"
                     ELSE "faculty"
                 END AS section_key,
                 CASE
                     WHEN pa.assignment_type = 'self' THEN "Self Evaluation"
                     WHEN pa.assignment_type = 'peer' THEN "Peer"
-                    WHEN u.role = "vpaa" OR LOWER(f.position_title) LIKE "%vpaa%" THEN "VPAA"
-                    WHEN u.role = "dean" OR LOWER(f.position_title) LIKE "%dean%" THEN "Dean"
-                    WHEN u.role = "program_head" OR LOWER(f.position_title) LIKE "%program head%" THEN "Program Head"
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = "vpaa" THEN "VPAA"
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = "dean" THEN "Dean"
+                    WHEN COALESCE(epp_context.role_snapshot, u.role) = "program_head" THEN "Program Head"
                     ELSE "Faculty"
                 END AS role_label,
                 CASE
                     WHEN pa.assignment_type = 'peer' THEN "Official peer assignment"
                     WHEN pa.assignment_type = 'self' THEN "Self-Evaluation"
                     WHEN pa.evaluator_role = 'teacher' AND pa.assignment_type = 'dean' THEN CONCAT("Assigned department Dean: ", COALESCE(NULLIF(f.department, ''), "Unassigned"))
-                    WHEN pa.evaluator_role = 'teacher' AND pa.assignment_type = 'program_head' THEN CONCAT("Assigned program head: ", COALESCE(NULLIF(f.program_code, ''), "Unassigned"))
+                    WHEN pa.evaluator_role = 'teacher' AND pa.assignment_type = 'program_head'
+                         AND COALESCE(epp_context.role_snapshot, u.role) = 'program_head'
+                      THEN CONCAT("Assigned program head: ", COALESCE(NULLIF(epp_context.program_snapshot, ''), NULLIF(f.program_code, ''), "Unassigned"))
+                    WHEN pa.evaluator_role = 'teacher' AND pa.assignment_type = 'program_head'
+                      THEN CONCAT("Historical program assignment: ", COALESCE(NULLIF(epp_context.program_snapshot, ''), NULLIF(f.program_code, ''), "Unassigned"))
                     WHEN pa.evaluator_role = 'program_head' AND pa.assignment_type = 'dean' THEN CONCAT("Assigned department Dean: ", COALESCE(NULLIF(f.department, ''), "Unassigned"))
-                    WHEN pa.evaluator_role = 'program_head' THEN CONCAT("Assigned program: ", COALESCE(NULLIF(f.program_code, ''), "Unassigned"))
+                    WHEN pa.evaluator_role = 'program_head' THEN CONCAT("Assigned program: ", COALESCE(NULLIF(epp_context.program_snapshot, ''), NULLIF(f.program_code, ''), "Unassigned"))
                     WHEN pa.evaluator_role = 'dean' THEN CONCAT("Department scope: ", COALESCE(NULLIF(f.department, ''), "Unassigned"))
                     WHEN pa.evaluator_role = 'vpaa' THEN CONCAT("VPAA department scope: ", COALESCE(NULLIF(f.department, ''), "Unassigned"))
                     ELSE ""
@@ -134,6 +144,10 @@ function dipascaf_assignment_rows(int $evaluatorUserId, string $evaluatorRole): 
          LEFT JOIN peer_evaluation_locks pel
             ON pel.evaluation_period_id = pea_scope.evaluation_period_id
          LEFT JOIN appraisal_periods ap_scope ON ap_scope.period_name = pa.cycle_name
+         LEFT JOIN evaluation_period_participation epp_context
+            ON epp_context.evaluation_period_id = ap_scope.id
+           AND epp_context.user_id = u.id
+           AND epp_context.participation_status = 'included'
          LEFT JOIN evaluation_period_participation epp_evaluator
             ON epp_evaluator.evaluation_period_id = ap_scope.id
            AND epp_evaluator.user_id = pa.evaluator_user_id
@@ -143,13 +157,13 @@ function dipascaf_assignment_rows(int $evaluatorUserId, string $evaluatorRole): 
            AND epp_evaluatee.user_id = u.id
            AND epp_evaluatee.participation_status = 'excluded'
          WHERE pa.evaluator_user_id = :evaluator_user_id
-           AND pa.evaluator_role = :evaluator_role
+           AND (pa.evaluator_role = :evaluator_role OR pa.assignment_type = 'peer')
            AND COALESCE(pa.is_archived, 0) = 0
            AND COALESCE(f.is_archived, 0) = 0
            AND pa.status <> 'not_required'
            AND epp_evaluator.id IS NULL
            AND epp_evaluatee.id IS NULL
-           AND (u.role IS NULL OR u.role IN ('teacher', 'program_head', 'dean', 'vpaa'))
+           AND (u.role IS NULL OR COALESCE(epp_context.role_snapshot, u.role) IN ('teacher', 'program_head', 'dean', 'vpaa'))
            AND (
                 pa.assignment_type <> 'peer'
                 OR (pea_scope.id IS NOT NULL AND COALESCE(pel.status, 'unlocked') = 'locked')
@@ -167,7 +181,12 @@ SQL;
 
     return array_values(array_filter(
         $rows,
-        static fn (array $row): bool => dipascaf_assignment_relationship_allowed($row, $evaluatorUserId, $evaluatorRole)
+        static fn (array $row): bool => dipascaf_assignment_relationship_allowed(
+            $row,
+            $evaluatorUserId,
+            $evaluatorRole,
+            isset($row['assignment_period_id']) ? (int) $row['assignment_period_id'] : null
+        )
     ));
 }
 
@@ -432,8 +451,8 @@ function dipascaf_submit_category_results(array $assignment, int $evaluatorUserI
 
     $hasFormBPayload = $form === 'b';
     $sql = $hasFormBPayload ? "INSERT INTO {$table}
-            (assignment_id, evaluator_user_id, evaluatee_faculty_id, category_id, total_rate, question_count, average_rating, factor_weight, weighted_score, questionnaire_answers, questionnaire_evidence, form_b_payload, behavioral_evidence, reason_for_rating, evaluation_period, status)
-            VALUES (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id, :category_id, :total_rate, :question_count, :average_rating, :factor_weight, :weighted_score, :questionnaire_answers, :questionnaire_evidence, :form_b_payload, :behavioral_evidence, :reason_for_rating, :evaluation_period, 'completed')
+            (assignment_id, evaluator_user_id, evaluatee_faculty_id, category_id, total_rate, question_count, average_rating, factor_weight, weighted_score, questionnaire_answers, questionnaire_evidence, form_b_payload, behavioral_evidence, reason_for_rating, recommendation, evaluation_period, status)
+            VALUES (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id, :category_id, :total_rate, :question_count, :average_rating, :factor_weight, :weighted_score, :questionnaire_answers, :questionnaire_evidence, :form_b_payload, :behavioral_evidence, :reason_for_rating, :recommendation, :evaluation_period, 'completed')
             ON DUPLICATE KEY UPDATE
                 total_rate = VALUES(total_rate),
                 question_count = VALUES(question_count),
@@ -445,12 +464,13 @@ function dipascaf_submit_category_results(array $assignment, int $evaluatorUserI
                 form_b_payload = VALUES(form_b_payload),
                 behavioral_evidence = VALUES(behavioral_evidence),
                 reason_for_rating = VALUES(reason_for_rating),
+                recommendation = VALUES(recommendation),
                 evaluation_period = VALUES(evaluation_period),
                 status = 'completed',
                 submitted_at = CURRENT_TIMESTAMP"
         : "INSERT INTO {$table}
-            (assignment_id, evaluator_user_id, evaluatee_faculty_id, category_id, total_rate, question_count, average_rating, factor_weight, weighted_score, questionnaire_answers, questionnaire_evidence, behavioral_evidence, reason_for_rating, evaluation_period, status)
-            VALUES (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id, :category_id, :total_rate, :question_count, :average_rating, :factor_weight, :weighted_score, :questionnaire_answers, :questionnaire_evidence, :behavioral_evidence, :reason_for_rating, :evaluation_period, 'completed')
+            (assignment_id, evaluator_user_id, evaluatee_faculty_id, category_id, total_rate, question_count, average_rating, factor_weight, weighted_score, questionnaire_answers, questionnaire_evidence, behavioral_evidence, reason_for_rating, recommendation, evaluation_period, status)
+            VALUES (:assignment_id, :evaluator_user_id, :evaluatee_faculty_id, :category_id, :total_rate, :question_count, :average_rating, :factor_weight, :weighted_score, :questionnaire_answers, :questionnaire_evidence, :behavioral_evidence, :reason_for_rating, :recommendation, :evaluation_period, 'completed')
             ON DUPLICATE KEY UPDATE
                 total_rate = VALUES(total_rate),
                 question_count = VALUES(question_count),
@@ -461,6 +481,7 @@ function dipascaf_submit_category_results(array $assignment, int $evaluatorUserI
                 questionnaire_evidence = VALUES(questionnaire_evidence),
                 behavioral_evidence = VALUES(behavioral_evidence),
                 reason_for_rating = VALUES(reason_for_rating),
+                recommendation = VALUES(recommendation),
                 evaluation_period = VALUES(evaluation_period),
                 status = 'completed',
                 submitted_at = CURRENT_TIMESTAMP";
@@ -512,6 +533,7 @@ function dipascaf_submit_category_results(array $assignment, int $evaluatorUserI
                 'questionnaire_evidence' => json_encode(is_array($item['evidence'] ?? null) ? $item['evidence'] : [], JSON_THROW_ON_ERROR),
                 'behavioral_evidence' => trim((string) ($item['behavioral_evidence'] ?? '')),
                 'reason_for_rating' => trim((string) ($item['reason_for_rating'] ?? '')),
+                'recommendation' => trim((string) ($item['recommendation'] ?? '')),
                 'evaluation_period' => $periodName,
             ];
             if ($hasFormBPayload) {

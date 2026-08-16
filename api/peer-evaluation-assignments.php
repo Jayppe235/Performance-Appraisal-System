@@ -1298,6 +1298,10 @@ try {
         $departmentScope = peer_api_dean_department_scope((int) $user['id']);
     } elseif (($user['role'] ?? '') === 'program_head') {
         $departmentScope = peer_api_program_head_scope((int) $user['id']);
+    } elseif (($user['role'] ?? '') === 'admin_hr' && (string)($input['department_scope'] ?? '') === 'unassigned') {
+        $departmentScope = ['department_ids'=>[], 'departments'=>[], 'unassigned_only'=>true];
+    } elseif (($user['role'] ?? '') === 'admin_hr' && (string)($input['department_scope'] ?? '') === 'all') {
+        $departmentScope = [];
     } elseif (!empty($input['department_id'])) {
         $departmentScope = peer_api_department_scope((int) $input['department_id']);
     }
@@ -1389,6 +1393,7 @@ try {
                ON evaluatee.evaluation_period_id=pea.evaluation_period_id AND evaluatee.user_id=pea.evaluatee_id
              WHERE pea.evaluation_period_id=:period_id AND COALESCE(pea.is_archived,0)=0
                AND (pea.evaluator_id=pea.evaluatee_id
+                 OR evaluator.user_id IS NULL OR evaluatee.user_id IS NULL
                  OR evaluator.participation_status<>'included' OR evaluator.work_status<>'active'
                  OR evaluator.employment_status NOT IN ('active','newly_added')
                  OR evaluatee.participation_status<>'included' OR evaluatee.work_status<>'active'

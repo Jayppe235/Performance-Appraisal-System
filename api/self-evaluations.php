@@ -146,6 +146,71 @@ function self_eval_compute(array $answers, array $categories = []): array
     ];
 }
 
+/**
+ * Performance Factors are the official mean of the completed Peer, Program
+ * Head, and Dean evaluations for the same employee and appraisal period.
+ * The score stays pending until all three evaluator sources have a result.
+ */
+function self_eval_official_factors(int $facultyId, string $cycleName): array
+{
+    $rows = admin_all(
+        "SELECT pa.assignment_type, pa.status,
+                LEAST(5.0000, GREATEST(0.0000, ROUND(SUM(results.weighted_score), 4))) AS score
+         FROM peer_assignments pa
+         LEFT JOIN (
+             SELECT assignment_id, weighted_score
+             FROM pmas_form_a_category_results
+             WHERE status = 'completed' AND COALESCE(is_archived, 0) = 0
+             UNION ALL
+             SELECT assignment_id, weighted_score
+             FROM pmas_form_b_category_results
+             WHERE status = 'completed' AND COALESCE(is_archived, 0) = 0
+         ) results ON results.assignment_id = pa.id
+         WHERE pa.evaluatee_faculty_id = :faculty_id
+           AND pa.cycle_name = :cycle_name
+           AND pa.assignment_type IN ('peer', 'program_head', 'dean')
+           AND COALESCE(pa.is_archived, 0) = 0
+         GROUP BY pa.id, pa.assignment_type, pa.status
+         ORDER BY pa.id",
+        ['faculty_id' => $facultyId, 'cycle_name' => $cycleName]
+    );
+
+    $sources = ['peer' => [], 'program_head' => [], 'dean' => []];
+    foreach ($rows as $row) {
+        $type = (string) ($row['assignment_type'] ?? '');
+        if (!array_key_exists($type, $sources)
+            || !in_array((string) ($row['status'] ?? ''), ['submitted', 'completed'], true)
+            || $row['score'] === null) {
+            continue;
+        }
+        $sources[$type][] = (float) $row['score'];
+    }
+
+    $sourceMeans = [];
+    foreach ($sources as $type => $scores) {
+        $sourceMeans[$type] = $scores === [] ? null : round(array_sum($scores) / count($scores), 4);
+    }
+    $complete = !in_array(null, $sourceMeans, true);
+    $score = $complete ? round(array_sum($sourceMeans) / count($sourceMeans), 4) : null;
+
+    return ['score' => $score, 'complete' => $complete, 'sources' => $sourceMeans];
+}
+
+function self_eval_apply_official_factors(array $computed, array $record): array
+{
+    $official = self_eval_official_factors(
+        (int) ($record['evaluatee_faculty_id'] ?? 0),
+        (string) ($record['cycle_name'] ?? $record['evaluation_period'] ?? '')
+    );
+    $computed['performance_factors_score'] = $official['score'];
+    $computed['overall_rating'] = $official['score'] === null
+        ? null
+        : round(((float) $computed['performance_outputs_score'] * 0.70) + ((float) $official['score'] * 0.30), 4);
+    $computed['performance_level'] = self_eval_level($computed['overall_rating']);
+    $computed['performance_factors_sources'] = $official['sources'];
+    return $computed;
+}
+
 function self_eval_default_title(string $role): string
 {
     if ($role === 'faculty') {
@@ -196,7 +261,7 @@ function self_eval_default_definition(string $role, array $legacy = []): array
         'description' => 'Complete the self-evaluation honestly and provide supporting details where requested.',
         'instructions' => 'Required questions are marked with an asterisk.',
         'approvalRequirements' => [
-            'reviewers' => $role === 'faculty' ? ['employee', 'program_head', 'dean'] : ['employee', 'dean', 'vpaa'],
+            'reviewers' => $role === 'faculty' ? ['employee', 'dean'] : ['employee', 'dean', 'vpaa'],
             'requireEmployeeSignature' => true,
             'requireReviewerComments' => false,
             'allowReturn' => true,
@@ -214,6 +279,7 @@ function self_eval_default_definition(string $role, array $legacy = []): array
         'sections' => [
             ['id' => 'system_part_i', 'type' => 'partI', 'title' => 'Part I - Self-Evaluation', 'instructions' => '', 'category' => 'Self Evaluation', 'visible' => true, 'required' => true, 'protected' => true, 'weight' => 0, 'questions' => []],
             ['id' => 'system_performance_outputs', 'type' => 'outputs', 'title' => 'Part II - Performance Outputs Appraisal', 'instructions' => '', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
+            ['id' => 'system_performance_factors', 'type' => 'factors', 'title' => 'Part III - Performance Factors', 'instructions' => 'Official combined ratings from the Peer, Program Head, and Dean evaluations.', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
             ['id' => 'system_summary', 'type' => 'summary', 'title' => 'Part IV - Summary and Overall Rating', 'instructions' => '', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
             ['id' => 'system_confirmation', 'type' => 'confirmation', 'title' => 'Comments and Confirmation', 'instructions' => '', 'visible' => true, 'required' => true, 'protected' => true, 'questions' => []],
             ['id' => 'system_career', 'type' => 'career', 'title' => 'Part V - Employee Career Development Assessment', 'instructions' => '', 'visible' => true, 'required' => false, 'protected' => true, 'questions' => []],
@@ -229,6 +295,11 @@ function self_eval_normalize_definition(string $role, mixed $value): array
     }
     if (!is_array($legacy['approvalRequirements'] ?? null)) {
         $legacy['approvalRequirements'] = self_eval_default_definition($role)['approvalRequirements'];
+    }
+    // Faculty self evaluations are reviewed directly by the Dean. Keep this
+    // canonical even for questionnaires saved before the workflow changed.
+    if ($role === 'faculty') {
+        $legacy['approvalRequirements']['reviewers'] = ['employee', 'dean'];
     }
     // Restore the original PMAS paper form for legacy default questionnaires.
     // Custom questionnaire sections without the five legacy question keys remain unchanged.
@@ -263,13 +334,13 @@ function self_eval_normalize_definition(string $role, mixed $value): array
         }
     }
 
-    $officialOrder = ['partI'=>10, 'questions'=>20, 'category'=>30, 'outputs'=>40, 'summary'=>50, 'confirmation'=>60, 'career'=>70];
+    $officialOrder = ['partI'=>10, 'questions'=>20, 'category'=>30, 'outputs'=>40, 'factors'=>45, 'summary'=>50, 'confirmation'=>60, 'career'=>70];
     usort($legacy['sections'], static function (array $left, array $right) use ($officialOrder): int {
         return ($officialOrder[(string)($left['type'] ?? '')] ?? 35)
             <=> ($officialOrder[(string)($right['type'] ?? '')] ?? 35);
     });
     foreach ($legacy['sections'] as &$section) {
-        if (in_array((string)($section['type'] ?? ''), ['partI','outputs','summary','confirmation','career'], true)) {
+        if (in_array((string)($section['type'] ?? ''), ['partI','outputs','factors','summary','confirmation','career'], true)) {
             $section['visible'] = true;
             $section['protected'] = true;
         }
@@ -409,7 +480,6 @@ function self_eval_reviewer_config(string $role): ?array
 {
     return match ($role) {
         'dean' => ['target' => 'faculty', 'prefix' => 'dean', 'label' => 'Dean'],
-        'program_head' => ['target' => 'faculty', 'prefix' => 'program_head', 'label' => 'Program Head'],
         'vpaa' => ['target' => 'dean', 'prefix' => 'vpaa', 'label' => 'VPAA'],
         default => null,
     };
@@ -419,7 +489,6 @@ function self_eval_can_review_role(string $reviewerRole, string $targetRole): bo
 {
     return match ($reviewerRole) {
         'dean' => in_array($targetRole, ['faculty', 'program_head'], true),
-        'program_head' => $targetRole === 'faculty',
         'vpaa' => $targetRole === 'dean',
         default => false,
     };
@@ -432,8 +501,9 @@ function self_eval_managed_role_sql(string $reviewerRole): string
         // example, submitted records only) are enforced by the endpoint after
         // the record is loaded.
         'admin' => '1 = 1',
-        'dean' => "(se.role = 'program_head' OR (se.role = 'faculty' AND se.program_head_review_status = 'approved'))",
-        'program_head' => "se.role = 'faculty'",
+        // Historical faculty records used the database role key `teacher`.
+        // Faculty and Program Head self evaluations go directly to the Dean.
+        'dean' => "se.role IN ('program_head', 'faculty', 'teacher')",
         'vpaa' => "se.role = 'dean'",
         default => '1 = 0',
     };
@@ -603,10 +673,11 @@ function self_eval_managed_record(array $manager, int $recordId = 0, int $assign
     $prefix = (string) ($config['prefix'] ?? 'dean');
     $managedRoleSql = self_eval_managed_role_sql($role);
     return admin_one(
-        "SELECT se.*, se.{$prefix}_review_status AS review_status,
+        "SELECT se.*, CASE WHEN se.role = 'teacher' THEN 'faculty' ELSE se.role END AS role,
+                se.{$prefix}_review_status AS review_status,
                 se.{$prefix}_reviewed_by AS reviewed_by, se.{$prefix}_reviewed_at AS reviewed_at,
                 se.{$prefix}_review_notes AS review_notes, reviewer.full_name AS reviewer_name,
-                pa.id AS managed_assignment_id, pa.status AS assignment_status, pa.deadline,
+                pa.id AS managed_assignment_id, pa.evaluatee_faculty_id, pa.status AS assignment_status, pa.deadline,
                 pa.cycle_name, f.full_name, f.department AS faculty_department, f.program_code,
                 f.position_title, u.full_name AS user_full_name
          FROM pmas_self_evaluations se
@@ -654,7 +725,9 @@ function self_eval_managed_records(array $manager, int $periodId = 0): array
     $prefix = $config['prefix'];
     $managedRoleSql = self_eval_managed_role_sql($role);
     return admin_all(
-        "SELECT se.id, se.user_id, u.full_name, se.role, se.department, pa.cycle_name AS evaluation_period, se.form_type,
+        "SELECT se.id, se.user_id, u.full_name,
+                CASE WHEN se.role = 'teacher' THEN 'faculty' ELSE se.role END AS role,
+                se.department, pa.cycle_name AS evaluation_period, se.form_type,
                 se.performance_outputs_score, se.performance_factors_score, se.overall_rating, se.performance_level,
                 se.status, se.submitted_at, se.reopened_at, se.reopened_by, se.updated_at,
                 se.{$prefix}_review_status AS review_status, se.{$prefix}_reviewed_by AS reviewed_by,
@@ -676,7 +749,7 @@ function self_eval_managed_records(array $manager, int $periodId = 0): array
     );
 }
 
-function self_eval_validate_submission(array $answers, string $requestedRole, string $action, array $categories): array
+function self_eval_validate_submission(array $answers, string $requestedRole, string $action, array $categories, bool $requireReviewerSections = true): array
 {
     $errors = [];
 
@@ -700,43 +773,54 @@ function self_eval_validate_submission(array $answers, string $requestedRole, st
         return $errors;
     }
 
-    $definition = self_eval_template(self_eval_form_type($requestedRole), $requestedRole)['definition'] ?? [];
-    $dynamicResponses = is_array($answers['dynamicResponses'] ?? null) ? $answers['dynamicResponses'] : [];
-    foreach (($definition['sections'] ?? []) as $section) {
-        if (($section['type'] ?? '') !== 'questions' || empty($section['visible'])) continue;
-        foreach (($section['questions'] ?? []) as $question) {
-            if (empty($question['required'])) continue;
-            $questionId = (string) ($question['id'] ?? '');
-            $value = $dynamicResponses[$questionId] ?? ($answers['selfRatings'][$questionId] ?? '');
-            if (trim((string) $value) === '') $errors[] = 'Complete all required self-evaluation questionnaire items.';
+    $hasPartOneResponse = false;
+    foreach (($answers['achievedGoals'] ?? []) as $row) {
+        if (trim((string) ($row['goals'] ?? '')) !== '' || trim((string) ($row['accomplishment'] ?? '')) !== '') {
+            $hasPartOneResponse = true;
+            break;
+        }
+    }
+    if (!$hasPartOneResponse) $errors[] = 'Complete at least one Part I goal or accomplishment.';
+    if (trim((string) ($answers['overallSelfRating'] ?? '')) === '') $errors[] = 'Select your Part I overall self-rating.';
+    if (trim((string) ($answers['ratingBasis'] ?? '')) === '') $errors[] = 'Explain the basis for your Part I self-rating.';
+
+    if ($requireReviewerSections) {
+        $definition = self_eval_template(self_eval_form_type($requestedRole), $requestedRole)['definition'] ?? [];
+        $dynamicResponses = is_array($answers['dynamicResponses'] ?? null) ? $answers['dynamicResponses'] : [];
+        foreach (($definition['sections'] ?? []) as $section) {
+            if (($section['type'] ?? '') !== 'questions' || empty($section['visible'])) continue;
+            foreach (($section['questions'] ?? []) as $question) {
+                if (empty($question['required'])) continue;
+                $questionId = (string) ($question['id'] ?? '');
+                $value = $dynamicResponses[$questionId] ?? ($answers['selfRatings'][$questionId] ?? '');
+                if (trim((string) $value) === '') $errors[] = 'Complete all required appraisal questionnaire items.';
+            }
         }
     }
 
-    $hasOutput = false;
-    $outputWeightTotal = 0.0;
-    foreach (($answers['performanceOutputs'] ?? []) as $row) {
-        $weight = (float) ($row['weight'] ?? 0);
-        $outputWeightTotal += max(0.0, $weight);
-        if (trim((string) ($row['goals'] ?? '')) !== '' && $weight > 0 && trim((string) ($row['rating'] ?? '')) !== '') {
-            $hasOutput = true;
+    if ($requireReviewerSections) {
+        $hasOutput = false;
+        $outputWeightTotal = 0.0;
+        foreach (($answers['performanceOutputs'] ?? []) as $row) {
+            $weight = (float) ($row['weight'] ?? 0);
+            $outputWeightTotal += max(0.0, $weight);
+            if (trim((string) ($row['goals'] ?? '')) !== '' && $weight > 0 && trim((string) ($row['rating'] ?? '')) !== '') {
+                $hasOutput = true;
+            }
         }
-    }
-    if (!$hasOutput) $errors[] = 'Add at least one performance output with a goal, weight, and rating.';
-    if ($hasOutput && abs($outputWeightTotal - 100.0) > 0.001) {
-        $errors[] = 'Performance Output weights must total exactly 100% before submitting.';
+        if (!$hasOutput) $errors[] = 'Dean must complete Part II with at least one performance output, weight, and rating.';
+        if ($hasOutput && abs($outputWeightTotal - 100.0) > 0.001) {
+            $errors[] = 'Part II Performance Output weights must total exactly 100% before Dean approval.';
+        }
     }
 
     $manualFactors = $answers['performanceFactorsScore'] ?? '';
     if ($manualFactors !== '' && ((float) $manualFactors < 1 || (float) $manualFactors > 5)) {
         $errors[] = 'Performance Factors score must be between 1 and 5.';
     }
-    if (trim((string) ($answers['confirmations']['appraisee'] ?? '')) === '') {
+    if ($requireReviewerSections && trim((string) ($answers['confirmations']['appraisee'] ?? '')) === '') {
         $errors[] = 'Typed name confirmation for the appraisee is required.';
     }
-    if (trim((string) ($answers['confirmations']['appraiseeSignature'] ?? '')) === '') {
-        $errors[] = 'Upload the appraisee virtual signature.';
-    }
-
     return array_values(array_unique($errors));
 }
 
@@ -932,7 +1016,8 @@ function self_eval_assignment(array $user, string $role, int $assignmentId = 0, 
 
     if ($assignmentId > 0) {
         $matchedAssignment = admin_one(
-            "SELECT pa.*, f.full_name, f.department, f.program_code, f.position_title
+            "SELECT pa.*, f.full_name, f.department, f.program_code, f.position_title,
+                    (SELECT ap.id FROM appraisal_periods ap WHERE ap.period_name=pa.cycle_name ORDER BY ap.id DESC LIMIT 1) AS evaluation_period_id
              FROM peer_assignments pa
              JOIN faculty f ON f.id = pa.evaluatee_faculty_id
              WHERE pa.id = :assignment_id
@@ -955,7 +1040,8 @@ function self_eval_assignment(array $user, string $role, int $assignmentId = 0, 
     $cycleName = trim((string) ($period['period_name'] ?? '')) ?: dipascaf_current_cycle_name();
 
     return admin_one(
-        "SELECT pa.*, f.full_name, f.department, f.program_code, f.position_title
+        "SELECT pa.*, f.full_name, f.department, f.program_code, f.position_title,
+                (SELECT ap.id FROM appraisal_periods ap WHERE ap.period_name=pa.cycle_name ORDER BY ap.id DESC LIMIT 1) AS evaluation_period_id
          FROM peer_assignments pa
          JOIN faculty f ON f.id = pa.evaluatee_faculty_id
          WHERE pa.evaluator_user_id = :user_id
@@ -1013,6 +1099,12 @@ try {
                 $record['employee_info'] = json_decode((string) ($record['employee_info'] ?? ''), true) ?: [];
                 $record['answers_json'] = json_decode((string) ($record['answers_json'] ?? ''), true) ?: [];
                 $record['questionnaire_snapshot'] = json_decode((string) ($record['questionnaire_snapshot'] ?? ''), true) ?: null;
+                $officialFactors = self_eval_official_factors(
+                    (int) ($record['evaluatee_faculty_id'] ?? 0),
+                    (string) ($record['cycle_name'] ?? '')
+                );
+                $record['official_performance_factors_score'] = $officialFactors['score'];
+                $record['performance_factors_sources'] = $officialFactors['sources'];
                 self_eval_audit_detail(
                     (int) $record['id'],
                     (int) $user['id'],
@@ -1131,6 +1223,8 @@ try {
                 'id' => (int) $assignment['id'],
                 'status' => (string) $assignment['status'],
                 'deadline' => (string) ($assignment['deadline'] ?? ''),
+                'periodId' => (int) ($assignment['evaluation_period_id'] ?? 0),
+                'periodName' => (string) ($assignment['cycle_name'] ?? ''),
             ],
             'employee' => [
                 'name' => (string) ($assignment['full_name'] ?? $user['full_name'] ?? ''),
@@ -1399,6 +1493,11 @@ try {
             if ((string) ($updated['review_status'] ?? '') !== 'approved') {
                 throw new RuntimeException('This self evaluation could not be approved. It may have already been processed.');
             }
+            db()->prepare(
+                "UPDATE peer_assignments
+                 SET status = 'submitted', submitted_at = COALESCE(submitted_at, NOW())
+                 WHERE id = :assignment_id AND assignment_type = 'self'"
+            )->execute(['assignment_id' => (int) ($managedRecord['managed_assignment_id'] ?? 0)]);
             self_eval_audit_detail($recordId, (int) $user['id'], $role, 'approved', self_eval_review_status_label($oldStatus, $config['label']), 'Approved by ' . $config['label'], $notes);
             self_eval_audit((int) $user['id'], $config['label'] . " approved self evaluation record #{$recordId}.");
             notify_create(
@@ -1514,7 +1613,7 @@ try {
             exit;
         }
 
-        $computed = self_eval_compute($answers, $categories);
+        $computed = self_eval_apply_official_factors(self_eval_compute($answers, $categories), $managedRecord);
         db()->beginTransaction();
         try {
             db()->prepare(
@@ -1654,7 +1753,9 @@ try {
         exit;
     }
     $categories = self_eval_categories_for_role($requestedRole);
-    $validationErrors = self_eval_validate_submission($answers, $requestedRole, $action, $categories);
+    // Employees submit the Self-Evaluation stage first. Part II Performance
+    // Outputs is completed and validated by the assigned Dean during review.
+    $validationErrors = self_eval_validate_submission($answers, $requestedRole, $action, $categories, false);
     if ($validationErrors !== []) {
         self_eval_log('Self evaluation validation failed', [
             'user_id' => (int) ($user['id'] ?? 0),
@@ -1731,12 +1832,13 @@ try {
         db()->prepare(
             "UPDATE peer_assignments
              SET status = :assignment_status,
-                 submitted_at = IF(:submitted_status = 'submitted', COALESCE(submitted_at, NOW()), NULL)
+                 submitted_at = NULL
              WHERE id = :id"
         )->execute([
             'id' => (int) $assignment['id'],
-            'assignment_status' => $status === 'submitted' ? 'submitted' : 'pending',
-            'submitted_status' => $status,
+            // Part I submission enters the Dean/VPAA review workflow. The
+            // assignment is only completed after the assigned reviewer approves it.
+            'assignment_status' => $status === 'submitted' ? 'in_progress' : 'pending',
         ]);
 
         $savedRecord = admin_one(
@@ -1755,7 +1857,7 @@ try {
                 $status === 'submitted' ? 'Submitted by ' . ucfirst(str_replace('_', ' ', $requestedRole)) . '.' : 'Self evaluation draft saved.'
             );
             if ($status === 'submitted') {
-                $nextReviewer = $requestedRole === 'dean' ? 'VPAA' : 'Dean and Program Head';
+                $nextReviewer = $requestedRole === 'dean' ? 'VPAA' : 'Dean';
                 notify_create(
                     (int) $user['id'],
                     'evaluation',
@@ -1765,7 +1867,7 @@ try {
                     'self_evaluation',
                     $recordId
                 );
-                if ($requestedRole === 'faculty') {
+                if (in_array($requestedRole, ['faculty', 'program_head'], true)) {
                   foreach (self_eval_dean_user_ids_for_department((string) ($assignment['department'] ?? $employeeInfo['department'] ?? '')) as $deanUserId) {
                     notify_create(
                         $deanUserId,
@@ -1776,12 +1878,6 @@ try {
                         'self_evaluation',
                         $recordId
                     );
-                  }
-                  $programCode = trim((string) ($assignment['program_code'] ?? $employeeInfo['program'] ?? $user['program'] ?? ''));
-                  if ($programCode !== '') {
-                    foreach (admin_all("SELECT DISTINCT program_head_user_id AS id FROM programs WHERE is_active = 1 AND program_code = :program AND program_head_user_id IS NOT NULL", ['program' => $programCode]) as $head) {
-                      notify_create((int) $head['id'], 'evaluation', 'Self Evaluation Pending Program Head Review', 'A faculty self evaluation under your program is waiting for review.', '/program-head/self-evaluation-review', 'self_evaluation', $recordId);
-                    }
                   }
                 } elseif ($requestedRole === 'dean') {
                   foreach (admin_all("SELECT id FROM users WHERE role = 'vpaa' AND is_active = 1") as $vpaa) {
@@ -1803,7 +1899,7 @@ try {
         throw $e;
     }
 
-    echo json_encode(['ok' => true, 'message' => $status === 'submitted' ? 'Your self evaluation has been submitted and is now waiting for Dean review.' : 'Draft saved.', 'computed' => $computed, 'status' => $status]);
+    echo json_encode(['ok' => true, 'message' => $status === 'submitted' ? 'Part I submitted to the Dean. Please wait for the Part II evaluation and scoring announcement.' : 'Draft saved.', 'computed' => $computed, 'status' => $status, 'next_stage' => $status === 'submitted' ? 'waiting_for_dean_part_ii' : 'employee_part_i']);
 } catch (Throwable $exception) {
     self_eval_log('Unhandled self evaluation API error', [
         'message' => $exception->getMessage(),

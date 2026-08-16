@@ -389,6 +389,34 @@ function dipascaf_seed_period_participants(int $periodId, int $actorId = 0): int
         }
         $inserted += $stmt->rowCount();
     }
+
+    // Repair legacy Program Head snapshots whose user.program code was renamed
+    // (for example BSBIOL -> BSBIO). The active program's head assignment is the
+    // authoritative mapping, so draft period records must retain its current ID.
+    $db = db();
+    $db->prepare(
+        "UPDATE evaluation_period_participation epp
+         JOIN programs p ON p.program_head_user_id=epp.user_id
+                        AND p.department_id=epp.department_id
+                        AND p.is_active=1
+         SET epp.program_id=p.id,
+             epp.program_snapshot=p.program_code,
+             epp.needs_review=0
+         WHERE epp.evaluation_period_id=?
+           AND epp.role_snapshot='program_head'
+           AND epp.program_id IS NULL
+           AND epp.assignment_source='master'"
+    )->execute([$periodId]);
+    $db->prepare(
+        "INSERT IGNORE INTO evaluation_period_program_heads
+          (evaluation_period_id,user_id,department_id,program_id,is_primary,is_lead_evaluator,assignment_source)
+         SELECT epp.evaluation_period_id,epp.user_id,epp.department_id,epp.program_id,1,1,'master'
+         FROM evaluation_period_participation epp
+         WHERE epp.evaluation_period_id=?
+           AND epp.role_snapshot='program_head'
+           AND epp.program_id IS NOT NULL
+           AND epp.participation_status='included'"
+    )->execute([$periodId]);
     return $inserted;
 }
 

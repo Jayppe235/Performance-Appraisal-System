@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Bot, CalendarDays, ClipboardList, Copy, FileQuestion, MessageCircle, Sparkles, Target, X } from 'lucide-react';
 import { apiUrl } from '../../data/apiBase.js';
 import { assistantRobotImage } from '../../data/visualAssets.js';
@@ -9,15 +8,23 @@ import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx'
 const robotImage = assistantRobotImage;
 const welcome = 'Hi, my name is APPRAISIA, your personal assistant. How can I help you today?';
 
+function languageUi(text = '') {
+  const value = text.toLocaleLowerCase();
+  if (/\b(unsa|asa|kinsa|ngano|palihug|tabangi|akong)\b/u.test(value)) return { code: 'ceb', thinking: 'Nagahunahuna...', send: 'Ipadala', placeholder: 'Pangutan-a si APPRAISIA...' };
+  if (/\b(diin|sin-o|ngaa|palihog|buligi|akon)\b/u.test(value)) return { code: 'hil', thinking: 'Nagapamensar...', send: 'Ipadala', placeholder: 'Pamangkuta si APPRAISIA...' };
+  if (/\b(ano|saan|nasaan|sino|bakit|paki|tulungan|aking)\b/u.test(value)) return { code: 'fil', thinking: 'Nag-iisip...', send: 'Ipadala', placeholder: 'Magtanong kay APPRAISIA...' };
+  return { code: 'en', thinking: 'Thinking...', send: 'Send', placeholder: 'Ask APPRAISIA...' };
+}
+
 const chatSuggestions = {
   admin: [
     {
       title: 'Progress',
       questions: [
-        'Which departments are below 70% completion, what is blocking them, and what should HR prioritize this week?',
-        'Find duplicate, reassigned, or not-required evaluator records in the current cycle.',
-        'Compare department completion with the previous period and identify the three largest declines.',
-        'Draft an institution-wide evaluation follow-up plan using current risks.',
+        'Show evaluation completion by department and flag departments below 70%.',
+        'Which departments have the most overdue evaluations?',
+        'Compare overall completion and average scores across appraisal periods.',
+        'Show current leadership assignment gaps.',
       ],
     },
     {
@@ -44,9 +51,9 @@ const chatSuggestions = {
       title: 'VPAA Review',
       questions: [
         'Generate VPAA summary',
-        'Compare Dean evaluation completion and recurring weaknesses across my departments for the last three periods.',
-        'Which assigned department has the greatest combined completion and performance risk?',
-        'Draft VPAA priorities based on overdue evaluations and repeated weak areas.',
+        'Compare completion and average scores across periods in my assigned departments.',
+        'Which assigned department has the lowest average score?',
+        'Show the most common weak categories in my assigned departments.',
       ],
     },
     {
@@ -63,10 +70,10 @@ const chatSuggestions = {
     {
       title: 'Department',
       questions: [
-        'Which faculty have submitted Self Evaluations but still lack reviewer confirmation?',
+        'Show my department evaluation progress.',
         'Which weak areas repeat across faculty and periods in my department?',
-        'Compare my department completion and scores with the previous period.',
-        'Draft a department review checklist ordered by urgency.',
+        'Compare department completion and average scores across periods.',
+        'Show intervention plans for my department.',
       ],
     },
     {
@@ -83,10 +90,10 @@ const chatSuggestions = {
     {
       title: 'Program',
       questions: [
-        'Which faculty in my program declined in two or more categories, and what evidence supports the change?',
-        'Which pending reviews should I complete first based on deadlines and risk?',
-        'Compare program strengths and weak areas across the latest two periods.',
-        'Draft a coaching agenda for the highest-priority faculty needs.',
+        'Show my program evaluation progress.',
+        'What are the current weak areas in my assigned program?',
+        'Compare program completion and average scores across periods.',
+        'Which faculty in my program need coaching first?',
       ],
     },
     {
@@ -103,9 +110,9 @@ const chatSuggestions = {
       title: 'My Results',
       questions: [
         'Compare my latest two periods and explain my three largest category changes.',
-        'Which evidence supports my strongest and weakest categories?',
-        'Draft three measurable development goals based on my latest results.',
-        'Explain my current Self Evaluation and assignment status.',
+        'What are my strongest and lowest-rated areas?',
+        'What training or development is recommended for me?',
+        'Show my latest performance summary.',
       ],
     },
     {
@@ -132,8 +139,8 @@ const assistantModes = [
     key: 'compare',
     label: 'Compare',
     icon: Sparkles,
-    hint: 'Compare periods, categories, or authorized organizational scopes.',
-    prompt: 'Compare the latest evaluation results with the previous period and highlight important changes.',
+    hint: 'Compare completion and scores using data available in your authorized scope.',
+    prompt: 'Compare completion and average scores across available appraisal periods, including the exact changes.',
   },
   {
     key: 'explain',
@@ -216,7 +223,6 @@ async function readAssistantResponse(response) {
 }
 
 export default function FloatingChat({ role }) {
-  const navigate = useNavigate();
   const { selectedPeriod } = useEvaluationPeriod();
   const [open, setOpen] = useState(false);
   const [showBubble, setShowBubble] = useState(() => window.localStorage.getItem('dipascaf-chat-welcome-shown') !== '1');
@@ -226,7 +232,10 @@ export default function FloatingChat({ role }) {
   const [sending, setSending] = useState(false);
   const [activeMode, setActiveMode] = useState('overview');
   const [copiedIndex, setCopiedIndex] = useState(null);
+  const [activeLanguage, setActiveLanguage] = useState(() => languageUi());
   const logRef = useRef(null);
+  const panelRef = useRef(null);
+  const inputRef = useRef(null);
   const suggestionGroups = [
     { title: 'This Page', questions: [pageAwareQuestion(role.key, window.location.pathname)] },
     ...(chatSuggestions[role.key] || chatSuggestions.admin),
@@ -247,6 +256,16 @@ export default function FloatingChat({ role }) {
     return () => window.clearTimeout(timer);
   }, [copiedIndex]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    inputRef.current?.focus();
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [open]);
+
   function openChat(sample = '') {
     setOpen(true);
     setShowBubble(false);
@@ -257,6 +276,8 @@ export default function FloatingChat({ role }) {
   async function submitMessage(clean, modeOverride = activeMode) {
     if (!clean || sending) return;
     const pendingId = `pending-${Date.now()}`;
+    const requestLanguage = languageUi(clean);
+    setActiveLanguage(requestLanguage);
     const recentMessages = messages
       .slice(-6)
       .map((item) => ({ from: item.from, text: item.text }))
@@ -265,7 +286,7 @@ export default function FloatingChat({ role }) {
     setMessages((current) => [
       ...current,
       { from: 'You', text: clean },
-      { id: pendingId, from: 'Assistant', text: 'Thinking...' },
+      { id: pendingId, from: 'Assistant', text: requestLanguage.thinking },
     ]);
     setMessage('');
     setSending(true);
@@ -296,6 +317,9 @@ export default function FloatingChat({ role }) {
 
       const payload = await readAssistantResponse(response);
       const answer = payload.answer || payload.error || 'The assistant could not return an answer.';
+      if (payload.language?.code) {
+        setActiveLanguage((current) => ({ ...current, code: payload.language.code }));
+      }
 
       setMessages((current) => current.map((item) => (
         item.id === pendingId ? { from: 'Assistant', text: answer, payload } : item
@@ -303,7 +327,7 @@ export default function FloatingChat({ role }) {
     } catch (error) {
       setMessages((current) => current.map((item) => (
         item.id === pendingId
-          ? { from: 'Assistant', text: `${error.message} Please make sure Apache is running in XAMPP, then try again.` }
+          ? { from: 'Assistant', text: `${error.message} Please check your connection and session, then try again.` }
           : item
       )));
     } finally {
@@ -357,7 +381,7 @@ export default function FloatingChat({ role }) {
         </aside>
       )}
       {open && (
-        <section className="floating-chat-panel" aria-label="APPRAISIA assistant">
+        <section className="floating-chat-panel" aria-label="APPRAISIA assistant" role="dialog" aria-modal="false" ref={panelRef} lang={activeLanguage.code}>
           <div className="floating-chat-header">
             <div>
               <strong>APPRAISIA Assistant</strong>
@@ -406,38 +430,26 @@ export default function FloatingChat({ role }) {
             })}
           </div>
           <div className="chat-log floating-chat-log" ref={logRef}>
+            <div className="floating-chat-mobile-prompts" aria-label="Suggested questions">
+              <span>Try asking APPRAISIA</span>
+              <div>
+                {quickReplies.map((reply) => (
+                  <button
+                    key={reply.label}
+                    type="button"
+                    onClick={() => askSuggestion(reply.prompt)}
+                    disabled={sending}
+                  >
+                    {reply.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {messages.map((item, index) => (
               <div key={`${item.from}-${index}`} className={`chat-message ${item.from === 'You' ? 'user' : 'assistant'}`}>
                 <div className="chat-bubble" style={{whiteSpace:'pre-wrap'}}>
                   <strong>{item.from}</strong>
                   {item.text}
-                  {item.from !== 'You' && item.payload && (
-                    <div className="chat-structured-response">
-                      {(item.payload.metrics || []).length > 0 && (
-                        <div className="chat-response-metrics">
-                          {item.payload.metrics.map((metric) => <span key={metric.label}><small>{metric.label}</small><strong>{metric.value}</strong></span>)}
-                        </div>
-                      )}
-                      {(item.payload.evidence || []).length > 0 && (
-                        <details><summary>Evidence and scope</summary>{item.payload.evidence.map((entry) => <p key={entry}>{entry}</p>)}</details>
-                      )}
-                      {(item.payload.warnings || []).length > 0 && (
-                        <details className="has-warning"><summary>Data warnings</summary>{item.payload.warnings.map((entry) => <p key={entry}>{entry}</p>)}</details>
-                      )}
-                      {item.payload.draft && <p className="chat-draft-notice">{item.payload.draft}</p>}
-                      {item.payload.navigation?.path && (
-                        <button className="chat-navigation-action" type="button" onClick={() => { navigate(item.payload.navigation.path); setOpen(false); }}>
-                          {item.payload.navigation.label || 'Open workspace'}
-                        </button>
-                      )}
-                      {(item.payload.follow_ups || []).length > 0 && (
-                        <div className="chat-follow-ups" aria-label="Suggested follow-up questions">
-                          <span>Ask next</span>
-                          {item.payload.follow_ups.map((followUp) => <button type="button" key={followUp} onClick={() => submitMessage(followUp)} disabled={sending}>{followUp}</button>)}
-                        </div>
-                      )}
-                    </div>
-                  )}
                   {item.from !== 'You' && !String(item.text || '').includes('Thinking...') && (
                     <div className="chat-message-actions">
                       <button type="button" onClick={() => copyMessage(item.text, index)} title="Copy response">
@@ -476,8 +488,8 @@ export default function FloatingChat({ role }) {
             ))}
           </div>
           <form className="chat-form floating-chat-form" onSubmit={submit}>
-            <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask APPRAISIA..." autoComplete="off" disabled={sending} />
-            <button type="submit" disabled={sending}>{sending ? 'Sending' : 'Send'}</button>
+            <input ref={inputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={activeLanguage.placeholder} aria-label={activeLanguage.placeholder} autoComplete="off" disabled={sending} />
+            <button type="submit" disabled={sending}>{sending ? activeLanguage.thinking : activeLanguage.send}</button>
           </form>
         </section>
       )}

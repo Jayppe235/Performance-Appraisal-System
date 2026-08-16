@@ -6,6 +6,7 @@ import {
 import apiFetch from '../../data/api.js';
 import { apiUrl } from '../../data/apiBase.js';
 import { addToast } from '../common/Toast.jsx';
+import { confirmProceed } from '../common/ConfirmationModal.jsx';
 import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
 import PeriodSelector from './PeriodSelector.jsx';
 
@@ -94,11 +95,17 @@ function statusLabel(status = '') {
   return String(status || 'draft').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function assignedReviewerRole(shown = {}) {
+  if (shown.assigned_reviewer_role) return shown.assigned_reviewer_role;
+  return String(shown.employee_role || '').toLowerCase() === 'dean' ? 'VPAA' : 'Dean';
+}
+
 function GoalsPaper({ shown, template, goals, editable, updateGoal, updateStandard, removeGoal }) {
   const totalWeight = goals.reduce((sum, goal) => sum + (Number(goal.weight) || 0), 0);
   const expectedWeight = Number(template.totalWeight || 100);
   const sectionOrder = Array.isArray(template.sectionOrder) ? template.sectionOrder : DEFAULT_TEMPLATE.sectionOrder;
   const sectionStyle = (key) => ({ order: sectionOrder.indexOf(key) >= 0 ? sectionOrder.indexOf(key) + 1 : 99 });
+  const reviewerRole = assignedReviewerRole(shown);
   return (
     <div className="goals-record-paper">
       <header>
@@ -155,7 +162,7 @@ function GoalsPaper({ shown, template, goals, editable, updateGoal, updateStanda
         <p className="goal-agreement">We have agreed on these goals as parameters for the appraisal of job performance for the current appraisal period.</p>
         <div className="goal-approvals">
           <span><strong>{shown.employee_name}</strong>Employee · {formatDate(shown.submitted_at)}</span>
-          <span><strong>{shown.reviewer_name || shown.assigned_reviewer_name || `Pending ${shown.assigned_reviewer_role || 'immediate superior'}`}</strong>{shown.assigned_reviewer_role || 'Immediate Superior'} · {formatDate(shown.reviewed_at)}</span>
+          <span><strong>{shown.reviewer_name || shown.assigned_reviewer_name || `Pending ${reviewerRole}`}</strong>{reviewerRole} · {formatDate(shown.reviewed_at)}</span>
         </div>
       </section>
     </div>
@@ -378,6 +385,17 @@ export default function GoalsRecordSheet({ role, mode = 'employee', reviewPeriod
     }
   }
   async function review(action) {
+    if (action === 'reopen') {
+      if (!comment.trim()) {
+        addToast({ type: 'error', text: 'Enter a new reason before reopening this approved record.' });
+        return;
+      }
+      const confirmed = await confirmProceed({
+        message: 'This will remove the approved status and return the Goals Record Sheet for changes.',
+        confirmText: 'Reopen Record',
+      });
+      if (!confirmed) return;
+    }
     if (reviewerDirtyRef.current) {
       const saved = await saveReviewerChanges(true);
       if (!saved) return;
@@ -391,12 +409,11 @@ export default function GoalsRecordSheet({ role, mode = 'employee', reviewPeriod
       addToast({ type: 'success', text: data.message });
       setComment('');
       if (action === 'approve') {
-        const approvedAt = new Date().toISOString();
-        const reviewerName = role?.user?.name || role?.user?.full_name || 'Dean Reviewer';
-        setSelected((current) => ({ ...current, status: 'approved', reviewer_name: reviewerName, reviewed_at: approvedAt, review_comment: comment }));
-        setRecords((current) => current.map((item) => item.id === selected.id
-          ? { ...item, status: 'approved', reviewer_name: reviewerName, reviewed_at: approvedAt, review_comment: comment }
-          : item));
+        // Reload the canonical database record instead of leaving an optimistic
+        // local status that can disagree with the saved review.
+        reviewerDirtyRef.current = false;
+        setSelected(null);
+        await load();
       } else {
         setSelected(null);
         await load();
@@ -504,7 +521,7 @@ export default function GoalsRecordSheet({ role, mode = 'employee', reviewPeriod
       </div>
       <div className="self-eval-table-wrap"><table className="self-eval-table"><thead><tr><th>Employee</th><th>Position</th><th>Department</th><th>Period</th><th>Total Weight</th><th>Status</th><th>Action</th></tr></thead><tbody>
         {records.length === 0 && <tr><td colSpan="7">No Goals Record Sheets are available.</td></tr>}
-        {records.map((item) => <tr key={item.id}><td data-label="Employee">{item.employee_name}</td><td data-label="Position">{item.position_title}</td><td data-label="Department">{item.department}</td><td data-label="Period">{item.appraisal_period}</td><td data-label="Total Weight">{item.goals.reduce((sum, goal) => sum + (Number(goal.weight) || 0), 0)}%</td><td data-label="Status"><span className={`goals-table-status is-${item.status}`}>{statusLabel(item.status)}</span></td><td data-label="Action"><button type="button" onClick={() => { reviewerDirtyRef.current = false; setSelected(item); setComment(item.review_comment || ''); }}><Eye size={15} /> Review</button></td></tr>)}
+        {records.map((item) => <tr key={item.id}><td data-label="Employee">{item.employee_name}</td><td data-label="Position">{item.position_title}</td><td data-label="Department">{item.department}</td><td data-label="Period">{item.appraisal_period}</td><td data-label="Total Weight">{item.goals.reduce((sum, goal) => sum + (Number(goal.weight) || 0), 0)}%</td><td data-label="Status"><span className={`goals-table-status is-${item.status}`}>{statusLabel(item.status)}</span></td><td data-label="Action"><button type="button" onClick={() => { reviewerDirtyRef.current = false; setSelected(item); setComment(item.status === 'approved' ? '' : (item.review_comment || '')); }}><Eye size={15} /> Review</button></td></tr>)}
       </tbody></table></div>
     </section>
   );

@@ -46,7 +46,8 @@ function program_head_departments(int $programHeadUserId, ?int $evaluationPeriod
 function program_head_filter_sql(array $departments, string $alias = 'f'): array
 {
     if ($departments === []) {
-        return ['1=1', []];
+        // An unmapped Program Head must never fall back to institution-wide data.
+        return ['1=0', []];
     }
 
     $parts = [];

@@ -75,6 +75,19 @@ function evaluation_api_role(string $role): string
     };
 }
 
+function evaluation_api_role_allowed(int $userId, string $masterRole, string $requestedRole, int $periodId = 0): bool
+{
+    if ($requestedRole === $masterRole) return true;
+    if ($periodId <= 0) return false;
+    $row = admin_one(
+        "SELECT role_snapshot FROM evaluation_period_participation
+         WHERE evaluation_period_id=:period_id AND user_id=:user_id
+           AND participation_status='included' AND COALESCE(work_status,'active')='active' LIMIT 1",
+        ['period_id'=>$periodId,'user_id'=>$userId]
+    );
+    return evaluation_api_role((string)($row['role_snapshot'] ?? '')) === $requestedRole;
+}
+
 function evaluation_api_score(array $row, array $categoryResults = []): ?float
 {
     if ($categoryResults !== []) {
@@ -116,9 +129,11 @@ function evaluation_api_previous_score(int $assignmentId, int $evaluateeFacultyI
              WHERE evaluatee_faculty_id = :fac_b AND status = 'completed'
          ) x
          JOIN peer_assignments pa ON pa.id = x.assignment_id
+         LEFT JOIN appraisal_periods candidate_period ON candidate_period.period_name=pa.cycle_name
+         LEFT JOIN appraisal_periods current_period ON current_period.period_name=:current_period_lookup
          WHERE pa.id <> :assignment_id
            AND COALESCE(pa.is_archived, 0) = 0
-           AND (:current_period = '' OR pa.cycle_name <> :current_period_match)
+           AND (:current_period = '' OR candidate_period.id < current_period.id)
          GROUP BY pa.id, pa.cycle_name
          ORDER BY submitted_at DESC
          LIMIT 1",
@@ -127,7 +142,7 @@ function evaluation_api_previous_score(int $assignmentId, int $evaluateeFacultyI
             'fac_b' => $evaluateeFacultyId,
             'assignment_id' => $assignmentId,
             'current_period' => $currentPeriod,
-            'current_period_match' => $currentPeriod,
+            'current_period_lookup' => $currentPeriod,
         ]
     );
 
@@ -216,7 +231,8 @@ try {
         exit;
     }
 
-    if ($actualRole !== 'admin_hr' && $requestedRole !== $actualRole) {
+    $requestPeriodId = max(0, (int)($_GET['period_id'] ?? 0));
+    if ($actualRole !== 'admin_hr' && !evaluation_api_role_allowed((int)$user['id'], $actualRole, $requestedRole, $requestPeriodId)) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'message' => 'You can only view your own evaluation assignments.']);
         exit;
@@ -247,7 +263,8 @@ try {
         if ($bodyRole !== '') {
             $requestedRole = $bodyRole;
         }
-        if ($actualRole !== 'admin_hr' && $requestedRole !== $actualRole) {
+        $bodyPeriodId = max(0, (int)($input['evaluation_period_id'] ?? $input['period_id'] ?? 0));
+        if ($actualRole !== 'admin_hr' && !evaluation_api_role_allowed((int)$user['id'], $actualRole, $requestedRole, $bodyPeriodId)) {
             http_response_code(403);
             echo json_encode(['ok' => false, 'message' => 'You can only view your own evaluation assignments.']);
             exit;
@@ -481,7 +498,10 @@ try {
             'periodName' => (string) ($row['cycle_name'] ?? 'Current Appraisal Cycle'),
             'deadline' => $deadline,
             'dateEvaluated' => (string) ($row['date_evaluated_display'] ?? ''),
-            'progressPercent' => (int) ($row['progress_percent'] ?? ($status === 'submitted' ? 100 : 0)),
+            // Progress belongs to this assignment, not to the evaluatee's
+            // aggregate faculty completion rate. The client overlays any
+            // saved local draft progress for an unfinished form.
+            'progressPercent' => $status === 'submitted' ? 100 : 0,
             'relationshipTag' => (string) ($row['relationship_tag'] ?? ''),
             'score' => $score,
             'previousScore' => $previous['score'] ?? null,

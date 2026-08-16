@@ -16,14 +16,16 @@ class ReportGenerator
     private array $headers;
     private array $data;
     private array $documentHeader;
+    private array $analytics;
 
-    public function __construct(string $title, string $reportType, array $headers, array $data, array $documentHeader = [])
+    public function __construct(string $title, string $reportType, array $headers, array $data, array $documentHeader = [], array $analytics = [])
     {
         $this->title = $title;
         $this->reportType = $reportType;
         $this->headers = $headers;
         $this->data = $data;
         $this->documentHeader = $documentHeader;
+        $this->analytics = $analytics;
     }
 
     public function exportCsv(string $filename = ''): void
@@ -113,10 +115,61 @@ class ReportGenerator
         $sheet->freezePane('A' . ($headerRow + 1));
         $sheet->setAutoFilter($headerRange);
 
+        if ($this->analytics !== []) {
+            $analyticsSheet = $spreadsheet->createSheet();
+            $analyticsSheet->setTitle('Analytics Summary');
+            $analyticsSheet->fromArray(['Evidence Source', 'Score', 'Completed Results'], null, 'A1');
+            $analyticsRow = 2;
+            foreach (($this->analytics['sources'] ?? []) as $source) {
+                $analyticsSheet->fromArray([$source['label'], $source['score'], $source['completed_count']], null, 'A' . $analyticsRow++);
+            }
+            $analyticsSheet->getStyle('A1:C1')->getFont()->setBold(true)->getColor()->setARGB('FFFFFFFF');
+            $analyticsSheet->getStyle('A1:C1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF246B49');
+            $analyticsSheet->getColumnDimension('A')->setWidth(28); $analyticsSheet->getColumnDimension('B')->setWidth(14); $analyticsSheet->getColumnDimension('C')->setWidth(20);
+            $distribution = $this->analytics['charts']['rating_distribution'] ?? ['labels'=>[],'values'=>[]];
+            $analyticsSheet->fromArray(['Performance Level', 'People'], null, 'E1');
+            foreach ($distribution['labels'] as $index => $label) $analyticsSheet->fromArray([$label, $distribution['values'][$index] ?? 0], null, 'E' . ($index + 2));
+            $analyticsSheet->getStyle('E1:F1')->getFont()->setBold(true)->getColor()->setARGB('FFFFFFFF');
+            $analyticsSheet->getStyle('E1:F1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF246B49');
+            $sourceCount = max(1, count($this->analytics['sources'] ?? []));
+            $sourceLabels = [new \PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues('String', "'Analytics Summary'!\$A\$2:\$A\$" . ($sourceCount + 1), null, $sourceCount)];
+            $sourceValues = [new \PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues('Number', "'Analytics Summary'!\$B\$2:\$B\$" . ($sourceCount + 1), null, $sourceCount)];
+            $sourceSeries = new \PhpOffice\PhpSpreadsheet\Chart\DataSeries(\PhpOffice\PhpSpreadsheet\Chart\DataSeries::TYPE_BARCHART, \PhpOffice\PhpSpreadsheet\Chart\DataSeries::GROUPING_CLUSTERED, range(0, count($sourceValues)-1), [], $sourceLabels, $sourceValues);
+            $sourceSeries->setPlotDirection(\PhpOffice\PhpSpreadsheet\Chart\DataSeries::DIRECTION_COL);
+            $sourceChart = new \PhpOffice\PhpSpreadsheet\Chart\Chart('sourceScores', new \PhpOffice\PhpSpreadsheet\Chart\Title('PMAS Form A and Form B Scores'), new \PhpOffice\PhpSpreadsheet\Chart\Legend(\PhpOffice\PhpSpreadsheet\Chart\Legend::POSITION_RIGHT, null, false), new \PhpOffice\PhpSpreadsheet\Chart\PlotArea(null, [$sourceSeries]));
+            $sourceChart->setTopLeftPosition('A7')->setBottomRightPosition('H22'); $analyticsSheet->addChart($sourceChart);
+            $distributionCount = max(1, count($distribution['labels']));
+            $pieLabels = [new \PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues('String', "'Analytics Summary'!\$E\$2:\$E\$" . ($distributionCount + 1), null, $distributionCount)];
+            $pieValues = [new \PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues('Number', "'Analytics Summary'!\$F\$2:\$F\$" . ($distributionCount + 1), null, $distributionCount)];
+            $pieSeries = new \PhpOffice\PhpSpreadsheet\Chart\DataSeries(\PhpOffice\PhpSpreadsheet\Chart\DataSeries::TYPE_PIECHART, null, [0], [], $pieLabels, $pieValues);
+            $pieChart = new \PhpOffice\PhpSpreadsheet\Chart\Chart('ratingDistribution', new \PhpOffice\PhpSpreadsheet\Chart\Title('Performance Distribution'), new \PhpOffice\PhpSpreadsheet\Chart\Legend(\PhpOffice\PhpSpreadsheet\Chart\Legend::POSITION_RIGHT, null, false), new \PhpOffice\PhpSpreadsheet\Chart\PlotArea(null, [$pieSeries]));
+            $pieChart->setTopLeftPosition('I7')->setBottomRightPosition('P22'); $analyticsSheet->addChart($pieChart);
+            foreach (($this->analytics['sources'] ?? []) as $source) {
+                $sourceSheet = $spreadsheet->createSheet();
+                $sourceSheet->setTitle(substr(str_replace(['PMAS ', ' Evaluation'], '', $source['label']), 0, 31));
+                $sourceSheet->fromArray(['Category', 'Score', 'Factor Weight', 'Result Count', 'Classification'], null, 'A1');
+                $sourceRow = 2;
+                $improvementMap = array_column($source['improvement_areas'] ?? [], 'classification', 'title');
+                foreach (($source['categories'] ?? []) as $category) $sourceSheet->fromArray([$category['title'],$category['score'],$category['weight'],$category['result_count'],$improvementMap[$category['title']] ?? 'strength/other'], null, 'A' . $sourceRow++);
+                $sourceSheet->getStyle('A1:E1')->getFont()->setBold(true)->getColor()->setARGB('FFFFFFFF');
+                $sourceSheet->getStyle('A1:E1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF246B49');
+                foreach (range('A','E') as $column) $sourceSheet->getColumnDimension($column)->setAutoSize(true);
+            }
+            $recommendationSheet = $spreadsheet->createSheet(); $recommendationSheet->setTitle('Recommendation');
+            $recommendation = $this->analytics['recommendation'] ?? null;
+            if ($recommendation) {
+                $recommendationSheet->fromArray([['Activity Type',$recommendation['activity_type']],['Title',$recommendation['title']],['Objective',$recommendation['objective']],['Reason',$recommendation['reason']]], null, 'A1');
+                $recommendationSheet->fromArray(['Evidence Source','Category','Score','Trigger'], null, 'A7'); $evidenceRow=8;
+                foreach ($recommendation['evidence'] as $evidence) $recommendationSheet->fromArray([$evidence['source'],$evidence['category'],$evidence['score'],$evidence['trigger']], null, 'A'.$evidenceRow++);
+            } else $recommendationSheet->setCellValue('A1', implode(' ', $this->analytics['warnings'] ?? ['Recommendation unavailable.']));
+            $recommendationSheet->getColumnDimension('A')->setWidth(24); foreach (['B','C','D'] as $column) $recommendationSheet->getColumnDimension($column)->setWidth(38); $recommendationSheet->getStyle('A1:D20')->getAlignment()->setWrapText(true);
+        }
+
         // Generate and validate a temporary XLSX before sending any response bytes.
         $tempFile = tempnam(sys_get_temp_dir(), 'appraisa-xlsx-');
         if ($tempFile === false) throw new RuntimeException('Unable to allocate a temporary Excel file.');
         $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xlsx');
+        if (method_exists($writer, 'setIncludeCharts')) $writer->setIncludeCharts(true);
         $writer->save($tempFile);
         $spreadsheet->disconnectWorksheets();
         if (!is_file($tempFile) || filesize($tempFile) < 1000) throw new RuntimeException('The generated Excel workbook is invalid.');

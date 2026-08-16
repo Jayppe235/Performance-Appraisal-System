@@ -4,8 +4,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/credentials.php';
+require_once __DIR__ . '/database_session.php';
 
 if (session_status() === PHP_SESSION_NONE) {
+    configure_database_sessions();
     // Set cookie path to / so the session cookie works across
     // both the Vite dev proxy (localhost:5173/api/...) and Apache
     // production (localhost/PMAS/api/...).

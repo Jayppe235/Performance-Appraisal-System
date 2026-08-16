@@ -11,11 +11,13 @@ import {
   ListChecks,
   Settings,
   SquarePen,
+  ScrollText,
   Users,
 } from 'lucide-react';
 
 const navIcons = {
   assistant: Bot,
+  audit: ScrollText,
   assignments: ClipboardList,
   dashboard: LayoutDashboard,
   evaluations: ClipboardCheck,

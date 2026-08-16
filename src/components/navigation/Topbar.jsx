@@ -119,7 +119,7 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
     let revealTimer;
     const frame = window.requestAnimationFrame(() => {
       revealTimer = window.setTimeout(() => {
-        passwordSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        passwordSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 60);
     });
 

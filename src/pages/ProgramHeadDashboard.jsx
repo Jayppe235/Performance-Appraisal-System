@@ -8,7 +8,6 @@ import MetricGrid from '../components/common/MetricGrid.jsx';
 import DataTable from '../components/common/DataTable.jsx';
 import ReportGrid from '../components/common/ReportGrid.jsx';
 import EvaluationDashboard from '../components/evaluations/EvaluationDashboard.jsx';
-import DeanSelfEvaluationReview from '../components/evaluations/DeanSelfEvaluationReview.jsx';
 import PeriodSelector from '../components/evaluations/PeriodSelector.jsx';
 import PersonalPerformanceSummary from '../components/evaluations/PersonalPerformanceSummary.jsx';
 import DepartmentAiInsights from '../components/ai/DepartmentAiInsights.jsx';
@@ -93,7 +92,7 @@ export default function ProgramHeadDashboard({ role }) {
             </section>
             <div className="program-head-role-dashboard-lower">
               <section className="program-head-priority-panel" aria-labelledby="program-head-priority-title"><div className="program-head-panel-heading"><div><p className="eyebrow">Priority Queue</p><h3 id="program-head-priority-title">Items requiring Program Head review</h3></div><strong>{actionCenter.total}</strong></div><div className="program-head-priority-list">{actionCenter.items.length ? actionCenter.items.map((item)=><Link key={item.label} to={item.href} className={`program-head-priority-item tone-${item.tone || 'info'}`}><span className="program-head-priority-count">{item.count}</span><span><strong>{item.label}</strong><small>{item.detail}</small></span><b>{item.cta}</b></Link>):<p className="dipascaf-empty">No program action items for this period.</p>}</div></section>
-              <section className="program-head-workspace-panel" aria-labelledby="program-head-workspace-title"><div className="program-head-panel-heading"><div><p className="eyebrow">Program Head Modules</p><h3 id="program-head-workspace-title">Continue your work</h3></div></div><div className="program-head-workspace-links"><Link to="/program-head/evaluate"><ClipboardList/><span><strong>Faculty Evaluations</strong><small>Evaluate assigned faculty and authorized peers</small></span></Link><Link to="/program-head/self-evaluation-review"><CheckCircle2/><span><strong>Self-Evaluation Reviews</strong><small>Review completed faculty self-assessments</small></span></Link><Link to="/program-head/summary"><BarChart3/><span><strong>Program Analytics</strong><small>Review performance, weak areas, and improvement plans</small></span></Link><Link to="/program-head/report"><FileText/><span><strong>Program Reports</strong><small>Generate reports within your authorized program scope</small></span></Link></div></section>
+              <section className="program-head-workspace-panel" aria-labelledby="program-head-workspace-title"><div className="program-head-panel-heading"><div><p className="eyebrow">Program Head Modules</p><h3 id="program-head-workspace-title">Continue your work</h3></div></div><div className="program-head-workspace-links"><Link to="/program-head/evaluate"><ClipboardList/><span><strong>Faculty Evaluations</strong><small>Evaluate assigned faculty and authorized peers</small></span></Link><Link to="/program-head/summary"><BarChart3/><span><strong>Program Analytics</strong><small>Review performance, weak areas, and improvement plans</small></span></Link><Link to="/program-head/report"><FileText/><span><strong>Program Reports</strong><small>Generate reports within your authorized program scope</small></span></Link></div></section>
             </div>
           </section>
         </>
@@ -105,7 +104,7 @@ export default function ProgramHeadDashboard({ role }) {
       )}
       {activeSection === 'peer-assignments' && <Navigate to="/program-head/evaluate" replace />}
       {activeSection === 'self-evaluation' && <Navigate to="/program-head/evaluate" replace />}
-      {activeSection === 'self-evaluation-review' && <DeanSelfEvaluationReview role={role} />}
+      {activeSection === 'self-evaluation-review' && <Navigate to="/program-head/evaluate" replace />}
       {activeSection === 'summary' && (
         <DepartmentAiInsights scope={role.user.program || 'assigned-program'} />
       )}

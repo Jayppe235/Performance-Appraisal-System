@@ -60,7 +60,6 @@ export const roles = {
     nav: [
       { key: 'overview', label: 'Dashboard', icon: 'dashboard' },
       { key: 'evaluate', label: 'Evaluations', icon: 'evaluations' },
-      { key: 'self-evaluation-review', label: 'Faculty Self-Evaluations', icon: 'selfEvaluation' },
       { key: 'summary', label: 'Program Analytics', icon: 'insights' },
       { key: 'results', label: 'Results', icon: 'results' },
       { key: 'report', label: 'Reports', icon: 'reports' },

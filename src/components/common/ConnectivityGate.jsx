@@ -65,7 +65,10 @@ export default function ConnectivityGate({ children }) {
     };
   }, [checkConnection]);
 
-  if (status === 'online') return children;
+  // Keep the application usable when only the API health check is failing.
+  // Individual requests already surface their own errors, while a genuine
+  // browser-offline state still receives the dedicated connectivity screen.
+  if (status === 'online' || status === 'server-unavailable') return children;
 
   const isChecking = status === 'checking';
   const isOffline = status === 'offline';

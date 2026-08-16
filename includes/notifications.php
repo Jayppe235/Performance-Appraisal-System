@@ -8,6 +8,11 @@ function notify_log(string $message): void
     error_log('[APPRAISIA Notifications] ' . $message);
 }
 
+function notify_delivery_result(bool $ok, ?int $id = null, string $status = 'created', string $error = ''): array
+{
+    return ['ok' => $ok, 'notification_id' => $id, 'status' => $status, 'error' => $error];
+}
+
 function notify_ensure_schema(): void
 {
     static $checked = false;
@@ -39,12 +44,17 @@ function notify_ensure_schema(): void
                     related_entity_type VARCHAR(80) NULL,
                     related_entity_id INT NULL,
                     related_record_id INT NULL,
+                    event_key VARCHAR(191) NULL,
+                    event_payload JSON NULL,
+                    delivery_status VARCHAR(30) NOT NULL DEFAULT 'created',
+                    delivery_error TEXT NULL,
                     is_read TINYINT(1) NOT NULL DEFAULT 0,
                     read_at DATETIME NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     INDEX idx_notifications_recipient_read (recipient_id, is_read),
                     INDEX idx_notifications_user_read (user_id, is_read),
                     INDEX idx_notifications_module_record (module, related_record_id),
+                    INDEX idx_notifications_event_key (event_key),
                     INDEX idx_notifications_created (created_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
             );
@@ -69,6 +79,10 @@ function notify_ensure_schema(): void
             'module' => 'ALTER TABLE notifications ADD COLUMN module VARCHAR(80) NULL AFTER action_url',
             'related_record_id' => 'ALTER TABLE notifications ADD COLUMN related_record_id INT NULL AFTER related_entity_id',
             'read_at' => 'ALTER TABLE notifications ADD COLUMN read_at DATETIME NULL AFTER is_read',
+            'event_key' => 'ALTER TABLE notifications ADD COLUMN event_key VARCHAR(191) NULL AFTER related_record_id',
+            'event_payload' => 'ALTER TABLE notifications ADD COLUMN event_payload JSON NULL AFTER event_key',
+            'delivery_status' => "ALTER TABLE notifications ADD COLUMN delivery_status VARCHAR(30) NOT NULL DEFAULT 'created' AFTER event_payload",
+            'delivery_error' => 'ALTER TABLE notifications ADD COLUMN delivery_error TEXT NULL AFTER delivery_status',
         ];
 
         foreach ($additions as $name => $sql) {
@@ -82,6 +96,11 @@ function notify_ensure_schema(): void
         db()->exec('UPDATE notifications SET action_url = link WHERE action_url IS NULL AND link IS NOT NULL');
         db()->exec('UPDATE notifications SET module = related_entity_type WHERE module IS NULL AND related_entity_type IS NOT NULL');
         db()->exec('UPDATE notifications SET related_record_id = related_entity_id WHERE related_record_id IS NULL AND related_entity_id IS NOT NULL');
+        try {
+            db()->exec('CREATE INDEX idx_notifications_event_key ON notifications (event_key)');
+        } catch (Throwable) {
+            // Index already exists.
+        }
     } catch (Throwable $exception) {
         notify_log('Schema check failed: ' . $exception->getMessage());
     }
@@ -159,6 +178,20 @@ function notify_send(array $payload): ?int
         $senderId = isset($payload['sender_id']) ? (int) $payload['sender_id'] : notify_current_sender_id();
         $senderId = $senderId > 0 ? $senderId : null;
         $dedupe = (bool) ($payload['dedupe'] ?? true);
+        $eventKey = trim((string) ($payload['event_key'] ?? ''));
+        $eventKey = $eventKey !== '' ? substr($eventKey, 0, 191) : null;
+        $eventPayload = $payload['event_payload'] ?? null;
+        $eventPayloadJson = $eventPayload === null ? null : json_encode($eventPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if ($eventKey !== null) {
+            $existingEvent = admin_one(
+                'SELECT id FROM notifications WHERE event_key = :event_key AND (recipient_id = :recipient_id OR user_id = :user_id) LIMIT 1',
+                ['event_key' => $eventKey, 'recipient_id' => $recipientId, 'user_id' => $recipientId]
+            );
+            if ($existingEvent !== null) {
+                return (int) $existingEvent['id'];
+            }
+        }
 
         if ($dedupe) {
             $params = [
@@ -193,9 +226,9 @@ function notify_send(array $payload): ?int
 
         $stmt = db()->prepare(
             'INSERT INTO notifications
-                (user_id, recipient_id, recipient_role, sender_id, type, title, description, message, link, action_url, module, related_entity_type, related_entity_id, related_record_id, is_read)
+                (user_id, recipient_id, recipient_role, sender_id, type, title, description, message, link, action_url, module, related_entity_type, related_entity_id, related_record_id, event_key, event_payload, delivery_status, is_read)
              VALUES
-                (:user_id, :recipient_id, :recipient_role, :sender_id, :type, :title, :description, :message, :link, :action_url, :module, :related_entity_type, :related_entity_id, :related_record_id, 0)'
+                (:user_id, :recipient_id, :recipient_role, :sender_id, :type, :title, :description, :message, :link, :action_url, :module, :related_entity_type, :related_entity_id, :related_record_id, :event_key, :event_payload, :delivery_status, 0)'
         );
         $stmt->execute([
             'user_id' => $systemWide ? null : $recipientId,
@@ -212,6 +245,9 @@ function notify_send(array $payload): ?int
             'related_entity_type' => $relatedType !== '' ? $relatedType : null,
             'related_entity_id' => $relatedRecordId,
             'related_record_id' => $relatedRecordId,
+            'event_key' => $eventKey,
+            'event_payload' => $eventPayloadJson,
+            'delivery_status' => 'created',
         ]);
 
         return (int) db()->lastInsertId();
@@ -219,6 +255,18 @@ function notify_send(array $payload): ?int
         notify_log('Creation failed: ' . $exception->getMessage());
         return null;
     }
+}
+
+function notify_send_with_result(array $payload): array
+{
+    $id = notify_send($payload);
+    if ($id === null) {
+        $recipientId = (int) ($payload['recipient_id'] ?? $payload['user_id'] ?? 0);
+        $message = 'Notification was not created for recipient ' . $recipientId . '.';
+        notify_log($message . ' Event: ' . (string) ($payload['event_key'] ?? 'unspecified'));
+        return notify_delivery_result(false, null, 'failed', $message);
+    }
+    return notify_delivery_result(true, $id);
 }
 
 function notify_create(
@@ -458,6 +506,8 @@ function notify_format(array $notification): array
         'related_entity_type' => (string) ($notification['related_entity_type'] ?? ''),
         'related_entity_id' => isset($notification['related_entity_id']) && $notification['related_entity_id'] !== null ? (int) $notification['related_entity_id'] : null,
         'related_record_id' => $relatedRecordId !== null ? (int) $relatedRecordId : null,
+        'event_key' => (string) ($notification['event_key'] ?? ''),
+        'delivery_status' => (string) ($notification['delivery_status'] ?? 'created'),
         'is_read' => (int) ($notification['is_read'] ?? 0) === 1,
         'read_at' => (string) ($notification['read_at'] ?? ''),
         'created_at' => $createdAt,

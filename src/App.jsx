@@ -67,11 +67,16 @@ export default function App() {
   // apiFetch's redirectToLogin() — which would cause an infinite reload loop
   // if the session check fails for any transient reason.
   useEffect(() => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    let mounted = true;
+
     (async () => {
       try {
         const res = await fetch(apiUrl('/api/auth.php?action=me'), {
           credentials: 'include',
           headers: { Accept: 'application/json' },
+          signal: controller.signal,
         });
         // Only accept JSON responses
         const ct = res.headers.get('content-type') || '';
@@ -79,7 +84,7 @@ export default function App() {
         const text = await res.text();
         if (!text.trim()) throw new Error('Empty session response');
         const data = JSON.parse(text);
-        if (data && data.ok && data.user) {
+        if (mounted && data && data.ok && data.user) {
           // Valid PHP session found — bootstrap the React session from it
           setSession({
             isLoggedIn: true,
@@ -89,11 +94,18 @@ export default function App() {
           });
         }
       } catch {
-        setSession(EMPTY_SESSION);
+        if (mounted) setSession(EMPTY_SESSION);
       } finally {
-        setSessionLoading(false);
+        window.clearTimeout(timeoutId);
+        if (mounted) setSessionLoading(false);
       }
     })();
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   // Show a brief loading screen while we check the PHP session on mount.
@@ -141,6 +153,7 @@ export default function App() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'logout' }),
+        signal: AbortSignal.timeout(5000),
       });
     } catch (error) {
       console.error(error);

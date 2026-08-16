@@ -23,7 +23,7 @@ function react_role_key(string $databaseRole): string
     };
 }
 
-function auth_user_payload(?array $user): ?array
+function auth_user_payload(?array $user, ?int $evaluationPeriodId = null): ?array
 {
     if ($user === null) {
         return null;
@@ -31,8 +31,35 @@ function auth_user_payload(?array $user): ?array
 
     $effectiveRole = (string)$user['role'];
     $actingDean = null;
+    $periodContext = null;
+    if ($evaluationPeriodId !== null && $evaluationPeriodId > 0 && $effectiveRole !== 'admin_hr') {
+        try {
+            $periodContext = admin_one(
+                "SELECT epp.role_snapshot,d.department_name,d.department_code,p.program_code,p.program_name
+                 FROM evaluation_period_participation epp
+                 LEFT JOIN departments d ON d.id=epp.department_id
+                 LEFT JOIN programs p ON p.id=epp.program_id
+                 WHERE epp.evaluation_period_id=:period_id AND epp.user_id=:user_id
+                   AND epp.participation_status='included' AND COALESCE(epp.work_status,'active')='active'
+                 LIMIT 1",
+                ['period_id'=>$evaluationPeriodId,'user_id'=>(int)$user['id']]
+            );
+            // A permanent Dean account must always enter the Dean portal.
+            // Historical Program Head snapshots remain available as record
+            // metadata, but must not downgrade the account's current access.
+            if (
+                $periodContext !== null
+                && !empty($periodContext['role_snapshot'])
+                && (string)$user['role'] !== 'dean'
+            ) {
+                $effectiveRole = (string)$periodContext['role_snapshot'];
+            }
+        } catch (Throwable) {
+            $periodContext = null;
+        }
+    }
     try {
-        $actingDean = admin_one(
+        $actingDean = $evaluationPeriodId !== null && $evaluationPeriodId > 0 ? null : admin_one(
             "SELECT epd.evaluation_period_id,epd.department_id,d.department_name,d.department_code
              FROM evaluation_period_deans epd
              JOIN appraisal_periods ap ON ap.id=epd.evaluation_period_id
@@ -55,11 +82,13 @@ function auth_user_payload(?array $user): ?array
         'userCode' => (string) ($user['user_code'] ?? ''),
         'name' => $user['full_name'],
         'email' => $user['email'],
-        'department' => $user['department'] ?? '',
-        'program' => $user['program'] ?? '',
+        'department' => $periodContext['department_name'] ?? $user['department'] ?? '',
+        'program' => $periodContext['program_code'] ?? $user['program'] ?? '',
         'databaseRole' => $user['role'],
         'effectiveRole' => $effectiveRole,
         'roleKey' => react_role_key($effectiveRole),
+        'periodRole' => $periodContext['role_snapshot'] ?? null,
+        'periodId' => $evaluationPeriodId,
         'actingDean' => $actingDean !== null,
         'actingDeanPeriodId' => (int)($actingDean['evaluation_period_id'] ?? 0),
         'actingDeanDepartment' => (string)($actingDean['department_name'] ?? ''),
@@ -116,9 +145,11 @@ try {
                     'email_verified_at' => $freshUser['email_verified_at'],
                     'must_change_password' => (int) $freshUser['must_change_password'],
                 ];
-                $user = auth_user_payload($freshUser);
+                $requestedPeriodId = max(0, (int)($_GET['period_id'] ?? 0));
+                $user = auth_user_payload($freshUser, $requestedPeriodId > 0 ? $requestedPeriodId : null);
             } else {
-                $user = auth_user_payload($sessionUser);
+                $requestedPeriodId = max(0, (int)($_GET['period_id'] ?? 0));
+                $user = auth_user_payload($sessionUser, $requestedPeriodId > 0 ? $requestedPeriodId : null);
             }
         }
         echo json_encode(['ok' => $user !== null, 'user' => $user]);

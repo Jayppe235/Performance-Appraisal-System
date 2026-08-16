@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useOutletContext } from 'react-router-dom';
 import { roles } from '../data/navigation.js';
 import { useLocalStorage } from '../hooks/useLocalStorage.js';
-import { EvaluationPeriodProvider } from '../contexts/EvaluationPeriodContext.jsx';
+import { EvaluationPeriodProvider, useEvaluationPeriod } from '../contexts/EvaluationPeriodContext.jsx';
+import apiFetch from '../data/api.js';
 
 import Sidebar from '../components/navigation/Sidebar.jsx';
 import Topbar from '../components/navigation/Topbar.jsx';
@@ -36,7 +37,7 @@ export function useDashboardContext() {
   return useOutletContext();
 }
 
-export default function DashboardLayout({ session, onLogout, onUserUpdate }) {
+function DashboardLayoutContent({ session, onLogout, onUserUpdate }) {
   const navigate = useNavigate();
   const baseRole = roles[session.roleKey] || roles.admin;
   const role = {
@@ -60,6 +61,27 @@ export default function DashboardLayout({ session, onLogout, onUserUpdate }) {
   const initialThemePreference = getThemePreference();
   const [, setThemePreference] = useState(initialThemePreference);
   const [darkMode, setDarkMode] = useState(() => resolveDarkMode(initialThemePreference));
+  const { selectedPeriodId } = useEvaluationPeriod();
+  const onUserUpdateRef = useRef(onUserUpdate);
+
+  useEffect(() => { onUserUpdateRef.current = onUserUpdate; }, [onUserUpdate]);
+
+  useEffect(() => {
+    if (!selectedPeriodId || session.roleKey === 'admin') return;
+    let active = true;
+    apiFetch(`/api/auth.php?action=me&period_id=${encodeURIComponent(selectedPeriodId)}`)
+      .then((payload) => {
+        if (!active || !payload?.ok || !payload.user) return;
+        const next = payload.user;
+        const currentPeriodId = String(session.user?.periodId || '');
+        if (next.roleKey !== session.roleKey || String(next.periodId || '') !== currentPeriodId
+          || next.department !== session.user?.department || next.program !== session.user?.program) {
+          onUserUpdateRef.current(next);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [selectedPeriodId, session.roleKey, session.user?.department, session.user?.periodId, session.user?.program]);
 
   useEffect(() => {
     function syncTheme() {
@@ -125,6 +147,7 @@ export default function DashboardLayout({ session, onLogout, onUserUpdate }) {
       setThemePreference(nextPreference);
       window.localStorage.setItem('dipascaf-theme-preference', nextPreference);
       window.localStorage.setItem('dipascaf-dark-mode', JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('dipascaf-theme-changed', { detail: { themePreference: nextPreference } }));
       return next;
     });
   }
@@ -133,6 +156,7 @@ export default function DashboardLayout({ session, onLogout, onUserUpdate }) {
     setThemePreference('light');
     window.localStorage.setItem('dipascaf-theme-preference', 'light');
     window.localStorage.setItem('dipascaf-dark-mode', 'false');
+    window.dispatchEvent(new CustomEvent('dipascaf-theme-changed', { detail: { themePreference: 'light' } }));
     setDarkMode(false);
   }
 
@@ -149,9 +173,14 @@ export default function DashboardLayout({ session, onLogout, onUserUpdate }) {
   ].join(' ');
 
   async function handleLogout() {
-    await onLogout();
     setSidebarOpen(false);
-    navigate('/login', { replace: true });
+    document.documentElement.classList.remove('modal-open');
+    try {
+      await onLogout();
+    } finally {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      navigate('/login', { replace: true });
+    }
   }
 
   return (
@@ -173,12 +202,14 @@ export default function DashboardLayout({ session, onLogout, onUserUpdate }) {
           onResetDark={handleResetDark}
           onLogout={handleLogout}
         />
-        <EvaluationPeriodProvider>
-          <Outlet context={{ role, darkMode }} />
-        </EvaluationPeriodProvider>
+        <Outlet context={{ role, darkMode }} />
       </main>
       <FloatingChat role={role} />
       <ToastContainer />
     </div>
   );
+}
+
+export default function DashboardLayout(props) {
+  return <EvaluationPeriodProvider><DashboardLayoutContent {...props} /></EvaluationPeriodProvider>;
 }

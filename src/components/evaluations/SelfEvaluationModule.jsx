@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowRight, CalendarRange, CheckCircle2, PartyPopper, Plus, RotateCcw, Save, Send, Trash2, Upload } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarRange, CheckCircle2, PartyPopper, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
 import apiFetch from '../../data/api.js';
 import { apiUrl } from '../../data/apiBase.js';
 import { addToast } from '../common/Toast.jsx';
-import { confirmProceed, confirmSaveChanges, confirmSubmitEvaluation } from '../common/ConfirmationModal.jsx';
+import { confirmProceed, confirmSaveChanges } from '../common/ConfirmationModal.jsx';
 import { DynamicQuestionnaireBuilder, DynamicQuestionnaireRenderer } from './DynamicSelfQuestionnaire.jsx';
 import { useEvaluationPeriod } from '../../contexts/EvaluationPeriodContext.jsx';
 import PeriodSelector from './PeriodSelector.jsx';
@@ -160,47 +160,6 @@ function buildSelfEvaluationPayloadFrom(categories, currentAnswers) {
   };
 }
 
-function readSignatureFile(file) {
-  return new Promise((resolve, reject) => {
-    if (!file?.type?.startsWith('image/')) {
-      reject(new Error('Please upload an image file for the signature.'));
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      reject(new Error('Signature image must be 5MB or smaller.'));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Unable to read the signature image.'));
-    reader.onload = () => {
-      const image = new Image();
-      image.onerror = () => reject(new Error('Unable to load the signature image.'));
-      image.onload = () => {
-        const maxWidth = 720;
-        const maxHeight = 240;
-        const scale = Math.min(1, maxWidth / image.width, maxHeight / image.height);
-        const width = Math.max(1, Math.round(image.width * scale));
-        const height = Math.max(1, Math.round(image.height * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext('2d');
-        context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, width, height);
-        context.drawImage(image, 0, 0, width, height);
-        resolve({
-          dataUrl: canvas.toDataURL('image/jpeg', 0.82),
-          name: file.name,
-        });
-      };
-      image.src = String(reader.result || '');
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 function roleParam(roleKey) {
   if (roleKey === 'programHead') return 'program_head';
   if (roleKey === 'admin') return 'faculty';
@@ -274,8 +233,8 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
   const managedReviewerRole = roleParam(role?.key);
   const isManagedReadOnly = displayMode === 'managed_view';
   const isManagedReviewerEdit = managedMode
-    && ['dean', 'program_head'].includes(managedReviewerRole)
-    && (managedReviewerRole === 'dean' ? ['faculty', 'program_head'].includes(targetRole) : targetRole === 'faculty')
+    && managedReviewerRole === 'dean'
+    && ['faculty', 'program_head'].includes(targetRole)
     && managedRecordIdNumber > 0;
   const effectiveRole = isAdmin || isManagedReviewerEdit ? targetRole : role?.key;
   const canEdit = !isManagedReadOnly && ((!isAdmin && status !== 'submitted') || (isManagedReviewerEdit && managedPermissions?.canEditSubmitted === true));
@@ -317,7 +276,13 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
       ? (categoryWeightTotal > 0 ? categoryWeighted / (categoryWeightTotal / 100) : answeredCategoryScores.reduce((sum, item) => sum + item.average, 0) / answeredCategoryScores.length)
       : null;
     const manualFactors = answers.performanceFactorsScore === '' ? null : Number(answers.performanceFactorsScore);
-    const factors = selfFactorsScore ?? manualFactors;
+    const storedOfficialFactors = recordMeta?.official_performance_factors_score ?? recordMeta?.performance_factors_score;
+    const parsedOfficialFactors = storedOfficialFactors === null || storedOfficialFactors === '' || storedOfficialFactors === undefined
+      ? null
+      : Number(storedOfficialFactors);
+    const factors = isManagedReviewerEdit
+      ? (Number.isFinite(parsedOfficialFactors) ? parsedOfficialFactors : null)
+      : (selfFactorsScore ?? manualFactors);
     const overall = factors === null || Number.isNaN(factors) ? null : (outputs * 0.7) + (factors * 0.3);
     return {
       outputs: Number(outputs.toFixed(4)),
@@ -327,7 +292,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
       level: performanceLevel(overall),
       totalWeight,
     };
-  }, [answers.performanceFactorsScore, answers.performanceOutputs, answers.selfRatings, formCategories, t.question3, t.question4, t.question5]);
+  }, [answers.performanceFactorsScore, answers.performanceOutputs, answers.selfRatings, formCategories, isManagedReviewerEdit, recordMeta?.official_performance_factors_score, recordMeta?.performance_factors_score, t.question3, t.question4, t.question5]);
 
   const selfEvaluationCategories = useMemo(() => formCategories, [formCategories]);
 
@@ -347,12 +312,15 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
 
   const modernSections = useMemo(() => (templateInfo.definition?.sections || [])
     .filter((section) => section.visible !== false && (section.type !== 'career' || showCareer))
-    .map((section) => ({ ...section, title: section.title || 'Untitled Section' })), [showCareer, templateInfo.definition]);
+    // The employee submits Part I only. All remaining appraisal sections,
+    // including Part II scoring and Part V, belong to the Dean stage.
+    .filter((section) => isManagedReviewerEdit ? section.type !== 'partI' : section.type === 'partI')
+    .map((section) => ({ ...section, title: section.title || 'Untitled Section' })), [isManagedReviewerEdit, showCareer, templateInfo.definition]);
 
   const activeSection = modernSections[Math.min(activeSectionIndex, Math.max(0, modernSections.length - 1))] || modernSections[0];
   const sectionCompletionPercent = modernSections.length > 1
     ? Math.round((activeSectionIndex / (modernSections.length - 1)) * 100)
-    : 0;
+    : 100;
 
   function categoryStats(category) {
     const ratingsForCategory = category.questions.map((question) => Number(answers.selfRatings?.[question.id] || 0));
@@ -411,9 +379,6 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
     const approvalRequirements = templateInfo.definition?.approvalRequirements || {};
     if (section.type === 'confirmation' && !answers.confirmations.appraisee.trim()) {
       errors.confirmation = 'Typed name confirmation for the appraisee is required.';
-    }
-    if (section.type === 'confirmation' && approvalRequirements.requireEmployeeSignature !== false && !answers.confirmations.appraiseeSignature) {
-      errors.appraiseeSignature = 'Upload the appraisee virtual signature.';
     }
     if (section.type === 'confirmation' && approvalRequirements.requireReviewerComments && !String(answers.comments || '').trim()) {
       errors.reviewerComments = 'Comments are required before this evaluation can be submitted for review.';
@@ -624,40 +589,57 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
     };
   }, [saveDraftSilently]);
 
-  useEffect(() => {
-    if (isAdmin || isManagedReviewerEdit || loading) {
-      if (isAdmin || isManagedReviewerEdit) setGoalsGate({ loading: false, approved: true, record: null });
-      return;
+  const loadGoalsApproval = useCallback(async () => {
+    const params = new URLSearchParams({ mode: 'mine' });
+    const assignmentPeriodId = selfAssignment?.periodId || selectedPeriodId;
+    if (assignmentPeriodId) params.set('period_id', String(assignmentPeriodId));
+    try {
+      const payload = await apiFetch(`/api/goals-records.php?${params.toString()}`);
+      const approved = payload.record?.status === 'approved';
+      setGoalsGate({ loading: false, approved, record: payload.record || null });
+      if (approved && payload.record?.goals?.length) {
+        setAnswers((current) => {
+          const existing = current.achievedGoals || [];
+          const existingOutputs = current.performanceOutputs || [];
+          const transferred = payload.record.goals.map((goal, index) => ({
+            goals: `${goal.keyResultArea}${goal.goalStatement ? ` — ${goal.goalStatement}` : ''}`,
+            accomplishment: existing[index]?.accomplishment || '',
+            approvedGoal: true,
+          }));
+          const performanceOutputs = payload.record.goals.map((goal, index) => ({
+            goals: `${goal.keyResultArea}${goal.goalStatement ? ` — ${goal.goalStatement}` : ''}`,
+            weight: goal.weight,
+            accomplishment: existingOutputs[index]?.accomplishment || '',
+            rating: existingOutputs[index]?.rating || '',
+            approvedGoal: true,
+          }));
+          return { ...current, achievedGoals: transferred, performanceOutputs };
+        });
+      }
+      return approved;
+    } catch {
+      setGoalsGate((current) => ({ ...current, loading: false, approved: false }));
+      return false;
     }
-    let active = true;
-    apiFetch('/api/goals-records.php?mode=mine')
-      .then((payload) => {
-        if (!active) return;
-        const approved = payload.record?.status === 'approved';
-        setGoalsGate({ loading: false, approved, record: payload.record || null });
-        if (approved && payload.record?.goals?.length) {
-          setAnswers((current) => {
-            const existing = current.achievedGoals || [];
-            const existingOutputs = current.performanceOutputs || [];
-            const transferred = payload.record.goals.map((goal, index) => ({
-              goals: `${goal.keyResultArea}${goal.goalStatement ? ` — ${goal.goalStatement}` : ''}`,
-              accomplishment: existing[index]?.accomplishment || '',
-              approvedGoal: true,
-            }));
-            const performanceOutputs = payload.record.goals.map((goal, index) => ({
-              goals: `${goal.keyResultArea}${goal.goalStatement ? ` — ${goal.goalStatement}` : ''}`,
-              weight: goal.weight,
-              accomplishment: existingOutputs[index]?.accomplishment || '',
-              rating: existingOutputs[index]?.rating || '',
-              approvedGoal: true,
-            }));
-            return { ...current, achievedGoals: transferred, performanceOutputs };
-          });
-        }
-      })
-      .catch(() => active && setGoalsGate({ loading: false, approved: false, record: null }));
-    return () => { active = false; };
-  }, [isAdmin, isManagedReviewerEdit, loading]);
+  }, [selectedPeriodId, selfAssignment?.periodId]);
+
+  useEffect(() => {
+    if (isAdmin || isManagedReviewerEdit) {
+      setGoalsGate({ loading: false, approved: true, record: null });
+      return undefined;
+    }
+    if (loading || goalsGate.approved) return undefined;
+    void loadGoalsApproval();
+    const refresh = () => { if (!document.hidden) void loadGoalsApproval(); };
+    const interval = window.setInterval(refresh, 10000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [goalsGate.approved, isAdmin, isManagedReviewerEdit, loadGoalsApproval, loading]);
 
   function markDraftDirty() {
     dirtyRef.current = true;
@@ -666,7 +648,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
 
   function updateAnswer(name, value) {
     markDraftDirty();
-    setAnswers((prev) => ({ ...prev, [name]: value }));
+    setAnswers((prev) => ({ ...prev, [name]: typeof value === 'function' ? value(prev[name]) : value }));
   }
 
   function updateDynamicResponse(questionId, value) {
@@ -711,10 +693,9 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
   function validationMessage() {
     const modernErrors = validateAllModernSections();
     if (Object.keys(modernErrors).length > 0) return Object.values(modernErrors)[0];
-    if (!answers.performanceOutputs.some((row) => row.goals.trim() && Number(row.weight) > 0 && row.rating)) return 'Add at least one performance output with weight and rating.';
+    if (isManagedReviewerEdit && !answers.performanceOutputs.some((row) => row.goals.trim() && Number(row.weight) > 0 && row.rating)) return 'Complete Part II with at least one performance output, weight, and rating.';
     if (computed.factors !== null && (computed.factors < 1 || computed.factors > 5)) return 'Performance Factors score must be between 1 and 5.';
-    if (!answers.confirmations.appraisee.trim()) return 'Typed name confirmation for the appraisee is required.';
-    if (!answers.confirmations.appraiseeSignature) return 'Upload the appraisee virtual signature.';
+    if (isManagedReviewerEdit && !answers.confirmations.appraisee.trim()) return 'Typed name confirmation for the appraisee is required.';
     return '';
   }
 
@@ -749,7 +730,11 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
               message: `This will overwrite the submitted self-evaluation for ${employee.name || 'this faculty member'} and record the ${managedReviewerRole === 'program_head' ? 'Program Head' : 'Dean'} update in the activity logs.`,
               confirmText: 'Update',
             })
-          : await confirmSubmitEvaluation();
+          : await confirmProceed({
+              title: 'Proceed to Dean for Part II Evaluation and Scoring?',
+              message: 'Your completed Part I will be sent to the Dean. Please wait for the Part II evaluation and scoring announcement after submission.',
+              confirmText: 'Yes, Proceed to Dean',
+            });
         if (!confirmed) return;
       }
     }
@@ -857,7 +842,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
     : effectiveRole === 'dean'
     ? 'Administrative'
     : 'Program Head';
-  const paperSectionTypes = ['partI', 'questions', 'category', 'outputs', 'summary', 'confirmation', 'career'];
+  const paperSectionTypes = ['partI', 'questions', 'category', 'outputs', 'factors', 'summary', 'confirmation', 'career'];
   const isPaperSection = paperSectionTypes.includes(activeSection?.type);
   const submitBlocker = !canEdit
     ? status === 'submitted'
@@ -887,8 +872,8 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
             <div className="evaluation-success-icon"><PartyPopper size={28} /></div>
             <div>
               <span>Congratulations</span>
-              <h3>Your self-evaluation was submitted successfully.</h3>
-              <p>{pending.length ? 'Your responses have been recorded. Continue with your next assigned evaluation.' : 'You have completed all currently assigned evaluations. Thank you!'}</p>
+              <h3>Part I was submitted to the Dean.</h3>
+              <p>Please wait for the announcement regarding Part II evaluation and scoring. Your record remains under review until the Dean completes the next stage.</p>
             </div>
           </div>
           {pending.length ? (
@@ -907,7 +892,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
                 })}
               </div>
             </div>
-          ) : <div className="evaluation-complete-panel"><CheckCircle2 size={20} /><div><strong>All evaluations complete</strong><span>You may return to your dashboard.</span></div></div>}
+          ) : <div className="evaluation-complete-panel"><CheckCircle2 size={20} /><div><strong>Waiting for Part II announcement</strong><span>The Dean will complete the next evaluation and scoring stage.</span></div></div>}
           <div className="evaluation-success-actions"><button type="button" className="dipascaf-evaluate-btn evaluation-nav-btn secondary" onClick={onFinish}>{pending.length ? 'Back to Dashboard' : 'Close'}</button></div>
         </div>
       </section>
@@ -929,6 +914,7 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
           <div>
             <strong>Goals Record Sheet Required</strong>
             <p>You must complete, submit, and obtain approval for your Goals Record Sheet before proceeding with your Self-Evaluation.</p>
+            <button type="button" onClick={() => void loadGoalsApproval()}>Check Approved Record Again</button>
           </div>
         </div>
       </section>
@@ -1038,8 +1024,8 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
       <section className="admin-box module-wide self-evaluation-page self-eval-modern-page self-eval-submitted-preview page-enter evaluation-form-modal">
         <div className="dipascaf-modal-header self-eval-modern-header">
           <div className="dipascaf-modal-header-text">
-            <h2>Self Evaluation Preview</h2>
-            <p>This self-evaluation has already been submitted. Only the submitted summary is shown here.</p>
+            <h2>Part I Submitted</h2>
+            <p>Your Part I response is with the Dean. Please wait for the Part II evaluation and scoring announcement.</p>
           </div>
           <span className={`self-eval-status ${status}`}>{status}</span>
         </div>
@@ -1064,11 +1050,11 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
     <section className={`admin-box module-wide self-evaluation-page self-eval-modern-page page-enter evaluation-form-modal ${isPaperSection ? 'self-eval-paper-active' : ''}`}>
       <div className="dipascaf-modal-header self-eval-modern-header">
         <div className="dipascaf-modal-header-text">
-          <h2>{isManagedReviewerEdit ? 'Edit Faculty Self Evaluation' : 'Self Evaluation'}</h2>
+          <h2>{isManagedReviewerEdit ? 'Dean Part II Evaluation and Scoring' : 'Self Evaluation'}</h2>
           <p>
             {isManagedReviewerEdit
-              ? `Review and update this submitted faculty self-evaluation. ${managedReviewerRole === 'program_head' ? 'Program Head' : 'Dean'} changes are validated, scope-checked, and recorded in the activity logs.`
-              : 'Rate your own performance based on the PMAS criteria. Complete each section, add behavioral evidence when required, then submit your final self-assessment.'}
+              ? 'Review the faculty member’s submitted Part I, complete the required Part II ratings and weights, then save the appraisal before final approval.'
+              : 'Complete Part I of your Self-Evaluation. After submission, wait for the Dean’s Part II evaluation and scoring announcement.'}
           </p>
         </div>
         <span className={`self-eval-status ${status}`}>{status}</span>
@@ -1114,22 +1100,8 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
 
       <form className={`admin-form evaluation-form self-eval-modern-form ${isPaperSection ? 'self-eval-paper-mode' : ''}`} onSubmit={(event) => event.preventDefault()} autoComplete="off">
         <div className="form-category-header">
-          <strong>Sections</strong>
-          <small>Move through the PMAS self-evaluation using the same flow as the evaluation questionnaire.</small>
-        </div>
-
-        <div className="form-category-nav">
-          <label className="form-category-select-label" htmlFor="self-evaluation-section-select">Section</label>
-          <select
-            id="self-evaluation-section-select"
-            className="form-category-select"
-            value={activeSectionIndex}
-            onChange={(event) => goToSection(Number(event.target.value))}
-          >
-            {modernSections.map((section, index) => (
-              <option key={section.id} value={index}>{section.title}</option>
-            ))}
-          </select>
+          <strong>{isManagedReviewerEdit ? 'Dean Appraisal Stage' : 'Employee Self-Evaluation'}</strong>
+          <small>{isManagedReviewerEdit ? 'Complete Part II evaluation and scoring. Ratings and weights are required before approval.' : 'Complete Part I, then press Next to proceed to the Dean and wait for the Part II announcement.'}</small>
         </div>
 
         <div className="form-category-progress">
@@ -1188,6 +1160,9 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
             {activeSection?.type === 'outputs' && (
               <ModernOutputsSection answers={answers} canEdit={canEdit} showValidation={showValidation} validationErrors={validationErrors} updateRow={updateRow} addRow={addRow} removeRow={removeRow} computed={computed} />
             )}
+            {activeSection?.type === 'factors' && (
+              <ModernFactorsSection computed={computed} sources={recordMeta?.performance_factors_sources} />
+            )}
             {activeSection?.type === 'summary' && (
               <ModernSummarySection answers={answers} canEdit={canEdit} showValidation={showValidation} validationErrors={validationErrors} updateAnswer={updateAnswer} updateRow={updateRow} addRow={addRow} removeRow={removeRow} computed={computed} template={t} />
             )}
@@ -1236,9 +1211,9 @@ export default function SelfEvaluationModule({ role, initialTargetRole = null, t
                     className="dipascaf-evaluate-btn evaluation-submit-btn"
                     onClick={() => save('submit')}
                     disabled={!canSubmitSelfEvaluation}
-                    title={submitBlocker || 'Submit Self-Evaluation'}
+                    title={submitBlocker || 'Continue to Dean review'}
                   >
-                    <Send size={16} /> {isManagedReviewerEdit ? 'Update Faculty Self-Evaluation' : 'Submit Self-Evaluation'}
+                    {isManagedReviewerEdit ? <Save size={16} /> : <ArrowRight size={16} />} {isManagedReviewerEdit ? 'Save Part II Appraisal' : 'Next'}
                   </button>
                 </>
               )
@@ -1447,6 +1422,29 @@ function ModernOutputsSection({ answers, canEdit, showValidation, validationErro
   );
 }
 
+function ModernFactorsSection({ computed, sources = {} }) {
+  const formatSource = (value) => {
+    const number = Number(value);
+    return value === null || value === undefined || value === '' || !Number.isFinite(number) ? 'Pending' : number.toFixed(4);
+  };
+
+  return (
+    <>
+      <h3>Part III - Performance Factors</h3>
+      <p className="self-eval-helper">This score is calculated automatically from the official Peer, Program Head, and Dean evaluations for the same appraisal period.</p>
+      <div className="form-category-computation-grid self-eval-modern-computation">
+        <article><span>Peer Rating</span><strong>{formatSource(sources?.peer)}</strong></article>
+        <article><span>Program Head Rating</span><strong>{formatSource(sources?.program_head)}</strong></article>
+        <article><span>Dean Rating</span><strong>{formatSource(sources?.dean)}</strong></article>
+        <article><span>Combined Performance Factors</span><strong>{computed.factors === null ? 'Pending' : computed.factors.toFixed(4)}</strong></article>
+      </div>
+      <div className="form-category-computation-grid self-eval-modern-computation">
+        <article><span>Performance Factors × 0.30</span><strong>{computed.factors === null ? 'Pending' : (computed.factors * 0.3).toFixed(4)}</strong></article>
+      </div>
+    </>
+  );
+}
+
 function ModernSummarySection({ answers, canEdit, showValidation, validationErrors, updateAnswer, updateRow, addRow, removeRow, computed, template }) {
   return (
     <>
@@ -1498,38 +1496,7 @@ function ModernSummarySection({ answers, canEdit, showValidation, validationErro
   );
 }
 
-function ModernConfirmationSection({ answers, appraiseeName, canEdit, showValidation, validationErrors, updateAnswer, programHeadReviewedAt, approvalRequirements = {} }) {
-  const programHeadName = String(answers.confirmations.appraiser || '').trim();
-  const programHeadSignature = answers.confirmations.appraiserSignature || '';
-  const programHeadSignatureName = answers.confirmations.appraiserSignatureName || '';
-  const programHeadReviewDate = formatReviewDate(programHeadReviewedAt);
-
-  async function handleSignatureUpload(event) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-
-    try {
-      const signature = await readSignatureFile(file);
-      updateAnswer('confirmations', {
-        ...answers.confirmations,
-        appraiseeSignature: signature.dataUrl,
-        appraiseeSignatureName: signature.name,
-      });
-      addToast({ type: 'success', text: 'Virtual signature uploaded.' });
-    } catch (error) {
-      addToast({ type: 'error', text: error.message || 'Unable to upload signature.' });
-    }
-  }
-
-  function removeSignature() {
-    updateAnswer('confirmations', {
-      ...answers.confirmations,
-      appraiseeSignature: '',
-      appraiseeSignatureName: '',
-    });
-  }
-
+function ModernConfirmationSection({ answers, appraiseeName, canEdit, showValidation, validationErrors, updateAnswer, approvalRequirements = {} }) {
   return (
     <>
       <h3>Comments and Confirmation</h3>
@@ -1538,60 +1505,14 @@ function ModernConfirmationSection({ answers, appraiseeName, canEdit, showValida
       <p className="self-eval-helper">We have jointly reviewed and discussed this performance appraisal.</p>
       <div className="self-eval-runtime-approval">
         <strong>Approval route</strong>
-        <span>{(approvalRequirements.reviewers || ['employee', 'program_head', 'dean']).map((reviewer) => String(reviewer).replaceAll('_', ' ')).join(' → ')}</span>
+        <span>{(approvalRequirements.reviewers || ['employee', 'dean']).map((reviewer) => String(reviewer).replaceAll('_', ' ')).join(' → ')}</span>
       </div>
       {showValidation && validationErrors.confirmation && <div className="field-error-label"><AlertCircle size={12} /><span>{validationErrors.confirmation}</span></div>}
       <div className="self-eval-modern-field-grid">
         <div className="self-eval-signature-field">
           <label>Printed Name of Appraisee<input autoComplete="off" value={answers.confirmations.appraisee || appraiseeName || ''} readOnly aria-readonly="true" title="Automatically filled from the appraisee profile" /></label>
-          {approvalRequirements.requireEmployeeSignature !== false && <div className={`self-eval-signature-upload ${answers.confirmations.appraiseeSignature ? 'has-signature' : ''} ${showValidation && validationErrors.appraiseeSignature ? 'has-validation-error' : ''}`}>
-            <div className="self-eval-signature-preview">
-              {answers.confirmations.appraiseeSignature ? (
-                <img src={answers.confirmations.appraiseeSignature} alt="Uploaded appraisee signature" />
-              ) : (
-                <span>No virtual signature uploaded</span>
-              )}
-            </div>
-            <div className="self-eval-signature-actions">
-              <label className={`evaluation-nav-btn secondary self-eval-signature-button ${!canEdit ? 'disabled' : ''}`}>
-                <Upload size={14} />
-                <span>{answers.confirmations.appraiseeSignature ? 'Replace signature' : 'Upload signature'}</span>
-                <input type="file" accept="image/*" onChange={handleSignatureUpload} disabled={!canEdit} />
-              </label>
-              {answers.confirmations.appraiseeSignature && canEdit && (
-                <button type="button" className="evaluation-nav-btn secondary self-eval-signature-button" onClick={removeSignature}>
-                  <Trash2 size={14} /> Remove
-                </button>
-              )}
-            </div>
-            {answers.confirmations.appraiseeSignatureName && <small>{answers.confirmations.appraiseeSignatureName}</small>}
-            {showValidation && validationErrors.appraiseeSignature && <div className="field-error-label"><AlertCircle size={12} /><span>{validationErrors.appraiseeSignature}</span></div>}
-          </div>}
         </div>
         <label className="self-eval-confirmation-date">Date<input type="date" autoComplete="off" value={answers.confirmations.date || ''} onChange={(e) => updateAnswer('confirmations', { ...answers.confirmations, date: e.target.value })} disabled={!canEdit} /></label>
-        {programHeadSignature && (
-          <div className="self-eval-signature-field self-eval-reviewer-signature-field">
-            <div className="self-eval-reviewer-signature-card">
-              <div className="self-eval-reviewer-signature-copy">
-                <span>Program Head Signature</span>
-                <strong>{programHeadName || 'Program Head'}</strong>
-                <div className="self-eval-reviewer-signature-status">
-                  <CheckCircle2 size={15} /> {programHeadReviewDate ? 'Reviewed and signed' : 'Signature uploaded'}
-                </div>
-                {programHeadReviewDate && (
-                  <div className="self-eval-reviewer-signature-date">
-                    <span>Review date</span>
-                    <time dateTime={programHeadReviewedAt}>{programHeadReviewDate}</time>
-                  </div>
-                )}
-                {programHeadSignatureName && <small>{programHeadSignatureName}</small>}
-              </div>
-              <div className="self-eval-signature-preview">
-                <img src={programHeadSignature} alt={`Signature of ${programHeadName || 'Program Head'}`} />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );
@@ -1615,17 +1536,7 @@ function SubmittedSelfEvaluationPreview({ answers, employee, formCode, audienceL
     fileName: confirmations.vpaaReviewerSignatureName,
     reviewedAt: recordMeta?.vpaa_reviewed_at,
     reviewStatus: recordMeta?.vpaa_review_status,
-  }] : [
-    ...(evaluationRole === 'program_head' ? [] : [{
-      key: 'program-head',
-      label: 'Program Head Confirmation',
-      name: confirmations.appraiser,
-      signature: confirmations.appraiserSignature,
-      fileName: confirmations.appraiserSignatureName,
-      reviewedAt: recordMeta?.program_head_reviewed_at,
-      reviewStatus: recordMeta?.program_head_review_status,
-    }]),
-    {
+  }] : [{
       key: 'dean',
       label: 'Dean Confirmation',
       name: confirmations.deanReviewer,
@@ -1633,8 +1544,7 @@ function SubmittedSelfEvaluationPreview({ answers, employee, formCode, audienceL
       fileName: confirmations.deanReviewerSignatureName,
       reviewedAt: recordMeta?.dean_reviewed_at,
       reviewStatus: recordMeta?.dean_review_status,
-    },
-  ];
+    }];
 
   return (
     <div className="self-eval-preview-summary self-eval-paper self-eval-paper-form submitted-self-eval-paper">
@@ -1744,15 +1654,6 @@ function SubmittedSelfEvaluationPreview({ answers, employee, formCode, audienceL
             <strong>{submittedValue(submittedDate, 'Not recorded')}</strong>
           </article>
         </div>
-        <div className="self-eval-preview-signature">
-          {confirmations.appraiseeSignature ? (
-            <img src={confirmations.appraiseeSignature} alt="Submitted appraisee signature" />
-          ) : (
-            <span>No signature image recorded.</span>
-          )}
-        </div>
-        {confirmations.appraiseeSignatureName && <small>{confirmations.appraiseeSignatureName}</small>}
-
         <div className="self-eval-preview-reviewer-confirmations">
           {reviewerConfirmations.map((reviewer) => (
             <article className={`self-eval-preview-reviewer-card ${reviewer.signature ? 'is-signed' : 'is-pending'}`} key={reviewer.key}>
@@ -1923,7 +1824,7 @@ function AdminSelfEvaluationTablePreview({ title, template, definition, formCode
         <p className="self-eval-helper">We have jointly reviewed and discussed this performance appraisal.</p>
         <div className="self-eval-approval-summary">
           <strong>Required approvals</strong>
-          <span>{(definition?.approvalRequirements?.reviewers || ['employee', 'program_head', 'dean']).map((reviewer) => String(reviewer).replaceAll('_', ' ')).join(' → ')}</span>
+          <span>{(definition?.approvalRequirements?.reviewers || ['employee', 'dean']).map((reviewer) => String(reviewer).replaceAll('_', ' ')).join(' → ')}</span>
         </div>
         <PreviewTable columns={['Printed Name and Signature of Appraisee', 'Printed Name and Signature of Appraiser', 'Printed Name and Signature of Reviewer', 'Date']} rows={[0]} />
       </div>

@@ -331,7 +331,12 @@ function handleListSchedules(): void
             s.evaluation_period_id,
             s.due_date,
             s.status,
-            s.total_assignments,
+            (
+                SELECT COUNT(*)
+                FROM peer_assignments pa
+                WHERE pa.cycle_name = ap.period_name
+                  AND COALESCE(pa.is_archived, 0) = 0
+            ) AS total_assignments,
             s.created_by,
             s.created_at,
             s.updated_at,

@@ -41,3 +41,13 @@ export function assetUrl(path) {
   const appBase = String(import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   return `${appBase}${cleanPath}`;
 }
+
+/** Route report downloads through executable PHP instead of exposing a
+ * reports/*.php file to static hosting. */
+export function reportUrl(endpoint) {
+  const cleanEndpoint = String(endpoint || '').split('/').pop();
+  const url = new URL(apiUrl('/api/vercel.php'), window.location.origin);
+  url.searchParams.set('_scope', 'reports');
+  url.searchParams.set('_endpoint', cleanEndpoint);
+  return url.toString();
+}

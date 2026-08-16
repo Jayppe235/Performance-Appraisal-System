@@ -76,6 +76,7 @@ export default defineConfig(({ mode }) => {
   plugins: [legacyDevelopmentBasePath(), developmentIndex(), react(), cssDiagnosticCompatibility()],
   server: {
     https,
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': {
         target: phpOrigin,

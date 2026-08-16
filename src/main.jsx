@@ -11,6 +11,7 @@ import './styles/people-modal-dark.css';
 import './styles/account-management.css';
 import './styles/sidebar-performance.css';
 import './styles/performance-reports.css';
+import './styles/mobile-shell-fixes.css';
 import './styles/assignment-workbench-fixes.css';
 import './styles/department-profile-polish.css';
 import './styles/department-ai-layout.css';

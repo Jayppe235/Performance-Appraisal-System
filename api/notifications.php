@@ -61,6 +61,7 @@ try {
                 'notifications' => $notifications,
                 'unread_count' => $unreadCount,
                 'latest_id' => (int) ($notifications[0]['id'] ?? 0),
+                'refreshed_at' => gmdate('c'),
             ]);
             break;
 
@@ -115,6 +116,7 @@ try {
             break;
     }
 } catch (Throwable $exception) {
+    notify_log('API action failed (' . $action . ') for user ' . $userId . ': ' . $exception->getMessage());
     http_response_code(500);
-    echo json_encode(['ok' => false, 'notifications' => [], 'unread_count' => 0, 'message' => $exception->getMessage()]);
+    echo json_encode(['ok' => false, 'notifications' => [], 'unread_count' => 0, 'message' => 'Unable to complete the notification request.']);
 }

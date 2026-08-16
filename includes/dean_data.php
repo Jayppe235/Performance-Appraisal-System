@@ -43,7 +43,7 @@ function dean_departments(int $deanUserId, ?int $evaluationPeriodId = null): arr
 function dean_department_filter_sql(array $departments, string $alias = 'f'): array
 {
     if ($departments === []) {
-        return ['1=1', []];
+        return ['1=0', []];
     }
 
     $departmentAliases = [];
@@ -53,7 +53,7 @@ function dean_department_filter_sql(array $departments, string $alias = 'f'): ar
     $departments = array_values(array_unique(array_filter($departmentAliases)));
 
     if ($departments === []) {
-        return ['1=1', []];
+        return ['1=0', []];
     }
 
     $parts = [];
@@ -490,6 +490,80 @@ function dean_category_result_rows(array $departments, string $periodName = '', 
          ORDER BY r.average_rating ASC, r.submitted_at DESC",
         array_merge($params, $periodParams)
     );
+}
+
+function dean_recurring_weak_areas(array $departments, float $threshold = 3.50): array
+{
+    $rows = array_merge(
+        dean_category_result_rows($departments, '', 'a', true),
+        dean_category_result_rows($departments, '', 'b', true)
+    );
+
+    // Collapse multiple evaluators into one faculty/category/period score so
+    // evaluator volume cannot make an area appear more recurrent than it is.
+    $facultyPeriod = [];
+    foreach ($rows as $row) {
+        $facultyId = (int) ($row['evaluatee_faculty_id'] ?? 0);
+        $period = trim((string) ($row['cycle_name'] ?? $row['evaluation_period'] ?? ''));
+        $category = trim((string) ($row['category_title'] ?? 'Uncategorized'));
+        if ($facultyId <= 0 || $period === '' || $category === '') continue;
+        $key = $category . "\n" . $period . "\n" . $facultyId;
+        $facultyPeriod[$key] ??= [
+            'category' => $category,
+            'period' => $period,
+            'faculty_id' => $facultyId,
+            'faculty_name' => (string) ($row['faculty_name'] ?? 'Unknown Faculty'),
+            'program_code' => (string) ($row['program_code'] ?? 'Unassigned Program'),
+            'total' => 0.0,
+            'count' => 0,
+        ];
+        $facultyPeriod[$key]['total'] += (float) ($row['average_rating'] ?? 0);
+        $facultyPeriod[$key]['count']++;
+    }
+
+    $categories = [];
+    foreach ($facultyPeriod as $item) {
+        if ($item['count'] <= 0) continue;
+        $score = $item['total'] / $item['count'];
+        if ($score > $threshold) continue;
+        $category = $item['category'];
+        $categories[$category] ??= [
+            'weak_area' => $category,
+            'score_total' => 0.0,
+            'occurrences' => 0,
+            'periods' => [],
+            'faculty' => [],
+            'programs' => [],
+        ];
+        $categories[$category]['score_total'] += $score;
+        $categories[$category]['occurrences']++;
+        $categories[$category]['periods'][$item['period']] = true;
+        $categories[$category]['faculty'][$item['faculty_name']] = true;
+        $categories[$category]['programs'][$item['program_code']] = true;
+    }
+
+    $result = [];
+    foreach ($categories as $category) {
+        $periods = array_keys($category['periods']);
+        $faculty = array_keys($category['faculty']);
+        $programs = array_keys($category['programs']);
+        $result[] = [
+            'weak_area' => $category['weak_area'],
+            'average_rating' => round($category['score_total'] / max(1, $category['occurrences']), 2),
+            'occurrences' => $category['occurrences'],
+            'period_count' => count($periods),
+            'faculty_count' => count($faculty),
+            'periods' => $periods,
+            'faculty' => $faculty,
+            'programs' => $programs,
+            'is_recurring' => count($periods) >= 2 && count($faculty) >= 2,
+        ];
+    }
+    usort($result, static fn(array $a, array $b): int =>
+        [$b['is_recurring'], $b['period_count'], $b['faculty_count'], $b['occurrences'], -$b['average_rating']]
+        <=> [$a['is_recurring'], $a['period_count'], $a['faculty_count'], $a['occurrences'], -$a['average_rating']]
+    );
+    return $result;
 }
 
 function dean_ai_insight_counts(array $departments): array

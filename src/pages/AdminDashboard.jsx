@@ -1,6 +1,6 @@
 import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Bell, Clock, KeyRound, Monitor, Moon, RotateCcw, Archive, FileText, Save, Search, ShieldCheck } from 'lucide-react';
+import { Activity, Bell, Clock, KeyRound, Monitor, Moon, RotateCcw, Archive, FileText, Save, Search, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 import { addToast } from '../components/common/Toast.jsx';
 import { confirmDeleteData, confirmProceed, confirmSaveChanges } from '../components/common/ConfirmationModal.jsx';
 import ErrorBoundary from '../components/common/ErrorBoundary.jsx';
@@ -11,6 +11,7 @@ import PeopleManagementPage from '../components/people/PeopleManagementPage.jsx'
 import DataTable from '../components/common/DataTable.jsx';
 import AdminEvaluationMonitor from '../components/evaluations/AdminEvaluationMonitor.jsx';
 import AdminDashboardOverview from '../components/dashboard/AdminDashboardOverview.jsx';
+import AuditLogsPage from '../components/admin/AuditLogsPage.jsx';
 import PeriodSelector from '../components/evaluations/PeriodSelector.jsx';
 import { useEvaluationPeriod } from '../contexts/EvaluationPeriodContext.jsx';
 import useRealtimeMetrics from '../hooks/useRealtimeMetrics.js';
@@ -79,6 +80,7 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   const { section = 'dashboard' } = useParams();
   const location = useLocation();
   const [activeSettingsTab, setActiveSettingsTab] = useState('profile');
+  const [auditLogTotal, setAuditLogTotal] = useState(0);
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [archivedDepartments, setArchivedDepartments] = useState([]);
@@ -96,6 +98,15 @@ export default function AdminDashboard({ role, onUserUpdate }) {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState(null);
   const [dashboardFilters, setDashboardFilters] = useState({ department: '', program: '', comparisonPeriodId: '' });
+
+  useEffect(() => {
+    if (section !== 'settings') return;
+    let active = true;
+    apiFetch('/api/audit-logs.php?page=1&page_size=1')
+      .then((payload) => { if (active) setAuditLogTotal(Number(payload?.pagination?.total) || 0); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [section]);
 
   // ── Archived questionnaire categories state ─────────────────────
   const [archivedFormACategories, setArchivedFormACategories] = useState([]);
@@ -137,6 +148,25 @@ export default function AdminDashboard({ role, onUserUpdate }) {
       fullName: role.user.name || '',
     });
   }, [role.user.name]);
+
+  useEffect(() => {
+    function syncActiveTheme(event) {
+      const preference = event?.detail?.themePreference
+        || window.localStorage.getItem('dipascaf-theme-preference')
+        || 'light';
+      setAdminSettings((current) => ({
+        ...current,
+        themePreference: preference === 'dark' ? 'dark' : 'light',
+      }));
+    }
+    window.addEventListener('dipascaf-theme-changed', syncActiveTheme);
+    window.addEventListener('storage', syncActiveTheme);
+    syncActiveTheme();
+    return () => {
+      window.removeEventListener('dipascaf-theme-changed', syncActiveTheme);
+      window.removeEventListener('storage', syncActiveTheme);
+    };
+  }, []);
 
   function updateAdminSetting(name, value) {
     setAdminSettings((prev) => ({ ...prev, [name]: value }));
@@ -315,8 +345,8 @@ export default function AdminDashboard({ role, onUserUpdate }) {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (section === 'settings' && params.get('tab') === 'archive') {
-      setActiveSettingsTab('archive');
+    if (section === 'settings' && ['archive', 'audit'].includes(params.get('tab'))) {
+      setActiveSettingsTab(params.get('tab'));
     }
   }, [location.search, section]);
 
@@ -506,11 +536,14 @@ export default function AdminDashboard({ role, onUserUpdate }) {
 
       {section === 'reports' && <ReportGrid role={role} />}
 
+      {section === 'audit-logs' && <Navigate to="/admin/settings?tab=audit" replace />}
+
       {section === 'settings' && (
-        <section className="admin-box module-wide page-enter">
-          <div className="box-title">
-            <h2>Settings & Archive</h2>
-            <span>Profile, system preferences, and archived records</span>
+        <section className="admin-box settings-page module-wide page-enter">
+          <div className="settings-page-hero">
+            <span className="settings-page-hero-icon"><SlidersHorizontal size={23} /></span>
+            <div><p className="eyebrow">Administration</p><h2>System Settings</h2><span>Manage your profile, preferences, security controls, audit activity, and archived records.</span></div>
+            <div className="settings-page-status"><strong>Admin/HR</strong><small>Configuration access</small></div>
           </div>
 
           {/* Settings Tabs */}
@@ -519,15 +552,25 @@ export default function AdminDashboard({ role, onUserUpdate }) {
               className={`settings-tab ${activeSettingsTab === 'profile' ? 'active' : ''}`}
               onClick={() => setActiveSettingsTab('profile')}
             >
-              Profile & System
+              <ShieldCheck size={16} /> Profile & System
             </button>
             <button
               className={`settings-tab ${activeSettingsTab === 'archive' ? 'active' : ''}`}
               onClick={() => setActiveSettingsTab('archive')}
             >
-              Archive ({archivedDepartments.length + archivedUsers.length + archivedEvaluations.length})
+              <Archive size={16} /> Archive <span className="settings-tab-count">{archivedDepartments.length + archivedUsers.length + archivedEvaluations.length}</span>
+            </button>
+            <button
+              className={`settings-tab ${activeSettingsTab === 'audit' ? 'active' : ''}`}
+              onClick={() => setActiveSettingsTab('audit')}
+            >
+              <Activity size={16} /> Audit Logs {auditLogTotal > 0 && <span className="settings-tab-count">{auditLogTotal}</span>}
             </button>
           </div>
+
+          {activeSettingsTab === 'audit' && (
+            <AuditLogsPage embedded onTotalChange={setAuditLogTotal} />
+          )}
 
           {/* Profile & System Settings Tab */}
           {activeSettingsTab === 'profile' && (

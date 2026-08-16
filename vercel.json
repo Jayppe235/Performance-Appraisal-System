@@ -2,19 +2,18 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/index.php": {
-      "runtime": "vercel-php@0.9.0"
-    }
-  },
   "rewrites": [
     {
+      "source": "/assets/uploads/:path*",
+      "destination": "https://pmas-api-production.up.railway.app/assets/uploads/:path*"
+    },
+    {
       "source": "/api/:endpoint",
-      "destination": "/api/index.php?_scope=api&_endpoint=:endpoint"
+      "destination": "https://pmas-api-production.up.railway.app/api/:endpoint"
     },
     {
       "source": "/reports/:endpoint",
-      "destination": "/api/index.php?_scope=reports&_endpoint=:endpoint"
+      "destination": "https://pmas-api-production.up.railway.app/api/vercel.php?_scope=reports&_endpoint=:endpoint"
     },
     {
       "source": "/((?!api/|reports/|assets/).*)",

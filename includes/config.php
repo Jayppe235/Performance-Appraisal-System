@@ -27,11 +27,22 @@ define('IS_PRODUCTION', PMAS_ENV === 'production');
 
 define('APP_URL', rtrim(pmas_env('PMAS_APP_URL', 'http://localhost/PMAS'), '/'));
 define('BASE_URL', pmas_base_path(pmas_env('PMAS_BASE_PATH', '/PMAS')));
-define('DB_HOST', pmas_env('PMAS_DB_HOST', 'localhost'));
-define('DB_PORT', pmas_env('PMAS_DB_PORT', '3306'));
-define('DB_NAME', pmas_env('PMAS_DB_NAME', 'pmas_db_clean'));
-define('DB_USER', pmas_env('PMAS_DB_USER', 'root'));
-define('DB_PASS', pmas_env('PMAS_DB_PASS'));
+
+// Most hosted MySQL providers expose one connection URL. Prefer it when set,
+// while retaining the individual PMAS_DB_* variables used by XAMPP and
+// traditional shared hosting.
+$databaseUrl = pmas_env('PMAS_DATABASE_URL', pmas_env('DATABASE_URL'));
+$databaseConfig = $databaseUrl !== '' ? parse_url($databaseUrl) : false;
+if ($databaseUrl !== '' && (!is_array($databaseConfig) || !in_array(strtolower((string)($databaseConfig['scheme'] ?? '')), ['mysql', 'mariadb'], true))) {
+    throw new RuntimeException('PMAS_DATABASE_URL must be a valid mysql:// or mariadb:// URL.');
+}
+$databaseNameFromUrl = is_array($databaseConfig) ? ltrim((string)($databaseConfig['path'] ?? ''), '/') : '';
+define('DB_HOST', is_array($databaseConfig) ? rawurldecode((string)($databaseConfig['host'] ?? '')) : pmas_env('PMAS_DB_HOST', 'localhost'));
+define('DB_PORT', is_array($databaseConfig) ? (string)($databaseConfig['port'] ?? 3306) : pmas_env('PMAS_DB_PORT', '3306'));
+define('DB_NAME', $databaseNameFromUrl !== '' ? rawurldecode($databaseNameFromUrl) : pmas_env('PMAS_DB_NAME', 'pmas_db_clean'));
+define('DB_USER', is_array($databaseConfig) ? rawurldecode((string)($databaseConfig['user'] ?? '')) : pmas_env('PMAS_DB_USER', 'root'));
+define('DB_PASS', is_array($databaseConfig) ? rawurldecode((string)($databaseConfig['pass'] ?? '')) : pmas_env('PMAS_DB_PASS'));
+define('DB_SSL_CA', pmas_env('PMAS_DB_SSL_CA'));
 
 $configuredDataKey = pmas_env('PMAS_DATA_KEY');
 if (IS_PRODUCTION) {

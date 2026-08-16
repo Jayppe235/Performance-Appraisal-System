@@ -10,41 +10,9 @@ require_once __DIR__ . '/../includes/gemini.php';
 require_once __DIR__ . '/../includes/openai.php';
 require_once __DIR__ . '/../includes/assistant_copilot.php';
 
-$assistantFallbackAnswer = 'I cannot answer this request because I am only designed to help with system analysis, dashboard guidance, evaluation support, and other PMAS-related functions inside the system.';
-
 function assistant_is_pmas_question(string $message): bool
 {
-    if ($message === '') {
-        return true;
-    }
-
-    $keywords = [
-        'admin', 'ai', 'analysis', 'analytics', 'appraisal', 'assignment', 'chatbot', 'compare', 'comparison',
-        'dashboard', 'dean', 'department',
-        'evidence', 'evaluation', 'export',
-        'faculty', 'feature', 'feedback', 'form', 'form a', 'form b',
-        'growth', 'history', 'how',
-        'idea', 'improve', 'improvement', 'insight', 'intervention',
-        'leadership',
-        'navigation',
-        'overdue', 'overview',
-        'peer', 'pending', 'performance', 'period', 'plan', 'pmas', 'priority', 'program', 'progress',
-        'qa', 'q&a', 'question', 'questionnaire',
-        'rate', 'rating', 'recommendation', 'report', 'role',
-        'score', 'seminar', 'setting', 'status', 'strength', 'submit', 'suggest', 'suggestion', 'summary',
-        'teacher', 'top', 'training', 'trend',
-        'urgent', 'user',
-        'vpaa', 'vice president',
-        'weak', 'what', 'why',
-    ];
-
-    foreach ($keywords as $keyword) {
-        if (str_contains($message, $keyword)) {
-            return true;
-        }
-    }
-
-    return false;
+    return assistant_copilot_topic_intent($message) !== null;
 }
 
 function assistant_static_pmas_answer(string $message): string
@@ -110,6 +78,147 @@ function assistant_static_pmas_answer(string $message): string
     return 'I can help with PMAS dashboard navigation, evaluation assignments, questionnaires, reports, faculty records, weak-area analysis, and training recommendations. Try asking about analytics, comparisons, or progress.';
 }
 
+function assistant_performance_extremes_answer(array $scores, string $scopeLabel, string $missingPath, string $language = 'en'): string
+{
+    $scores = array_values(array_filter($scores, static fn (array $row): bool =>
+        isset($row['factor'], $row['score']) && is_numeric($row['score'])
+    ));
+    if ($scores === []) {
+        return assistant_copilot_missing_data($language, 'completed performance category results', $missingPath);
+    }
+    usort($scores, static fn (array $a, array $b): int => (float) $a['score'] <=> (float) $b['score']);
+    $lowest = $scores[0];
+    $strongest = $scores[count($scores) - 1];
+    return "Performance areas for {$scopeLabel}:\n"
+        . '- Strongest: ' . $strongest['factor'] . ' — ' . number_format((float) $strongest['score'], 2) . "/5\n"
+        . '- Lowest-rated: ' . $lowest['factor'] . ' — ' . number_format((float) $lowest['score'], 2) . "/5\n"
+        . 'These values come from completed evaluations in your authorized PMAS scope.';
+}
+
+function assistant_scoped_category_scores(?int $facultyId = null, array $departments = [], array $programs = []): array
+{
+    $conditions = ['COALESCE(f.is_archived, 0) = 0'];
+    $params = [];
+    if ($facultyId !== null) {
+        $conditions[] = 'f.id = :faculty_id';
+        $params['faculty_id'] = $facultyId;
+    }
+    foreach ([['f.department', 'department', $departments], ['f.program', 'program', $programs]] as [$column, $prefix, $values]) {
+        $holders = [];
+        foreach (array_values(array_unique(array_filter(array_map('trim', $values)))) as $i => $value) {
+            $key = $prefix . '_' . $i;
+            $holders[] = ':' . $key;
+            $params[$key] = $value;
+        }
+        if ($holders !== []) $conditions[] = $column . ' IN (' . implode(',', $holders) . ')';
+    }
+
+    $rows = admin_all(
+        "SELECT x.factor, ROUND(AVG(x.score), 2) AS score
+           FROM (
+                 SELECT r.evaluatee_faculty_id AS faculty_id, c.title AS factor, r.average_rating AS score
+                   FROM pmas_form_a_category_results r
+                   JOIN pmas_form_a_categories c ON c.id = r.category_id
+                  WHERE r.status = 'completed' AND COALESCE(r.is_archived, 0) = 0
+                 UNION ALL
+                 SELECT r.evaluatee_faculty_id AS faculty_id, c.title AS factor, r.average_rating AS score
+                   FROM pmas_form_b_category_results r
+                   JOIN pmas_form_b_categories c ON c.id = r.category_id
+                  WHERE r.status = 'completed' AND COALESCE(r.is_archived, 0) = 0
+                ) x
+           JOIN faculty f ON f.id = x.faculty_id
+          WHERE " . implode(' AND ', $conditions) . "
+          GROUP BY x.factor",
+        $params
+    );
+    return array_map(static fn (array $row): array => [
+        'factor' => (string) ($row['factor'] ?? 'Category'),
+        'score' => (float) ($row['score'] ?? 0),
+    ], $rows);
+}
+
+function assistant_assignment_count_request(string $message): bool
+{
+    $text = assistant_copilot_normalize_text($message);
+    $countWords = ['how many', 'number of', 'count', 'ilan', 'pila'];
+    $evaluationWords = ['evaluate', 'evaluation', 'evaluator', 'assigned', 'i-evaluate', 'i evaluate', 'eevaluate', 'e-evaluate', 'susuriin', 'timbangon'];
+    $hasCount = false;
+    $hasEvaluation = false;
+    foreach ($countWords as $word) {
+        if (str_contains($text, $word)) {
+            $hasCount = true;
+            break;
+        }
+    }
+    foreach ($evaluationWords as $word) {
+        if (str_contains($text, $word)) {
+            $hasEvaluation = true;
+            break;
+        }
+    }
+    return $hasCount && $hasEvaluation;
+}
+
+function assistant_assignment_count_answer(int $userId, string $message, string $selectedPeriod = ''): ?array
+{
+    if (!assistant_assignment_count_request($message)) {
+        return null;
+    }
+
+    $period = $selectedPeriod;
+    if ($period === '') {
+        $current = dipascaf_current_evaluation_period();
+        $period = trim((string) ($current['period_name'] ?? ''));
+    }
+
+    $params = ['user_id' => $userId];
+    $periodSql = '';
+    if ($period !== '') {
+        $periodSql = ' AND cycle_name = :period';
+        $params['period'] = $period;
+    }
+    $rows = admin_all(
+        "SELECT status, assignment_type, COUNT(*) AS total
+           FROM peer_assignments
+          WHERE evaluator_user_id = :user_id
+            AND assignment_type <> 'self'
+            AND COALESCE(is_archived, 0) = 0
+            AND is_current = 1
+            AND status NOT IN ('cancelled', 'reassigned', 'replaced', 'not_required')"
+            . $periodSql .
+        ' GROUP BY status, assignment_type',
+        $params
+    );
+
+    $total = 0;
+    $submitted = 0;
+    $byType = [];
+    foreach ($rows as $row) {
+        $count = (int) ($row['total'] ?? 0);
+        $total += $count;
+        if ((string) ($row['status'] ?? '') === 'submitted') {
+            $submitted += $count;
+        }
+        $type = (string) ($row['assignment_type'] ?? 'evaluation');
+        $byType[$type] = ($byType[$type] ?? 0) + $count;
+    }
+    $pending = max(0, $total - $submitted);
+    $language = assistant_copilot_language($message)['code'];
+    $breakdown = implode(', ', array_map(
+        static fn(string $type, int $count): string => str_replace('_', ' ', $type) . ': ' . $count,
+        array_keys($byType),
+        array_values($byType)
+    ));
+
+    $answer = match ($language) {
+        'ceb' => "Aduna kay {$total} ka evaluation assignment sa {$period}: {$submitted} nahuman ug {$pending} ang pending." . ($breakdown !== '' ? " Breakdown: {$breakdown}." : ''),
+        'fil' => "Mayroon kang {$total} evaluation assignment sa {$period}: {$submitted} ang natapos at {$pending} ang pending." . ($breakdown !== '' ? " Breakdown: {$breakdown}." : ''),
+        'hil' => "May ara ka {$total} ka evaluation assignment sa {$period}: {$submitted} ang natapos kag {$pending} ang pending." . ($breakdown !== '' ? " Breakdown: {$breakdown}." : ''),
+        default => "You have {$total} evaluation assignments for {$period}: {$submitted} completed and {$pending} pending." . ($breakdown !== '' ? " Breakdown: {$breakdown}." : ''),
+    };
+    return ['answer' => $answer, 'period' => $period, 'total' => $total, 'submitted' => $submitted, 'pending' => $pending, 'by_type' => $byType];
+}
+
 function assistant_questionnaire_answer(): string
 {
     if (!function_exists('dipascaf_ensure_form_a_schema')) {
@@ -139,23 +248,31 @@ function assistant_mode_label(string $mode): string
     };
 }
 
-function assistant_enhance_answer(string $answer, string $mode, string $role, string $pagePath, string $userScope): string
+function assistant_enhance_answer(string $answer, string $mode, string $role, string $pagePath, string $userScope, string $language = 'en'): string
 {
     $mode = $mode === 'actions' || $mode === 'insights' ? $mode : 'overview';
-    $prefix = 'Mode: ' . assistant_mode_label($mode);
+    $labels = match ($language) {
+        'fil' => ['mode' => 'Paraan', 'scope' => 'Saklaw', 'page' => 'Pahina', 'overview' => 'Pangkalahatang-ideya', 'insights' => 'Mga Insight', 'actions' => 'Plano ng Aksyon'],
+        'ceb' => ['mode' => 'Paagi', 'scope' => 'Sakop', 'page' => 'Panid', 'overview' => 'Kinatibuk-ang Tan-aw', 'insights' => 'Mga Insight', 'actions' => 'Plano sa Aksyon'],
+        'hil' => ['mode' => 'Paagi', 'scope' => 'Sakop', 'page' => 'Pahina', 'overview' => 'Kabilugan nga Pagtan-aw', 'insights' => 'Mga Insight', 'actions' => 'Plano sang Aksyon'],
+        default => ['mode' => 'Mode', 'scope' => 'Scope', 'page' => 'Page', 'overview' => 'Overview', 'insights' => 'Insights', 'actions' => 'Action Plan'],
+    };
+    $prefix = $labels['mode'] . ': ' . ($labels[$mode] ?? $labels['overview']);
     if ($userScope !== '') {
-        $prefix .= ' | Scope: ' . $userScope;
+        $prefix .= ' | ' . $labels['scope'] . ': ' . $userScope;
     }
     if ($pagePath !== '') {
-        $prefix .= ' | Page: ' . $pagePath;
+        $prefix .= ' | ' . $labels['page'] . ': ' . $pagePath;
     }
 
     if ($mode === 'actions') {
-        return $prefix . "\n\n" . $answer . "\n\nPrioritized next steps:\n"
-            . "- High priority: review overdue, pending, or lowest-scoring records first.\n"
-            . "- Medium priority: create or update intervention plans for repeated weak areas.\n"
-            . "- Low priority: document strengths and export summaries for coaching records.\n"
-            . "- Review checkpoint: confirm evidence, evaluator coverage, and period status before final action.";
+        $steps = match ($language) {
+            'fil' => "Mga prayoridad na susunod na hakbang:\n- Mataas: suriin muna ang overdue, pending, o pinakamababang score.\n- Katamtaman: ayusin ang intervention plans para sa paulit-ulit na weak areas.\n- Mababa: itala ang strengths at i-export ang coaching summary.\n- Tsek: kumpirmahin ang evidence, evaluator coverage, at period status.",
+            'ceb' => "Giprayoridad nga sunod nga mga lakang:\n- Taas: unaha ang overdue, pending, o labing ubos nga scores.\n- Tunga: i-update ang intervention plans sa balik-balik nga weak areas.\n- Ubos: idokumento ang strengths ug i-export ang coaching summary.\n- Susiha: kumpirmaha ang evidence, evaluator coverage, ug period status.",
+            'hil' => "Ginprayoridad nga masunod nga mga tikang:\n- Mataas: unaha ang overdue, pending, ukon pinakamubo nga scores.\n- Tunga: i-update ang intervention plans para sa nagabalik nga weak areas.\n- Ubos: idokumento ang strengths kag i-export ang coaching summary.\n- Susiha: kumpirmaha ang evidence, evaluator coverage, kag period status.",
+            default => "Prioritized next steps:\n- High priority: review overdue, pending, or lowest-scoring records first.\n- Medium priority: update intervention plans for repeated weak areas.\n- Low priority: document strengths and export coaching summaries.\n- Review checkpoint: confirm evidence, evaluator coverage, and period status.",
+        };
+        return $prefix . "\n\n" . $answer . "\n\n" . $steps;
     }
 
     if ($mode === 'insights') {
@@ -172,6 +289,11 @@ function assistant_enhance_answer(string $answer, string $mode, string $role, st
 function assistant_analytics_answer(string $message, string $role): string
 {
     $lower = strtolower($message);
+    $focus = assistant_copilot_query_focus($message);
+
+    if ($focus === 'performance' && (str_contains($lower, 'strength') || str_contains($lower, 'strong') || str_contains($lower, 'highest') || str_contains($lower, 'lowest'))) {
+        return assistant_performance_extremes_answer(assistant_scoped_category_scores(), 'the institution', 'Admin/HR > AI Analytics');
+    }
 
     if (str_contains($lower, 'question') || str_contains($lower, 'questionnaire') || str_contains($lower, 'form a') || str_contains($lower, 'form b')) {
         return assistant_questionnaire_answer();
@@ -204,24 +326,13 @@ function assistant_analytics_answer(string $message, string $role): string
         return implode("\n", $lines);
     }
 
-    if (str_contains($lower, 'compare') || (str_contains($lower, 'period') && (str_contains($lower, 'over') || str_contains($lower, 'change') || str_contains($lower, 'across') || str_contains($lower, 'trend')))) {
+    if ($focus !== 'weak_areas' && (str_contains($lower, 'compare') || (str_contains($lower, 'period') && (str_contains($lower, 'over') || str_contains($lower, 'change') || str_contains($lower, 'across') || str_contains($lower, 'trend'))))) {
         $comparison = admin_period_comparison();
-        if ($comparison === []) {
-            return 'No period comparison data is available yet.';
-        }
-        $lines = ['📊 Period-over-Period System Comparison:'];
-        foreach ($comparison as $p) {
-            $change = '';
-            if ($p['change_from_previous'] !== null) {
-                $change = $p['change_from_previous'] > 0 ? ' (▲ +' . $p['change_from_previous'] . '%)' : ($p['change_from_previous'] < 0 ? ' (▼ ' . $p['change_from_previous'] . '%)' : ' (stable)');
-            }
-            $lines[] = '- ' . ($p['period_name'] ?? '') . ': ' . $p['completion_rate'] . '% complete (' . $p['completed'] . '/' . $p['total_assignments'] . '), overdue: ' . $p['overdue'] . ', avg score: ' . ($p['average_score'] !== null ? number_format($p['average_score'], 2) : 'N/A') . $change;
-            if ($p['weak_areas'] !== []) {
-                $areas = array_map(fn($w) => $w['area'] . ' (' . $w['count'] . 'x)', $p['weak_areas']);
-                $lines[] = '  Weak areas: ' . implode(', ', $areas);
-            }
-        }
-        return implode("\n", $lines);
+        return assistant_copilot_period_comparison(array_map(static fn (array $p): array => [
+            'period_name' => $p['period_name'] ?? '', 'completion_rate' => $p['completion_rate'] ?? 0,
+            'completed' => $p['completed'] ?? 0, 'total' => $p['total_assignments'] ?? 0,
+            'average_score' => $p['average_score'] ?? null, 'weak_areas' => $p['weak_areas'] ?? [],
+        ], $comparison), 'the institution');
     }
 
     if (str_contains($lower, 'compar') || (str_contains($lower, 'department') && (str_contains($lower, 'best') || str_contains($lower, 'worst') || str_contains($lower, 'top') || str_contains($lower, 'rank')))) {
@@ -353,25 +464,69 @@ function assistant_dean_analytics(int $deanUserId, string $message): string
 {
     $departments = dean_departments($deanUserId);
     $lower = strtolower($message);
+    $language = assistant_copilot_language($message)['code'];
+
+    if ($departments === []) {
+        return assistant_copilot_missing_data($language, 'Dean department assignment data', 'People Management');
+    }
+
+    if (str_contains($lower, 'assignment') || str_contains($lower, 'assigned') || str_contains($lower, 'pending evaluation') || str_contains($lower, 'overdue')) {
+        $assignments = dean_assignments($deanUserId);
+        $pending = array_values(array_filter($assignments, static fn (array $row): bool => (string) ($row['status'] ?? '') !== 'submitted'));
+        if ($pending === []) {
+            return $assignments === []
+                ? assistant_copilot_missing_data($language, 'Dean evaluation assignments', 'Dean > Evaluate')
+                : 'You have no pending Dean evaluation assignments in your authorized department scope.';
+        }
+        $lines = ['Pending Dean evaluations: ' . count($pending)];
+        foreach (array_slice($pending, 0, 8) as $row) {
+            $lines[] = '- ' . ($row['evaluatee_name'] ?? $row['faculty_name'] ?? 'Faculty') . ' — ' . ($row['status'] ?? 'pending');
+        }
+        $lines[] = 'Open Dean > Evaluate to review these records.';
+        return implode("\n", $lines);
+    }
+
+    if (str_contains($lower, 'questionnaire') || str_contains($lower, 'form a') || str_contains($lower, 'form b') || str_contains($lower, 'evidence') || str_contains($lower, 'before submitting')) {
+        return assistant_static_pmas_answer($message);
+    }
+
+    if (str_contains($lower, 'report') || str_contains($lower, 'export')) {
+        return 'Open Dean > Report to review and export evaluation information available for your assigned department.';
+    }
+
+    $focus = assistant_copilot_query_focus($message);
+    if ($focus === 'performance' && (str_contains($lower, 'strength') || str_contains($lower, 'strong') || str_contains($lower, 'highest') || str_contains($lower, 'lowest'))) {
+        return assistant_performance_extremes_answer(assistant_scoped_category_scores(null, $departments), 'your assigned department', 'Dean > Reports', $language);
+    }
+    if ($focus === 'weak_areas') {
+        $areas = dean_recurring_weak_areas($departments);
+        $recurring = array_values(array_filter($areas, static fn(array $area): bool => !empty($area['is_recurring'])));
+        if ($areas === []) {
+            return 'No category results at or below 3.50 are available for your department yet.';
+        }
+        $shown = $recurring !== [] ? $recurring : array_slice($areas, 0, 5);
+        $lines = [$recurring !== []
+            ? 'Recurring Weak Areas Across Faculty and Periods (' . implode(', ', $departments) . '):'
+            : 'No weak area currently repeats across both multiple faculty and multiple periods. Lowest available category patterns:'];
+        foreach (array_slice($shown, 0, 7) as $area) {
+            $lines[] = '- ' . $area['weak_area'] . ': avg ' . number_format((float) $area['average_rating'], 2) . '/5; '
+                . $area['faculty_count'] . ' faculty; ' . $area['period_count'] . ' periods; '
+                . $area['occurrences'] . ' faculty-period occurrences.';
+            $lines[] = '  Periods: ' . implode(', ', $area['periods']) . ' | Programs: ' . implode(', ', $area['programs']);
+            $lines[] = '  Faculty: ' . implode(', ', array_slice($area['faculty'], 0, 6))
+                . (count($area['faculty']) > 6 ? ' +' . (count($area['faculty']) - 6) . ' more' : '');
+        }
+        $lines[] = 'Method: category scores ≤3.50, averaged per faculty/category/period; recurring means at least 2 faculty across at least 2 periods.';
+        return implode("\n", $lines);
+    }
 
     if (str_contains($lower, 'compare') || str_contains($lower, 'period') || (str_contains($lower, 'trend') && str_contains($lower, 'department'))) {
         $comparison = dean_period_comparison($departments);
-        if ($comparison === []) {
-            return 'No period comparison data is available yet for your department(s).';
-        }
-        $lines = ['📊 Period-over-Period Department Comparison (' . implode(', ', $departments) . '):'];
-        foreach ($comparison as $p) {
-            $change = '';
-            if ($p['score_change'] !== null) {
-                $change = $p['score_change'] > 0 ? ' (▲ +' . $p['score_change'] . ')' : ($p['score_change'] < 0 ? ' (▼ ' . $p['score_change'] . ')' : ' (stable)');
-            }
-            $lines[] = '- ' . ($p['period_name'] ?? '') . ': ' . $p['completion_rate'] . '% complete (' . $p['submitted'] . '/' . $p['total'] . '), avg score: ' . ($p['average_score'] ?? 'N/A') . $change;
-            if ($p['weak_areas'] !== []) {
-                $areas = array_map(fn($w) => $w['area'] . ' (' . $w['count'] . 'x)', $p['weak_areas']);
-                $lines[] = '  Weak areas: ' . implode(', ', $areas);
-            }
-        }
-        return implode("\n", $lines);
+        return assistant_copilot_period_comparison(array_map(static fn (array $p): array => [
+            'period_name' => $p['period_name'] ?? '', 'completion_rate' => $p['completion_rate'] ?? 0,
+            'completed' => $p['submitted'] ?? 0, 'total' => $p['total'] ?? 0,
+            'average_score' => $p['average_score'] ?? null, 'weak_areas' => $p['weak_areas'] ?? [],
+        ], $comparison), 'your department (' . implode(', ', $departments) . ')');
     }
 
     if (str_contains($lower, 'summary') || str_contains($lower, 'overview') || str_contains($lower, 'analytics')) {
@@ -440,25 +595,66 @@ function assistant_program_head_analytics(int $programHeadUserId, string $messag
     $programs = program_head_programs($programHeadUserId);
     $departments = program_head_departments($programHeadUserId);
     $lower = strtolower($message);
+    $focus = assistant_copilot_query_focus($message);
+    $language = assistant_copilot_language($message)['code'];
 
-    if (str_contains($lower, 'compare') || str_contains($lower, 'trend') || (str_contains($lower, 'period') && (str_contains($lower, 'over') || str_contains($lower, 'change') || str_contains($lower, 'across')))) {
-        $comparison = program_head_period_comparison($departments, $programs);
-        if ($comparison === []) {
-            return 'No period comparison data is available yet for your assigned program.';
+    if ($programs === [] && $departments === []) {
+        return assistant_copilot_missing_data($language, 'Program Head assignment data', 'People Management');
+    }
+
+    if ($focus === 'performance' && (str_contains($lower, 'strength') || str_contains($lower, 'strong') || str_contains($lower, 'highest') || str_contains($lower, 'lowest'))) {
+        $programValues = [];
+        foreach ($programs as $program) {
+            $programValues[] = trim((string) ($program['program_code'] ?? ''));
+            $programValues[] = trim((string) ($program['program_name'] ?? ''));
         }
-        $lines = ['Program period-over-period comparison:'];
-        foreach ($comparison as $p) {
-            $change = '';
-            if ($p['score_change'] !== null) {
-                $change = $p['score_change'] > 0 ? ' (up +' . $p['score_change'] . ')' : ($p['score_change'] < 0 ? ' (down ' . $p['score_change'] . ')' : ' (stable)');
-            }
-            $lines[] = '- ' . ($p['period_name'] ?? '') . ': ' . $p['completion_rate'] . '% complete (' . $p['submitted'] . '/' . $p['total'] . '), avg score: ' . ($p['average_score'] ?? 'N/A') . $change;
-            if ($p['weak_areas'] !== []) {
-                $areas = array_map(fn ($w) => $w['area'] . ' (' . $w['count'] . 'x)', $p['weak_areas']);
-                $lines[] = '  Weak areas: ' . implode(', ', $areas);
-            }
+        return assistant_performance_extremes_answer(assistant_scoped_category_scores(null, $departments, $programValues), 'your assigned program', 'Program Head > Reports', $language);
+    }
+
+    if ($focus === 'assignments' || str_contains($lower, 'pending') || str_contains($lower, 'overdue') || str_contains($lower, 'risk')) {
+        $assignments = program_head_assignments($programHeadUserId);
+        $pending = array_values(array_filter($assignments, static fn (array $row): bool => (string) ($row['status'] ?? '') !== 'submitted'));
+        if ($pending === []) {
+            return $assignments === []
+                ? assistant_copilot_missing_data($language, 'evaluation assignments', 'Program Head > Evaluate')
+                : 'You have no pending evaluation assignments in your authorized program scope.';
+        }
+        $lines = ['Pending Program Head evaluations: ' . count($pending)];
+        foreach (array_slice($pending, 0, 8) as $row) {
+            $due = trim((string) ($row['due_date'] ?? ''));
+            $lines[] = '- ' . ($row['evaluatee_name'] ?? 'Faculty') . ' — ' . ($row['status'] ?? 'pending') . ($due !== '' ? '; due ' . $due : '');
+        }
+        $lines[] = 'Open Program Head > Evaluate to review or complete these assignments.';
+        return implode("\n", $lines);
+    }
+
+    if ($focus === 'interventions' || str_contains($lower, 'coaching') || str_contains($lower, 'recommend')) {
+        $plans = program_head_interventions($departments, $programs);
+        if ($plans === []) {
+            return assistant_copilot_missing_data($language, 'intervention or coaching plans', 'Program Head > Summary');
+        }
+        $lines = ['Program intervention and coaching priorities:'];
+        foreach (array_slice($plans, 0, 8) as $plan) {
+            $lines[] = '- ' . ($plan['faculty_name'] ?? 'Faculty') . ' — ' . ($plan['recommendation'] ?? 'Review the recorded weak area') . ' (' . ($plan['status'] ?? 'planned') . ')';
         }
         return implode("\n", $lines);
+    }
+
+    if (str_contains($lower, 'questionnaire') || str_contains($lower, 'form a') || str_contains($lower, 'form b') || str_contains($lower, 'evidence') || str_contains($lower, 'before submitting')) {
+        return assistant_static_pmas_answer($message);
+    }
+
+    if (str_contains($lower, 'report') || str_contains($lower, 'export')) {
+        return 'Open Program Head > Report to review and export evaluation information available for your assigned program.';
+    }
+
+    if ($focus !== 'weak_areas' && (str_contains($lower, 'compare') || str_contains($lower, 'trend') || (str_contains($lower, 'period') && (str_contains($lower, 'over') || str_contains($lower, 'change') || str_contains($lower, 'across'))))) {
+        $comparison = program_head_period_comparison($departments, $programs);
+        return assistant_copilot_period_comparison(array_map(static fn (array $p): array => [
+            'period_name' => $p['period_name'] ?? '', 'completion_rate' => $p['completion_rate'] ?? 0,
+            'completed' => $p['submitted'] ?? 0, 'total' => $p['total'] ?? 0,
+            'average_score' => $p['average_score'] ?? null, 'weak_areas' => $p['weak_areas'] ?? [],
+        ], $comparison), 'your assigned program');
     }
 
     if (str_contains($lower, 'summary') || str_contains($lower, 'overview') || str_contains($lower, 'analytics')) {
@@ -484,7 +680,7 @@ function assistant_program_head_analytics(int $programHeadUserId, string $messag
     if (str_contains($lower, 'weak') || str_contains($lower, 'area')) {
         $summary = program_head_summary($programHeadUserId, $departments, $programs);
         if ($summary['weakAreas'] === []) {
-            return 'No weak areas detected for your programs yet.';
+            return assistant_copilot_missing_data($language, 'weak-area results', 'Program Head > Summary');
         }
         $lines = ['Weak Areas in Your Program(s):'];
         foreach ($summary['weakAreas'] as $wa) {
@@ -496,7 +692,7 @@ function assistant_program_head_analytics(int $programHeadUserId, string $messag
     $summary = program_head_summary($programHeadUserId, $departments, $programs);
     $total = $summary['submitted'] + $summary['pending'];
     $rate = $total > 0 ? round(($summary['submitted'] / $total) * 100) : 0;
-    return 'Your program(s) have ' . $summary['facultyCount'] . ' faculty. Evaluation progress: ' . $summary['submitted'] . ' submitted, ' . $summary['pending'] . ' pending (' . $rate . '% completion). Try "Show weak areas" or "Program overview".';
+    return 'Your program(s) have ' . $summary['facultyCount'] . ' faculty. Evaluation progress: ' . $summary['submitted'] . ' submitted, ' . $summary['pending'] . ' pending (' . $rate . '% completion). You can also ask about pending assignments, coaching priorities, reports, questionnaires, weak areas, or period comparisons.';
 }
 
 function assistant_vpaa_analytics(int $vpaaUserId, string $message): string
@@ -508,25 +704,32 @@ function assistant_vpaa_analytics(int $vpaaUserId, string $message): string
     $weakAreas = vpaa_weak_areas($departments);
     $interventions = vpaa_interventions($departments);
     $lower = strtolower($message);
+    $language = assistant_copilot_language($message)['code'];
+
+    if ($departments === []) {
+        return assistant_copilot_missing_data($language, 'VPAA department assignment data', 'VPAA assignments or Admin/HR People Management');
+    }
+
+    $focus = assistant_copilot_query_focus($message);
+    if ($focus === 'performance' && (str_contains($lower, 'strength') || str_contains($lower, 'strong') || str_contains($lower, 'highest') || str_contains($lower, 'lowest'))) {
+        return assistant_performance_extremes_answer(assistant_scoped_category_scores(null, $departments), 'your assigned departments', 'VPAA > Reports', $language);
+    }
+
+    if (str_contains($lower, 'questionnaire') || str_contains($lower, 'form a') || str_contains($lower, 'form b') || str_contains($lower, 'evidence') || str_contains($lower, 'before submitting')) {
+        return assistant_static_pmas_answer($message);
+    }
+
+    if (str_contains($lower, 'report') || str_contains($lower, 'export')) {
+        return 'Open VPAA > Reports to review and export evaluation information available for your assigned departments.';
+    }
 
     if (str_contains($lower, 'compare') || str_contains($lower, 'trend') || (str_contains($lower, 'period') && (str_contains($lower, 'over') || str_contains($lower, 'change') || str_contains($lower, 'across')))) {
         $comparison = vpaa_period_comparison($departments);
-        if ($comparison === []) {
-            return 'No period comparison data is available yet for your assigned departments.';
-        }
-        $lines = ['📊 Period-over-Period VPAA Comparison:'];
-        foreach ($comparison as $p) {
-            $change = '';
-            if ($p['score_change'] !== null) {
-                $change = $p['score_change'] > 0 ? ' (▲ +' . $p['score_change'] . ')' : ($p['score_change'] < 0 ? ' (▼ ' . $p['score_change'] . ')' : ' (stable)');
-            }
-            $lines[] = '- ' . ($p['period_name'] ?? '') . ': ' . $p['completion_rate'] . '% complete (' . $p['completed'] . '/' . $p['total_assignments'] . '), avg score: ' . ($p['average_score'] ?? 'N/A') . $change;
-            if ($p['weak_areas'] !== []) {
-                $areas = array_map(fn($w) => $w['area'] . ' (' . $w['count'] . 'x)', $p['weak_areas']);
-                $lines[] = '  Weak areas: ' . implode(', ', $areas);
-            }
-        }
-        return implode("\n", $lines);
+        return assistant_copilot_period_comparison(array_map(static fn (array $p): array => [
+            'period_name' => $p['period_name'] ?? '', 'completion_rate' => $p['completion_rate'] ?? 0,
+            'completed' => $p['completed'] ?? 0, 'total' => $p['total_assignments'] ?? 0,
+            'average_score' => $p['average_score'] ?? null, 'weak_areas' => $p['weak_areas'] ?? [],
+        ], $comparison), 'your assigned departments');
     }
 
     if (str_contains($lower, 'lowest') || str_contains($lower, 'weak department')) {
@@ -634,8 +837,20 @@ if ($user === null) {
 header('Content-Type: application/json');
 
 try {
-    $rawMessage = trim($_POST['message'] ?? '');
+    $originalMessage = trim($_POST['message'] ?? '');
+    $knownPeriodYears = [];
+    foreach (admin_all('SELECT period_name, school_year FROM appraisal_periods') as $periodRow) {
+        preg_match_all('/(?<!\d)(?:19|20)\d{2}(?!\d)/', implode(' ', [
+            (string) ($periodRow['period_name'] ?? ''),
+            (string) ($periodRow['school_year'] ?? ''),
+        ]), $periodYears);
+        $knownPeriodYears = array_merge($knownPeriodYears, $periodYears[0] ?? []);
+    }
+    $yearCorrection = assistant_copilot_correct_year_typos($originalMessage, array_values(array_unique($knownPeriodYears)));
+    $rawMessage = trim((string) $yearCorrection['message']);
+    $messageCorrections = (array) ($yearCorrection['corrections'] ?? []);
     $message = strtolower($rawMessage);
+    $detectedLanguage = assistant_copilot_language($rawMessage);
     $role = $user['role'] ?? '';
     $assistantMode = strtolower(trim((string) ($_POST['assistant_mode'] ?? 'overview')));
     if (!in_array($assistantMode, ['overview', 'compare', 'explain', 'risk', 'draft', 'insights', 'actions'], true)) {
@@ -653,8 +868,19 @@ try {
         $recentMessages = [];
     }
 
+    $smallTalkAnswer = assistant_copilot_small_talk($rawMessage);
+    if ($smallTalkAnswer !== null) {
+        $structured = assistant_copilot_payload($smallTalkAnswer, $rawMessage, 'overview', $user, [], $selectedPeriod, 'pmas_knowledge');
+        echo json_encode(['ok' => true, ...$structured, 'mode' => 'overview']);
+        exit;
+    }
+
     if (!assistant_is_pmas_question($message)) {
-        echo json_encode(['ok' => true, 'answer' => $assistantFallbackAnswer]);
+        $refusal = assistant_copilot_refusal($detectedLanguage['code']);
+        $structured = assistant_copilot_payload($refusal, $rawMessage, 'overview', $user, [], $selectedPeriod, 'refusal');
+        $structured['data_available'] = false;
+        $structured['warnings'] = [];
+        echo json_encode(['ok' => true, ...$structured, 'mode' => 'overview']);
         exit;
     }
 
@@ -669,18 +895,42 @@ try {
         'page_path' => $pagePath,
         'user_scope' => $userScope,
         'recent_conversation' => array_slice($recentMessages, -6),
+        'response_language' => $detectedLanguage,
+        'context_read_at' => gmdate('c'),
+        'authorized_modules' => assistant_copilot_module_context($user),
     ];
 
-    if ($role === 'teacher') {
+    $assignmentCount = assistant_assignment_count_answer((int) ($user['id'] ?? 0), $rawMessage, $selectedPeriod);
+    if ($assignmentCount !== null) {
+        $answerFromLiveData = true;
+        $answer = $assignmentCount['answer'];
+        $context['evaluation_assignment_count'] = $assignmentCount;
+    } elseif ($role === 'teacher') {
         $faculty = teacher_user_faculty((int) $user['id']);
         $answerFromLiveData = true;
         if (!$faculty) {
             $answer = 'Your teacher account is not linked to a faculty record yet. Ask Admin/HR to match your account email with your faculty profile.';
             $context['teacher_profile'] = 'not linked to a faculty record';
         } else {
+            if (in_array(assistant_copilot_query_focus($rawMessage), ['assignments'], true)
+                || str_contains($message, 'pending evaluation') || str_contains($message, 'evaluation status')) {
+                $pendingAssignments = teacher_pending_assignments((int) $user['id']);
+                if ($pendingAssignments === []) {
+                    $answer = assistant_copilot_missing_data($detectedLanguage['code'], 'pending evaluation assignments', 'Faculty > Evaluate');
+                } else {
+                    $parts = ['Your pending evaluation assignments: ' . count($pendingAssignments)];
+                    foreach (array_slice($pendingAssignments, 0, 8) as $assignment) {
+                        $parts[] = '- ' . ($assignment['evaluatee_name'] ?? 'Evaluation') . ' — ' . ($assignment['assignment_type'] ?? 'evaluation');
+                    }
+                    $parts[] = 'Open Faculty > Evaluate to continue.';
+                    $answer = implode("\n", $parts);
+                }
+            } else {
             $scores = teacher_factor_scores((int) $faculty['id']);
             $weightedTotal = (float) ($scores['_weightedTotal'] ?? 0);
             unset($scores['_weightedTotal']);
+            $categoryScores = assistant_scoped_category_scores((int) $faculty['id']);
+            $performanceScores = $categoryScores !== [] ? $categoryScores : $scores;
             $feedback = teacher_generated_feedback($scores);
             $context['teacher_profile'] = [
                 'faculty_name' => $faculty['full_name'] ?? '',
@@ -693,10 +943,17 @@ try {
                 'trend' => teacher_trend((int) $faculty['id']),
             ];
 
-            if (str_contains($message, 'strength') || str_contains($message, 'strong')) {
-                $answer = 'Your strongest area is ' . $feedback['strength'] . '. Keep documenting effective practices so they can be recognized in future appraisals.';
+            if ((str_contains($message, 'strength') || str_contains($message, 'strong') || str_contains($message, 'highest'))
+                && (str_contains($message, 'weak') || str_contains($message, 'low'))) {
+                $answer = assistant_performance_extremes_answer($performanceScores, 'your faculty record', 'Faculty > Results', $detectedLanguage['code']);
+            } elseif (str_contains($message, 'strength') || str_contains($message, 'strong') || str_contains($message, 'highest')) {
+                $answer = $performanceScores === []
+                    ? assistant_copilot_missing_data($detectedLanguage['code'], 'completed performance category results', 'Faculty > Results')
+                    : assistant_performance_extremes_answer($performanceScores, 'your faculty record', 'Faculty > Results', $detectedLanguage['code']);
             } elseif (str_contains($message, 'weak') || str_contains($message, 'low') || str_contains($message, 'improve')) {
-                $answer = 'Your lowest-rated area is ' . $feedback['weakness'] . '. In simple terms, this is the area where evaluators saw the most room for improvement.';
+                $answer = $performanceScores === []
+                    ? assistant_copilot_missing_data($detectedLanguage['code'], 'completed performance category results', 'Faculty > Results')
+                    : assistant_performance_extremes_answer($performanceScores, 'your faculty record', 'Faculty > Results', $detectedLanguage['code']);
             } elseif (str_contains($message, 'seminar') || str_contains($message, 'training') || str_contains($message, 'recommend') || str_contains($message, 'develop')) {
                 $plans = teacher_recommendations((int) $faculty['id']);
                 $answer = $plans === []
@@ -806,27 +1063,50 @@ try {
                     $periodHint = ' Over ' . count($trend) . ' period(s), your rating has ' . ($diff > 0 ? 'improved by ' . $diff : ($diff < 0 ? 'changed by ' . $diff : 'remained stable')) . '. Try "compare periods" for details.';
                 }
                 $answer = $feedback['summary'] . ' Suggested next steps: ' . implode(', ', $feedback['suggestions']) . '.' . $periodHint;
-            }
         }
+    }
+    }
     } elseif (in_array($role, ['admin_hr', 'vpaa', 'dean', 'program_head'], true)) {
         $answerFromLiveData = true;
-        $context['dashboard_stats'] = admin_stats();
-        $context['department_weak_areas'] = array_slice(admin_department_weak_areas(), 0, 8);
-        $context['priority_interventions'] = array_slice(admin_interventions(), 0, 8);
-        $context['completion_by_department'] = array_slice(admin_completion_by_department(), 0, 10);
-        $context['weak_area_patterns'] = array_slice(admin_weak_area_patterns(), 0, 5);
-        $context['unassigned_leadership'] = admin_unassigned_leadership();
-        $context['evaluation_progress'] = admin_evaluation_progress_summary();
-        $context['period_comparison'] = array_slice(admin_period_comparison(), 0, 8);
         $context['current_period'] = dipascaf_period_payload();
 
         if ($role === 'admin_hr') {
+            $context['dashboard_stats'] = admin_stats();
+            $context['department_weak_areas'] = array_slice(admin_department_weak_areas(), 0, 8);
+            $context['priority_interventions'] = array_slice(admin_interventions(), 0, 8);
+            $context['completion_by_department'] = array_slice(admin_completion_by_department(), 0, 10);
+            $context['weak_area_patterns'] = array_slice(admin_weak_area_patterns(), 0, 5);
+            $context['unassigned_leadership'] = admin_unassigned_leadership();
+            $context['evaluation_progress'] = admin_evaluation_progress_summary();
+            $context['period_comparison'] = array_slice(admin_period_comparison(), 0, 8);
             $answer = assistant_analytics_answer($message, $role);
         } elseif ($role === 'vpaa') {
+            $departments = vpaa_departments((int) $user['id']);
+            $context['authorized_departments'] = $departments;
+            $context['summary'] = vpaa_summary($departments);
+            $context['assignments'] = array_slice(vpaa_assignments($departments, $selectedPeriod), 0, 10);
+            $context['weak_areas'] = array_slice(vpaa_weak_areas($departments), 0, 8);
+            $context['interventions'] = array_slice(vpaa_interventions($departments), 0, 8);
             $answer = assistant_vpaa_analytics((int) $user['id'], $message);
         } elseif ($role === 'dean') {
+            $departments = dean_departments((int) $user['id']);
+            $context['authorized_departments'] = $departments;
+            $context['summary'] = dean_summary($departments);
+            $context['assignments'] = array_slice(dean_assignments((int) $user['id']), 0, 10);
+            $context['weak_areas'] = array_slice(dean_recurring_weak_areas($departments), 0, 8);
+            $context['interventions'] = array_slice(dean_interventions($departments), 0, 8);
             $answer = assistant_dean_analytics((int) $user['id'], $message);
         } elseif ($role === 'program_head') {
+            $programs = program_head_programs((int) $user['id']);
+            $departments = program_head_departments((int) $user['id']);
+            $context['authorized_departments'] = $departments;
+            $context['authorized_programs'] = array_map(static fn (array $program): array => [
+                'code' => $program['program_code'] ?? '', 'name' => $program['program_name'] ?? '',
+            ], $programs);
+            $context['summary'] = program_head_summary((int) $user['id'], $departments, $programs);
+            $context['assignments'] = array_slice(program_head_assignments((int) $user['id']), 0, 10);
+            $context['weak_areas'] = array_slice(program_head_ai_insights($departments, $programs, (int) $user['id']), 0, 8);
+            $context['interventions'] = array_slice(program_head_interventions($departments, $programs), 0, 8);
             $answer = assistant_program_head_analytics((int) $user['id'], $message);
         }
     }
@@ -846,32 +1126,43 @@ try {
         }
     } else {
         $detectedIntents = assistant_copilot_intents($rawMessage, $assistantMode);
-        $needsSynthesis = count($detectedIntents) > 1 || in_array($assistantMode, ['compare', 'explain', 'risk', 'draft'], true);
+        $needsSynthesis = $detectedLanguage['code'] !== 'en' || count($detectedIntents) > 1 || in_array($assistantMode, ['compare', 'explain', 'risk', 'draft'], true);
         if ($needsSynthesis) {
             $safeSynthesisContext = [
                 'authoritative_database_answer' => $answer,
                 'authorized_scope' => $userScope,
                 'role' => $role,
                 'mode' => $assistantMode,
-                'instruction' => 'Summarize only the authoritative answer. Do not add people, scores, facts, or actions not present in it. Keep the response short.',
+                'response_language' => $detectedLanguage,
+                'instruction' => 'Answer in the requested response language, including mixed-language phrasing when detected. Summarize only the authoritative answer. Do not add people, scores, facts, or actions not present in it. Keep official PMAS form names unchanged and keep the response short.',
             ];
             $synthesized = openai_answer($rawMessage, $safeSynthesisContext);
             if ($synthesized !== null) {
                 $answer = $synthesized;
-                $responseSource = 'role_scoped_database+openai';
+                $responseSource = 'translated_scoped_response';
             } else {
                 $synthesized = gemini_answer($rawMessage, $safeSynthesisContext);
                 if ($synthesized !== null) {
                     $answer = $synthesized;
-                    $responseSource = 'role_scoped_database+gemini';
+                    $responseSource = 'translated_scoped_response';
                 }
             }
         }
     }
 
-    $answer = assistant_enhance_answer($answer, $assistantMode, $role, $pagePath, $userScope);
+    $answer = assistant_enhance_answer($answer, $assistantMode, $role, $pagePath, $userScope, $detectedLanguage['code']);
+
+    if ($messageCorrections !== []) {
+        $correctionLabels = array_map(
+            static fn (array $correction): string => ($correction['original'] ?? '') . ' as ' . ($correction['corrected'] ?? ''),
+            $messageCorrections
+        );
+        $answer = 'I interpreted ' . implode(', ', $correctionLabels) . ".\n\n" . $answer;
+    }
 
     $structured = assistant_copilot_payload($answer, $rawMessage, $assistantMode, $user, $context, $selectedPeriod, $responseSource);
+    $structured['corrections'] = $messageCorrections;
+    $structured['interpreted_message'] = $rawMessage;
     error_log('[assistant-copilot] ' . json_encode([
         'user_id' => (int) ($user['id'] ?? 0), 'role' => $role,
         'intent' => $structured['intent'], 'scope' => $structured['scope'], 'source' => $structured['source'],
@@ -884,16 +1175,10 @@ try {
 } catch (Throwable $exception) {
     $message = strtolower(trim($_POST['message'] ?? ''));
     $role = $user['role'] ?? '';
-    if ($role === 'admin_hr') {
-        try {
-            $answer = assistant_analytics_answer($message, $role);
-            echo json_encode(['ok' => true, 'answer' => $answer]);
-            exit;
-        } catch (Throwable) {
-        }
-    }
-    $answer = assistant_is_pmas_question($message)
-        ? assistant_static_pmas_answer($message)
-        : $assistantFallbackAnswer;
-    echo json_encode(['ok' => true, 'answer' => $answer]);
+    $language = assistant_copilot_language($message);
+    $isPmas = assistant_is_pmas_question($message);
+    $answer = $isPmas ? assistant_static_pmas_answer($message) : assistant_copilot_refusal($language['code']);
+    $structured = assistant_copilot_payload($answer, $message, 'overview', $user, [], '', $isPmas ? 'pmas_knowledge' : 'refusal');
+    if (!$isPmas) $structured['data_available'] = false;
+    echo json_encode(['ok' => true, ...$structured, 'mode' => 'overview']);
 }

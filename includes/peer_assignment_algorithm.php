@@ -89,6 +89,7 @@ function dipascaf_peer_eligible_users(bool $includeProgramHeads = true, array $d
     $roles = $includeProgramHeads ? "'teacher', 'program_head'" : "'teacher'";
     $params = [];
     $scopeWhere = '';
+    $unassignedOnly = !empty($departmentScope['unassigned_only']);
 
     $departmentIds = array_values(array_filter(array_map('intval', $departmentScope['department_ids'] ?? [])));
     $departments = array_values(array_unique(array_filter(array_map(
@@ -132,7 +133,11 @@ function dipascaf_peer_eligible_users(bool $includeProgramHeads = true, array $d
         $scopeParts[] = 'd.department_name IN (' . implode(',', $nameKeys) . ')';
     }
 
-    if ($scopeParts !== []) {
+    if ($unassignedOnly) {
+        $scopeWhere = " AND d.id IS NULL
+            AND (u.department IS NULL OR TRIM(u.department) = '' OR LOWER(TRIM(u.department)) IN ('general','unassigned','unassigned department'))
+            AND (f.department IS NULL OR TRIM(f.department) = '' OR LOWER(TRIM(f.department)) IN ('general','unassigned','unassigned department'))";
+    } elseif ($scopeParts !== []) {
         $scopeWhere = ' AND (' . implode(' OR ', $scopeParts) . ')';
     }
 
@@ -519,6 +524,13 @@ function dipascaf_peer_scope_condition(array $departmentScope, string $assignmen
 {
     $params = [];
     $parts = [];
+
+    if (!empty($departmentScope['unassigned_only'])) {
+        return [
+            'sql' => '(' . $assignmentAlias . ".department_id IS NULL AND (" . $facultyAlias . ".department IS NULL OR TRIM(" . $facultyAlias . ".department) = '' OR LOWER(TRIM(" . $facultyAlias . ".department)) IN ('general','unassigned','unassigned department')))",
+            'params' => [],
+        ];
+    }
 
     $programCodes = array_values(array_unique(array_filter(array_map(
         static fn ($value): string => strtoupper(trim((string) $value)),

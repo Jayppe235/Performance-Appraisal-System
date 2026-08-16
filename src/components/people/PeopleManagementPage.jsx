@@ -5,7 +5,7 @@ import { Archive, BadgeCheck, Building2, Camera, Check, ChevronDown, ChevronLeft
 import { addToast } from '../common/Toast.jsx';
 import { confirmDeleteData, confirmProceed, confirmSaveChanges } from '../common/ConfirmationModal.jsx';
 import apiFetch from '../../data/api.js';
-import { apiUrl, assetUrl } from '../../data/apiBase.js';
+import { apiUrl, assetUrl, reportUrl } from '../../data/apiBase.js';
 import { notifyLiveDataChanged } from '../../hooks/useLiveRefresh.js';
 
 const API_BASE = '/api/people.php';
@@ -331,7 +331,7 @@ export default function PeopleManagementPage({ archiveOnly = false }) {
   }, []);
   async function exportAccountReport(format) {
     if (reportExporting || accountReportRows.length === 0) return;
-    const url = new URL(assetUrl('reports/user_accounts_download.php'), window.location.origin);
+    const url = new URL(reportUrl('user_accounts_download.php'));
     if (reportDepartment) url.searchParams.set('department', reportDepartment);
     url.searchParams.set('format', format);
     url.searchParams.set('_export', String(Date.now()));
@@ -1549,11 +1549,11 @@ function handleImageUpload(event, type) {
                 <button type="button" className="primary" onClick={() => exportAccountReport('pdf')} disabled={!!reportExporting || accountReportRows.length === 0}><FileText size={16} /> {reportExporting === 'pdf' ? 'Generating…' : 'PDF'}</button>
               </div>
             </div>
-            <div className="people-account-report-security"><ShieldCheck size={17} /><div><strong>Secure password reporting</strong><p>Existing user-created passwords are never displayed or exported. The report shows only the institution's standard temporary password, APPRAISIA_NDMC.</p></div></div>
+            <div className="people-account-report-security"><ShieldCheck size={17} /><div><strong>Secure password reporting</strong><p>Existing user-created passwords are never displayed or exported. Accounts still using the institution's temporary password show APPRAISIA_NDMC; accounts whose users replaced it show Password has changed.</p></div></div>
             {reportError && <div className="people-form-alert" role="alert">{reportError}</div>}
             <div className="people-account-report-paper">
               <header><p>Notre Dame of Midsayap College</p><h3>APPRAISIA User Account Report</h3><span>{reportDepartment || 'All Departments'} · Generated {new Date().toLocaleDateString()}</span></header>
-              <div className="people-account-report-table-wrap"><table><thead><tr><th>Full Name</th><th>Username</th><th>Temporary Password</th><th>Role</th></tr></thead><tbody>{accountReportRows.map((user) => <tr key={user.id}><td>{user.fullName}</td><td>{user.userCode}</td><td><span className="people-password-report-status temporary">APPRAISIA_NDMC</span></td><td>{user.role === 'Faculty' ? 'Faculty Member' : user.role}</td></tr>)}{accountReportRows.length === 0 && <tr><td colSpan="4" className="empty">No Dean, Program Head, or Faculty accounts found for the selected department.</td></tr>}</tbody></table></div>
+              <div className="people-account-report-table-wrap"><table><thead><tr><th>Full Name</th><th>Username</th><th>Password Status</th><th>Role</th></tr></thead><tbody>{accountReportRows.map((user) => <tr key={user.id}><td>{user.fullName}</td><td>{user.userCode}</td><td><span className={`people-password-report-status ${user.mustChangePassword ? 'temporary' : 'changed'}`}>{user.mustChangePassword ? 'APPRAISIA_NDMC' : 'Password has changed'}</span></td><td>{user.role === 'Faculty' ? 'Faculty Member' : user.role}</td></tr>)}{accountReportRows.length === 0 && <tr><td colSpan="4" className="empty">No Dean, Program Head, or Faculty accounts found for the selected department.</td></tr>}</tbody></table></div>
             </div>
           </section>
         </ManagementModal>
@@ -1605,7 +1605,16 @@ function handleImageUpload(event, type) {
           onClose={closeUserForm}
           className="people-account-modal"
         >
-          <form ref={userFormRef} className="admin-form people-user-form" onSubmit={saveUser}>
+          <form ref={userFormRef} className="admin-form people-user-form" onSubmit={saveUser} aria-busy={saving}>
+            {saving && (
+              <div className="people-account-saving-overlay" role="status" aria-live="polite">
+                <div>
+                  <Loader2 size={32} className="animate-spin" />
+                  <strong>{isEditing ? 'Saving changes…' : 'Creating account…'}</strong>
+                  <span>Please wait while the account information is updated.</span>
+                </div>
+              </div>
+            )}
             {isEditing && <section className="people-edit-profile-header people-edit-profile-header-fixed"><div className="people-edit-avatar">{userForm.avatar ? <img src={userForm.avatar} alt={`${userForm.fullName} profile preview`} /> : <span>{userForm.fullName.trim().split(/\s+/).slice(0,2).map((part) => part[0]).join('').toUpperCase() || 'U'}</span>}</div><div className="people-edit-profile-copy"><h3>{userForm.fullName || 'User Account'}</h3><div><span className="people-role-badge"><BadgeCheck size={13} /> {userForm.role === 'Admin' ? 'HRDM Director/Admin' : userForm.role === 'Faculty' ? 'Faculty Member' : userForm.role}</span>{userForm.department && <span className="people-department-badge"><Building2 size={12} /> {userForm.department}</span>}{userForm.role==='Program Head'&&userForm.programIds.length>0&&<span className="people-department-badge"><GraduationCap size={12}/>{userForm.programIds.length} Program{userForm.programIds.length===1?'':'s'}</span>}<span className={`people-status ${userForm.status.toLowerCase()}`}>{userForm.status}</span></div></div><div className="people-edit-photo-actions"><label><Camera size={15} /> Change Photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => handleImageUpload(event, 'user')} /></label><button type="button" onClick={removeUserPhoto} disabled={!userForm.avatar}><Trash2 size={14} /> Remove Photo</button></div><button type="button" className="people-edit-close" onClick={closeUserForm} aria-label="Close Edit User Account" title="Close"><span className="people-edit-close-glyph" aria-hidden="true">×</span></button></section>}
             <div className="people-user-form-scroll">
               {formError && !ASSIGNMENT_FIELD_ERRORS.includes(formError) && <div className="people-form-alert" role="alert">{formError}</div>}
@@ -1669,7 +1678,7 @@ function handleImageUpload(event, type) {
 
               {summaryReady && <aside className="people-assignment-summary"><strong>Assignment Summary</strong><div><span>Role</span><b>{userForm.role === 'Faculty' ? 'Faculty Member' : userForm.role}</b></div>{userForm.department && <div><span>Department</span><b>{userForm.department}</b></div>}{userForm.program && <div><span>{userForm.role==='Program Head'&&userForm.programIds.length>1?'Programs':'Program'}</span><b>{userForm.role==='Program Head'?userForm.programIds.join(', '):userForm.program}</b></div>}<div><span>Account Status</span><b>{userForm.status}</b></div></aside>}
             </div>
-            <footer className="people-user-form-footer">{isEditing && <button type="button" className="people-reset-account" onClick={resetUserChanges}><RotateCcw size={16} /> Reset Changes</button>}<div className="people-user-footer-primary"><button type="button" className="people-cancel-account" onClick={closeUserForm}>{accountReturnTo ? <ChevronLeft size={16} /> : <X size={16} />} {accountReturnTo ? 'Back to Department Profile' : 'Cancel'}</button><button type="submit" className="people-save-account" disabled={saving}>{saving ? <Loader2 size={17} className="animate-spin" /> : isEditing ? <Save size={17} /> : <UserPlus size={17} />} {saving ? (isEditing ? 'Saving Changes...' : 'Creating Account...') : (isEditing ? 'Save Changes' : 'Create Account')}</button></div></footer>
+            <footer className="people-user-form-footer">{isEditing && <button type="button" className="people-reset-account" onClick={resetUserChanges} disabled={saving}><RotateCcw size={16} /> Reset Changes</button>}<div className="people-user-footer-primary"><button type="button" className="people-cancel-account" onClick={closeUserForm} disabled={saving}>{accountReturnTo ? <ChevronLeft size={16} /> : <X size={16} />} {accountReturnTo ? 'Back to Department Profile' : 'Cancel'}</button><button type="submit" className="people-save-account" disabled={saving}>{saving ? <Loader2 size={17} className="animate-spin" /> : isEditing ? <Save size={17} /> : <UserPlus size={17} />} {saving ? (isEditing ? 'Saving Changes...' : 'Creating Account...') : (isEditing ? 'Save Changes' : 'Create Account')}</button></div></footer>
           </form>
         </ManagementModal>
       )}
