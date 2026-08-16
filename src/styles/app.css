@@ -75404,3 +75404,30 @@ body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
     overscroll-behavior: contain;
   }
 }
+
+/* Center APPRAISIA artwork precisely inside the phone launcher. */
+@media (max-width: 560px) {
+  .admin-body .floating-chat-toggle,
+  .admin-dashboard-body .floating-chat-toggle,
+  body .floating-chat-toggle {
+    display: grid !important;
+    place-content: center !important;
+    place-items: center !important;
+    padding: 0 !important;
+  }
+
+  .admin-body .floating-chat-toggle .floating-chat-logo,
+  .admin-dashboard-body .floating-chat-toggle .floating-chat-logo,
+  body .floating-chat-toggle .floating-chat-logo {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    margin: 0 !important;
+    object-fit: contain !important;
+    object-position: 50% 50% !important;
+    translate: none !important;
+    scale: 1 !important;
+    transform: none !important;
+    transform-origin: 50% 50% !important;
+  }
+}
