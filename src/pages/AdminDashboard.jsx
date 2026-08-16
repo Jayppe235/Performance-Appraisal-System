@@ -549,18 +549,21 @@ export default function AdminDashboard({ role, onUserUpdate }) {
           {/* Settings Tabs */}
           <div className="settings-tabs">
             <button
+              type="button"
               className={`settings-tab ${activeSettingsTab === 'profile' ? 'active' : ''}`}
               onClick={() => setActiveSettingsTab('profile')}
             >
               <ShieldCheck size={16} /> Profile & System
             </button>
             <button
+              type="button"
               className={`settings-tab ${activeSettingsTab === 'archive' ? 'active' : ''}`}
               onClick={() => setActiveSettingsTab('archive')}
             >
               <Archive size={16} /> Archive <span className="settings-tab-count">{archivedDepartments.length + archivedUsers.length + archivedEvaluations.length}</span>
             </button>
             <button
+              type="button"
               className={`settings-tab ${activeSettingsTab === 'audit' ? 'active' : ''}`}
               onClick={() => setActiveSettingsTab('audit')}
             >
@@ -730,6 +733,10 @@ export default function AdminDashboard({ role, onUserUpdate }) {
 
               {settingsMessage && <div className={`settings-message ${settingsMessage.type}`}>{settingsMessage.text}</div>}
               <div className="settings-save-row">
+                <div className="settings-save-copy">
+                  <strong>Ready to apply your changes?</strong>
+                  <span>Settings affect your current PMAS workspace and security preferences.</span>
+                </div>
                 <button type="submit" className="primary-button" disabled={settingsSaving}>
                   <Save size={16} /> {settingsSaving ? 'Saving...' : 'Save Settings'}
                 </button>
