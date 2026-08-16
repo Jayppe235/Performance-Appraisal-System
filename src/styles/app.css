@@ -20460,6 +20460,37 @@ body:has(:is(.admin-body.dark-mode, .admin-dashboard-body.dark-mode)) .settings-
   .settings-save-row .primary-button { width: 100% !important; min-width: 0 !important; min-height: 46px !important; }
 }
 
+/* Keep the phone account trigger visible while its fixed dropdown is open. */
+.admin-avatar img.is-brand-fallback,
+.account-dropdown-avatar img.is-brand-fallback {
+  object-fit: contain !important;
+  padding: 3px;
+  background: #ffffff;
+}
+
+@media (max-width: 720px) {
+  .admin-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 11500 !important;
+    isolation: isolate;
+    background: color-mix(in srgb, var(--theme-surface, #ffffff) 94%, transparent) !important;
+    box-shadow: 0 10px 26px rgba(15, 49, 36, .12);
+    backdrop-filter: blur(18px);
+  }
+
+  .admin-actions .account-dropdown {
+    top: calc(env(safe-area-inset-top) + 66px) !important;
+    z-index: 11600 !important;
+  }
+
+  :is(.admin-body.dark-mode, .admin-dashboard-body.dark-mode) .admin-header,
+  body:has(:is(.admin-body.dark-mode, .admin-dashboard-body.dark-mode)) .admin-header {
+    background: rgba(8, 19, 31, .94) !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .38);
+  }
+}
+
 @media (max-width: 620px) {
   .admin-content.admin-module .department-completion-panel > header {
     align-items: flex-start;

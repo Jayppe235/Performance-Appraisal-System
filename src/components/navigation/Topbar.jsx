@@ -42,6 +42,25 @@ function profileImageSrc(path, version = '') {
   return `${assetUrl(value)}${suffix}`;
 }
 
+const brandAvatarSrc = assetUrl('/assets/images/ndmc-seal.png');
+
+function AccountAvatar({ src, label }) {
+  const useBrandFallback = !src;
+  return (
+    <img
+      className={useBrandFallback ? 'is-brand-fallback' : undefined}
+      src={src || brandAvatarSrc}
+      alt={useBrandFallback ? 'NDMC logo' : `${label} profile`}
+      onError={(event) => {
+        if (event.currentTarget.src.endsWith('/assets/images/ndmc-seal.png')) return;
+        event.currentTarget.classList.add('is-brand-fallback');
+        event.currentTarget.src = brandAvatarSrc;
+        event.currentTarget.alt = 'NDMC logo';
+      }}
+    />
+  );
+}
+
 function getTypeIcon(type) {
   if (type === 'approval') return ShieldCheck;
   if (type === 'revision') return RotateCcw;
@@ -750,14 +769,14 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
         <div className="account-menu" ref={accountMenuRef}>
           <button className="profile-button account-menu-trigger" type="button" onClick={toggleAccountMenu} aria-label="Account menu" aria-expanded={accountOpen && !accountClosing} aria-haspopup="menu">
             <span className="admin-avatar">
-              {avatarSrc ? <img src={avatarSrc} alt={`${avatarLabel} profile`} /> : avatarLabel.charAt(0)}
+              <AccountAvatar src={avatarSrc} label={avatarLabel} />
             </span>
           </button>
           {accountOpen && (
             <section className={`account-dropdown ${accountClosing ? 'is-closing' : 'is-opening'}`} aria-label="Account options" role="menu">
               <div className="account-dropdown-head">
                 <span className="account-dropdown-avatar">
-                  {avatarSrc ? <img src={avatarSrc} alt={`${avatarLabel} profile`} /> : avatarLabel.charAt(0)}
+                  <AccountAvatar src={avatarSrc} label={avatarLabel} />
                 </span>
                 <div>
                   <strong>{avatarLabel}</strong>
