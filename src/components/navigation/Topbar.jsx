@@ -155,6 +155,7 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
   const [notificationSettings, setNotificationSettings] = useState(readNotificationSettings);
   const notificationPanelRef = useRef(null);
   const accountMenuRef = useRef(null);
+  const accountDropdownRef = useRef(null);
   const accountCloseTimerRef = useRef(null);
   const profileFileInputRef = useRef(null);
   const active = useMemo(() => role.nav.find((item) => item.key === section) || role.nav[0], [role, section]);
@@ -284,7 +285,11 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
     if (!accountOpen) return;
 
     function handleClickOutside(event) {
-      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target)) {
+      if (
+        accountMenuRef.current &&
+        !accountMenuRef.current.contains(event.target) &&
+        !accountDropdownRef.current?.contains(event.target)
+      ) {
         closeAccountMenu();
       }
     }
@@ -301,6 +306,29 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleAccountKeyDown);
+    };
+  }, [accountOpen]);
+
+  const [accountMenuPosition, setAccountMenuPosition] = useState({ top: 72, right: 10 });
+
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+
+    const positionMenu = () => {
+      const trigger = accountMenuRef.current?.getBoundingClientRect();
+      if (!trigger) return;
+      setAccountMenuPosition({
+        top: Math.min(window.innerHeight - 80, trigger.bottom + 10),
+        right: Math.max(10, window.innerWidth - trigger.right),
+      });
+    };
+
+    positionMenu();
+    window.addEventListener('resize', positionMenu);
+    window.addEventListener('scroll', positionMenu, true);
+    return () => {
+      window.removeEventListener('resize', positionMenu);
+      window.removeEventListener('scroll', positionMenu, true);
     };
   }, [accountOpen]);
 
@@ -772,8 +800,14 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
               <AccountAvatar src={avatarSrc} label={avatarLabel} />
             </span>
           </button>
-          {accountOpen && (
-            <section className={`account-dropdown ${accountClosing ? 'is-closing' : 'is-opening'}`} aria-label="Account options" role="menu">
+          {accountOpen && createPortal(
+            <section
+              ref={accountDropdownRef}
+              className={`account-dropdown account-dropdown-portal ${accountClosing ? 'is-closing' : 'is-opening'}`}
+              style={{ top: `${accountMenuPosition.top}px`, right: `${accountMenuPosition.right}px` }}
+              aria-label="Account options"
+              role="menu"
+            >
               <div className="account-dropdown-head">
                 <span className="account-dropdown-avatar">
                   <AccountAvatar src={avatarSrc} label={avatarLabel} />
@@ -801,7 +835,8 @@ export default function Topbar({ role, onOpenMenu, onUserUpdate, darkMode = fals
                 <LogOut size={16} />
                 <span>Logout</span>
               </button>
-            </section>
+            </section>,
+            document.body
           )}
         </div>
       </div>

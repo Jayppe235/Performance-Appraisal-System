@@ -75370,3 +75370,37 @@ body:has(.admin-dashboard-body.dark-mode) .eval-monitor-container .eval-monitor-
     max-height: calc(100dvh - 78px - env(safe-area-inset-bottom)) !important;
   }
 }
+
+/* Account dropdown is portalled to the document so no header can clip it. */
+.account-dropdown.account-dropdown-portal {
+  position: fixed !important;
+  left: auto !important;
+  z-index: 30050 !important;
+}
+
+body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
+  .account-dropdown.account-dropdown-portal {
+  border-color: #304b61 !important;
+  background: rgba(8, 25, 39, .98) !important;
+  color: #f1f7ff !important;
+  box-shadow: 0 24px 58px rgba(0, 0, 0, .5) !important;
+}
+
+body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
+  .account-dropdown.account-dropdown-portal .account-dropdown-head {
+  border-color: #304b61 !important;
+}
+
+body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
+  .account-dropdown.account-dropdown-portal :is(strong,small,button) {
+  color: #f1f7ff !important;
+}
+
+@media (max-width: 720px) {
+  .account-dropdown.account-dropdown-portal {
+    width: min(320px, calc(100vw - 20px)) !important;
+    max-height: calc(100dvh - 84px - env(safe-area-inset-bottom)) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+}
