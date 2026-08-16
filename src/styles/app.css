@@ -75530,3 +75530,72 @@ body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
   .account-dropdown.account-dropdown-portal > button { grid-template-columns:32px minmax(0,1fr)!important; }
   .account-dropdown.account-dropdown-portal .account-theme-badge { grid-column:2!important; justify-self:start!important; margin-top:3px!important; }
 }
+
+/* Clean mobile account cards: remove inherited solid button fills. */
+@media (max-width: 720px) {
+  .account-dropdown.account-dropdown-portal > button,
+  .account-dropdown.account-dropdown-portal > button.account-theme-item,
+  .account-dropdown.account-dropdown-portal > button.account-theme-item.is-current {
+    grid-template-columns: 34px minmax(0,1fr) !important;
+    min-height: 50px !important;
+    border: 1px solid rgba(22,131,88,.16) !important;
+    background: rgba(255,255,255,.88) !important;
+    color: #143d2e !important;
+    box-shadow: 0 6px 16px rgba(15,80,55,.06) !important;
+  }
+
+  .account-dropdown.account-dropdown-portal > button > span {
+    color: inherit !important;
+    font-size: .82rem !important;
+    font-weight: 800 !important;
+    white-space: normal !important;
+  }
+
+  .account-dropdown.account-dropdown-portal > button > svg {
+    border: 1px solid rgba(22,131,88,.16) !important;
+    background: #eaf8f1 !important;
+    color: #13724d !important;
+  }
+
+  .account-dropdown.account-dropdown-portal .account-theme-badge {
+    display: none !important;
+  }
+
+  .account-dropdown.account-dropdown-portal > button.danger {
+    border-color: rgba(220,38,38,.18) !important;
+    background: #fff7f7 !important;
+    color: #b42318 !important;
+  }
+
+  .account-dropdown.account-dropdown-portal > button.danger > svg {
+    border-color: rgba(220,38,38,.18) !important;
+    background: #feecec !important;
+    color: #dc2626 !important;
+  }
+
+  body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
+    .account-dropdown.account-dropdown-portal > button,
+  body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
+    .account-dropdown.account-dropdown-portal > button.account-theme-item,
+  body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
+    .account-dropdown.account-dropdown-portal > button.account-theme-item.is-current {
+    border-color: #294b66 !important;
+    background: #10283a !important;
+    color: #edf6ff !important;
+    box-shadow: none !important;
+  }
+
+  body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
+    .account-dropdown.account-dropdown-portal > button > svg {
+    border-color: #315772 !important;
+    background: #17364d !important;
+    color: #7dd3fc !important;
+  }
+
+  body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
+    .account-dropdown.account-dropdown-portal > button.danger {
+    border-color: rgba(248,113,113,.28) !important;
+    background: rgba(127,29,29,.18) !important;
+    color: #fca5a5 !important;
+  }
+}
