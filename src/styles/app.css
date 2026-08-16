@@ -487,6 +487,89 @@
   }
 }
 
+/* Phone account sheet: stable horizontal option boxes and badges. */
+@media (max-width: 720px) {
+  .account-dropdown.account-dropdown-portal {
+    display: grid !important;
+    gap: 8px !important;
+    padding: 11px !important;
+    border-radius: 18px !important;
+  }
+
+  .account-dropdown.account-dropdown-portal .account-dropdown-head {
+    grid-template-columns: 48px minmax(0,1fr) !important;
+    gap: 11px !important;
+    margin: 0 2px 4px !important;
+    padding: 7px 6px 12px !important;
+  }
+
+  .account-dropdown.account-dropdown-portal .account-dropdown-avatar {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 15px !important;
+  }
+
+  .account-dropdown.account-dropdown-portal > button {
+    display: grid !important;
+    grid-template-columns: 34px minmax(0,1fr) auto !important;
+    align-items: center !important;
+    gap: 9px !important;
+    min-height: 52px !important;
+    padding: 7px 9px !important;
+    border-radius: 13px !important;
+    text-align: left !important;
+  }
+
+  .account-dropdown.account-dropdown-portal > button > svg {
+    grid-column: 1 !important;
+    justify-self: center !important;
+    width: 30px !important;
+    height: 30px !important;
+    padding: 6px !important;
+    border-radius: 9px !important;
+  }
+
+  .account-dropdown.account-dropdown-portal > button > span {
+    grid-column: 2 !important;
+    min-width: 0 !important;
+    font-size: .82rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .account-dropdown.account-dropdown-portal .account-theme-badge {
+    grid-column: 3 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    min-width: max-content !important;
+    min-height: 24px !important;
+    padding: 3px 7px !important;
+    border-radius: 999px !important;
+    font-size: .6rem !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    writing-mode: horizontal-tb !important;
+  }
+
+  .account-dropdown.account-dropdown-portal .account-theme-badge svg {
+    width: 11px !important;
+    height: 11px !important;
+    padding: 0 !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .account-dropdown.account-dropdown-portal > button {
+    grid-template-columns: 32px minmax(0,1fr) !important;
+  }
+  .account-dropdown.account-dropdown-portal .account-theme-badge {
+    grid-column: 2 !important;
+    justify-self: start !important;
+    margin-top: 3px !important;
+  }
+}
+
 /* Final phone dashboard density override. Keep this last in the cascade. */
 @media (max-width: 560px) {
   :is(.admin-content,.dean-content,.faculty-content,.vpaa-dashboard-content) {
@@ -75430,4 +75513,20 @@ body:has(:is(.admin-body.dark-mode,.admin-dashboard-body.dark-mode))
     transform: none !important;
     transform-origin: 50% 50% !important;
   }
+}
+
+/* Final phone account-box layout (portalled outside .admin-body). */
+@media (max-width: 720px) {
+  .account-dropdown.account-dropdown-portal { display:grid!important; gap:8px!important; padding:11px!important; border-radius:18px!important; }
+  .account-dropdown.account-dropdown-portal .account-dropdown-head { grid-template-columns:48px minmax(0,1fr)!important; gap:11px!important; margin:0 2px 4px!important; padding:7px 6px 12px!important; }
+  .account-dropdown.account-dropdown-portal .account-dropdown-avatar { width:48px!important; height:48px!important; border-radius:15px!important; }
+  .account-dropdown.account-dropdown-portal > button { display:grid!important; grid-template-columns:34px minmax(0,1fr) auto!important; align-items:center!important; gap:9px!important; min-height:52px!important; padding:7px 9px!important; border-radius:13px!important; text-align:left!important; }
+  .account-dropdown.account-dropdown-portal > button > svg { grid-column:1!important; justify-self:center!important; width:30px!important; height:30px!important; padding:6px!important; border-radius:9px!important; }
+  .account-dropdown.account-dropdown-portal > button > span { grid-column:2!important; min-width:0!important; font-size:.82rem!important; line-height:1.25!important; }
+  .account-dropdown.account-dropdown-portal .account-theme-badge { grid-column:3!important; display:inline-flex!important; align-items:center!important; justify-content:center!important; gap:3px!important; min-width:max-content!important; min-height:24px!important; padding:3px 7px!important; border-radius:999px!important; font-size:.6rem!important; line-height:1!important; white-space:nowrap!important; writing-mode:horizontal-tb!important; }
+  .account-dropdown.account-dropdown-portal .account-theme-badge svg { width:11px!important; height:11px!important; padding:0!important; }
+}
+@media (max-width: 360px) {
+  .account-dropdown.account-dropdown-portal > button { grid-template-columns:32px minmax(0,1fr)!important; }
+  .account-dropdown.account-dropdown-portal .account-theme-badge { grid-column:2!important; justify-self:start!important; margin-top:3px!important; }
 }
